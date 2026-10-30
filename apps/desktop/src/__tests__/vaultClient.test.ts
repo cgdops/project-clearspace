@@ -4,11 +4,18 @@ import {
   addJournalEntry,
   getVaultDashboard,
   importExportedContent,
+  importFilesBatch,
   loadSampleMultiProviderVault,
+  parseMultiProviderClient,
   resetLocalVault,
   scanLocalVault,
   toggleQuestState,
 } from "../vaultClient";
+import {
+  buildContributionGridModel,
+  computeIntensityLevel,
+  formatContributionTooltip,
+} from "../ContributionGrid";
 
 describe("Clearspace Browser-Mode Vault Client", () => {
   beforeEach(() => {
@@ -250,5 +257,403 @@ describe("Clearspace Browser-Mode Vault Client", () => {
 
     const after = await getVaultDashboard();
     expect(after.summary.clean_prompts_kept).toBe(5);
+  });
+
+  it("honestly positions Beginner -> Junior, Intermediate -> Mid-Level, and Advanced -> Senior / Staff without ego inflation", async () => {
+    const beginnerExport = JSON.stringify([
+      {
+        uuid: "beg-conv-1",
+        chat_messages: [
+          {
+            sender: "human",
+            created_at: "2026-03-01T10:00:00Z",
+            text: "How do I write a basic rust tool and sqlite database query for a beginner step by step tutorial?",
+          },
+        ],
+      },
+    ]);
+
+    const { dashboard: begDash } = await importExportedContent(beginnerExport);
+    expect(begDash.summary.overall_positioning).toBe("Beginner → Junior");
+    expect(begDash.summary.tier_counts).toEqual([1, 0, 0]);
+    const begTopRole = begDash.onet_matches[0];
+    expect(begTopRole.assessed_tier).toBe("Beginner → Junior");
+    expect(begTopRole.positioned_title).toContain("Junior");
+    expect(begTopRole.overall_fit_pct).toBeGreaterThan(0);
+    expect(begTopRole.overall_fit_pct).toBeLessThanOrEqual(46);
+    expect(begTopRole.identified_gaps.length).toBeGreaterThan(0);
+    expect(begTopRole.tested_assumptions.length).toBeGreaterThan(0);
+
+    // Zero-hit mirror cards must report 0% confidence rather than an inflated 68% floor
+    const zeroHitCard = begDash.mirror_cards.find((c) => c.id === "card-burnout-trigger");
+    expect(zeroHitCard?.confidence_pct).toBe(0);
+    expect(zeroHitCard?.assumption_challenged).toBeTruthy();
+    expect(zeroHitCard?.identified_gap).toBeTruthy();
+
+    await resetLocalVault();
+    const intermediateExport = JSON.stringify([
+      {
+        uuid: "int-conv-1",
+        chat_messages: [
+          {
+            sender: "human",
+            created_at: "2026-03-01T11:00:00Z",
+            text: "Let us implement and test an agent tool workflow with rust, typescript, and sqlite to solve developer tasks cleanly.",
+          },
+        ],
+      },
+    ]);
+    const { dashboard: intDash } = await importExportedContent(intermediateExport);
+    expect(intDash.summary.overall_positioning).toBe("Intermediate → Mid-Level");
+    expect(intDash.onet_matches[0].assessed_tier).toBe("Intermediate → Mid-Level");
+    expect(intDash.onet_matches[0].positioned_title).toContain("Mid-Level");
+    expect(intDash.onet_matches[0].overall_fit_pct).toBeGreaterThanOrEqual(45);
+    expect(intDash.onet_matches[0].overall_fit_pct).toBeLessThanOrEqual(74);
+  });
+
+  it("aggregates daily_counts and builds the 53-week GitHub-style contribution grid with hover tooltips and color gradient levels", async () => {
+    const dash = await loadSampleMultiProviderVault();
+    expect(dash.summary.daily_counts).toBeDefined();
+    expect(dash.summary.daily_counts?.length).toBe(5);
+
+    expect(formatContributionTooltip("2026-03-18", 113)).toBe("113 prompts on March 18th.");
+    expect(formatContributionTooltip("2026-03-01", 1)).toBe("1 prompt on March 1st.");
+    expect(formatContributionTooltip("2026-03-02", 0)).toBe("No prompts on March 2nd.");
+    expect(formatContributionTooltip("2026-03-11", 4)).toBe("4 prompts on March 11th.");
+
+    expect(computeIntensityLevel(0, 20)).toBe(0);
+    expect(computeIntensityLevel(3, 20)).toBe(1);
+    expect(computeIntensityLevel(8, 20)).toBe(2);
+    expect(computeIntensityLevel(14, 20)).toBe(3);
+    expect(computeIntensityLevel(19, 20)).toBe(4);
+
+    const grid = buildContributionGridModel(
+      [
+        ["2026-03-18", 113],
+        ["2026-03-19", 25],
+        ["2026-03-20", 60],
+      ],
+      "2026",
+      "2026-10-30"
+    );
+    expect(grid.totalPrompts).toBe(198);
+    expect(grid.activeDays).toBe(3);
+    expect(grid.maxDailyCount).toBe(113);
+    expect(grid.longestStreak).toBe(3);
+    expect(grid.weeks.length).toBeGreaterThanOrEqual(52);
+    expect(grid.monthLabels.length).toBeGreaterThanOrEqual(10);
+
+    const allDays = grid.weeks.flatMap((w) => w.days);
+    const mar18 = allDays.find((d) => d.dateStr === "2026-03-18");
+    expect(mar18?.count).toBe(113);
+    expect(mar18?.level).toBe(4);
+    expect(mar18?.tooltipText).toBe("113 prompts on March 18th.");
+  });
+
+  it("detects Anthropic Claude Export Batch Manifests and surfaces actionable warnings and direct download links", async () => {
+    const manifestJson = JSON.stringify({
+      instructions:
+        "Download each file using the export_url (or curl_command in a terminal). Links expire on the date shown in expires_at.",
+      expires_at: "2026-11-30T19:24:03.988299+00:00",
+      total_files: 3,
+      data_files: [
+        {
+          filename: "users-000.zip",
+          category: "users",
+          size_bytes: 205,
+          export_url: "https://claude.ai/export/fd757f36/download/ccb50377/users-000.zip",
+        },
+        {
+          filename: "projects-000.zip",
+          category: "projects",
+          size_bytes: 547,
+          export_url: "https://claude.ai/export/fd757f36/download/ccb50377/projects-000.zip",
+        },
+        {
+          filename: "conversations-000.zip",
+          category: "conversations",
+          size_bytes: 590,
+          export_url: "https://claude.ai/export/fd757f36/download/ccb50377/conversations-000.zip",
+        },
+      ],
+    });
+
+    const { prompts, summary } = parseMultiProviderClient(manifestJson);
+    expect(prompts).toHaveLength(0);
+    expect(summary.detected_format).toBe("Anthropic Claude Export Manifest");
+    expect(summary.manifest_links).toHaveLength(3);
+    expect(summary.manifest_links?.[2]?.filename).toBe("conversations-000.zip");
+    expect(summary.warnings?.[0]).toContain("conversations-000.zip");
+  });
+
+  it("parses Google Gemini Workspace conversation_turns, filters Gemini Canvas UI noise, and parses Gemini Gems HTML + ChatGPT chat.html", async () => {
+    const workspaceTxtJson = JSON.stringify({
+      conversation_turns: [
+        {
+          user_turn: {
+            prompt:
+              "Can you help me organize my career strategy and build an automated telemetry pipeline for my engineering portfolio?",
+          },
+          turn_last_modified: "2026-01-22T20:42:07.887822Z",
+        },
+        {
+          user_turn: {
+            prompt: "how to format in miliseconds?",
+          },
+          turn_last_modified: "2026-01-22T20:43:39.299807Z",
+        },
+      ],
+    });
+
+    const wsRes = parseMultiProviderClient(workspaceTxtJson);
+    expect(wsRes.summary.detected_format).toContain("Workspace Conversation History");
+    expect(wsRes.prompts).toHaveLength(2);
+    expect(wsRes.prompts[0].source).toBe("gemini_takeout");
+
+    const geminiActivityWithNoise = JSON.stringify([
+      {
+        header: "Gemini Apps",
+        title: "Cleared previous feedback",
+        time: "2026-10-18T17:19:03.658Z",
+      },
+      {
+        header: "Gemini Apps",
+        title: "Created Gemini Canvas titled Master Resume v2 (Evidence-Backed)",
+        time: "2026-10-14T15:39:05.789Z",
+      },
+      {
+        header: "Gemini Apps",
+        title: "Selected preferred draft",
+        time: "2026-10-14T16:00:00.000Z",
+      },
+      {
+        header: "Gemini Apps",
+        title:
+          "Branched How should I structure our multi-provider ingestion pipeline so every user prompt is scrubbed deterministically?",
+        time: "2026-10-15T18:00:00.000Z",
+        subtitles: [{ name: "1 generated image." }, { name: "Attached 1 file." }],
+      },
+    ]);
+
+    const actRes = parseMultiProviderClient(geminiActivityWithNoise);
+    expect(actRes.summary.total_raw_prompts).toBe(4);
+    expect(actRes.summary.noise_filtered_out).toBe(3);
+    expect(actRes.summary.clean_prompts_kept).toBe(1);
+    expect(actRes.prompts[0].cleaned_text.startsWith("How should I structure")).toBe(true);
+
+    const gemsHtml = `<div><b>Name:</b><br>LoL Matchup Coach<br><br><b>Description:</b><br>Jungle coach<br><br><b>Instructions:</b><br>Act as a high-level strategic coach and analyze objective tradeoffs, pathing efficiency, and win conditions.<br><br><b>Creation Time:</b><br>2026-02-01 16:40:31 UTC<br><br></div>`;
+    const gemsRes = parseMultiProviderClient(gemsHtml);
+    expect(gemsRes.summary.detected_format).toContain("Gemini Gems HTML");
+    expect(gemsRes.prompts).toHaveLength(1);
+    expect(gemsRes.prompts[0].cleaned_text).toContain("LoL Matchup Coach");
+
+    const emptyHtml = "<div></div>";
+    const emptyRes = parseMultiProviderClient(emptyHtml);
+    expect(emptyRes.prompts).toHaveLength(0);
+    expect(emptyRes.summary.detected_format).toContain("Empty HTML Export");
+    expect(emptyRes.summary.warnings?.length).toBeGreaterThan(0);
+
+    const chatHtml = `<html><head><script>var jsonData = [{"id":"html-chat-1","create_time":1739565000,"mapping":{"n1":{"message":{"author":{"role":"user"},"create_time":1739565000,"content":{"parts":[{"type":"text","text":"How do we design a local-first SQLite schema with deterministic migrations and zero cloud dependencies?"}]}}}}}];</script></head><body></body></html>`;
+    const htmlRes = parseMultiProviderClient(chatHtml);
+    expect(htmlRes.summary.detected_format).toContain("OpenAI ChatGPT HTML Export");
+    expect(htmlRes.prompts).toHaveLength(1);
+    expect(htmlRes.prompts[0].source).toBe("chat_gpt_web");
+  });
+
+  it("parses Claude content block arrays, Claude projects.json, YAML frontmatter markdown, and batch import reports", async () => {
+    const claudeContentBlocks = JSON.stringify([
+      {
+        uuid: "claude-blocks-1",
+        chat_messages: [
+          {
+            sender: "human",
+            created_at: "2026-03-10T19:00:00Z",
+            text: "",
+            content: [
+              {
+                type: "text",
+                text: "Let us evaluate the architectural tradeoffs between distributed consensus and single-node embedded SQLite for local-first desktop apps.",
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const claudeProjects = JSON.stringify([
+      {
+        uuid: "proj-1",
+        name: "Clearspace Architecture",
+        created_at: "2026-03-11T12:00:00Z",
+        prompt_template:
+          "Always reason from mathematical first principles, challenge unverified assumptions, and quantify system bottlenecks.",
+        docs: [
+          {
+            uuid: "doc-1",
+            filename: "spec.md",
+            created_at: "2026-03-11T12:05:00Z",
+            content:
+              "Every local import must surface a complete per-file status summary with raw, clean, noise, duplicate, and PII redaction counts.",
+          },
+        ],
+      },
+    ]);
+
+    const frontmatterMd = `---
+title: Architecture Notes
+date: 2026-10-14
+---
+
+# Systems Reflection
+
+We need to ensure that every user import produces immediate visual confirmation and transparent per-file diagnostics.`;
+
+    const { report, dashboard } = await importFilesBatch([
+      { name: "claude_conversations.json", rawText: claudeContentBlocks },
+      { name: "projects.json", rawText: claudeProjects },
+      { name: "Master Resume v2", rawText: frontmatterMd },
+      {
+        name: "anthropic_data_manifest.json",
+        rawText: JSON.stringify({
+          data_files: [
+            {
+              filename: "conversations-000.zip",
+              category: "conversations",
+              size_bytes: 590,
+              export_url: "https://claude.ai/export/test/conversations-000.zip",
+            },
+          ],
+        }),
+      },
+      { name: "gemini_scheduled_actions_data.html", rawText: "<div></div>" },
+      { name: "broken.json", rawText: "{not valid json" },
+    ]);
+
+    expect(report.files_processed).toBe(6);
+    expect(report.total_clean_kept).toBe(4);
+    expect(report.total_new_added).toBe(4);
+    expect(dashboard.summary.clean_prompts_kept).toBe(4);
+
+    const byName = new Map(report.file_reports.map((r) => [r.file_name, r]));
+    expect(byName.get("claude_conversations.json")?.status).toBe("imported");
+    expect(byName.get("projects.json")?.status).toBe("imported");
+    expect(byName.get("projects.json")?.clean_prompts_kept).toBe(2);
+    expect(byName.get("Master Resume v2")?.status).toBe("imported");
+    expect(byName.get("anthropic_data_manifest.json")?.status).toBe("manifest_warning");
+    expect(byName.get("anthropic_data_manifest.json")?.manifest_links).toHaveLength(1);
+    expect(byName.get("gemini_scheduled_actions_data.html")?.status).toBe("empty");
+    expect(byName.get("broken.json")?.status).toBe("error");
+  });
+
+  it("verifies Round 1 real-world user testing archives (Takeout ZIP, Gemini MyActivity, Workspace txt, Gems HTML, and Anthropic Manifests)", async () => {
+    // @ts-ignore - Node built-ins available in Vitest runner
+    const fs = await import("node:fs");
+    // @ts-ignore - Node built-ins available in Vitest runner
+    const path = await import("node:path");
+    const userProfile: string =
+      ((globalThis as Record<string, any>).process?.env?.USERPROFILE as string) || "";
+    const meDir = path.join(userProfile, "OneDrive - G3Z Creative", "Desktop", "me");
+    if (!fs.existsSync(meDir)) {
+      return;
+    }
+
+    const anthropicFile = path.join(meDir, "anthropic_data_christian.json");
+    const manifestFile = path.join(
+      meDir,
+      "manifest-fd757f36-5306-4d74-a381-7a3e6d50cbd1-1793388221-ccb50377-2026-10-30-19-24-03.json"
+    );
+    const myActivityFile = path.join(
+      meDir,
+      "Takeout",
+      "My Activity",
+      "Gemini Apps",
+      "MyActivity.json"
+    );
+    const workspaceConvFile = path.join(
+      meDir,
+      "Takeout",
+      "Gemini in Workspace",
+      "Conversation History",
+      "conversation_1787448579.txt"
+    );
+    const gemsHtmlFile = path.join(meDir, "Takeout", "Gemini", "gemini_gems_data.html");
+    const scheduledHtmlFile = path.join(
+      meDir,
+      "Takeout",
+      "Gemini",
+      "gemini_scheduled_actions_data.html"
+    );
+    const resumeMdFile = path.join(
+      meDir,
+      "Takeout",
+      "My Activity",
+      "Gemini Apps",
+      "Master Resume v2 (Evidence-Backed-914e83b00f701603"
+    );
+    const wtPlanFile = path.join(
+      meDir,
+      "Takeout",
+      "My Activity",
+      "Gemini Apps",
+      "war_thunder_heatmap_plan_v1-5e669d345bb82532"
+    );
+
+    const { report, dashboard } = await importFilesBatch([
+      { name: "anthropic_data_christian.json", rawText: fs.readFileSync(anthropicFile, "utf8") },
+      { name: "manifest-batch.json", rawText: fs.readFileSync(manifestFile, "utf8") },
+      { name: "MyActivity.json", rawText: fs.readFileSync(myActivityFile, "utf8") },
+      { name: "conversation_1787448579.txt", rawText: fs.readFileSync(workspaceConvFile, "utf8") },
+      { name: "gemini_gems_data.html", rawText: fs.readFileSync(gemsHtmlFile, "utf8") },
+      {
+        name: "gemini_scheduled_actions_data.html",
+        rawText: fs.readFileSync(scheduledHtmlFile, "utf8"),
+      },
+      { name: "Master Resume v2", rawText: fs.readFileSync(resumeMdFile, "utf8") },
+      { name: "war_thunder_heatmap_plan_v1", rawText: fs.readFileSync(wtPlanFile, "utf8") },
+    ]);
+
+    const byName = new Map(report.file_reports.map((r) => [r.file_name, r]));
+    // 1. Both Anthropic files are Export Batch Manifests with direct download links
+    expect(byName.get("anthropic_data_christian.json")?.status).toBe("manifest_warning");
+    expect(byName.get("anthropic_data_christian.json")?.manifest_links).toHaveLength(3);
+    expect(byName.get("manifest-batch.json")?.status).toBe("manifest_warning");
+    expect(byName.get("manifest-batch.json")?.manifest_links).toHaveLength(4);
+
+    // 2. Gemini MyActivity.json filters out Canvas/UI system events and keeps 842 genuine prompts
+    expect(byName.get("MyActivity.json")?.status).toBe("imported");
+    expect(byName.get("MyActivity.json")?.clean_prompts_kept).toBe(842);
+
+    // 3. Gemini in Workspace conversation_1787448579.txt extracts 2 prompts
+    expect(byName.get("conversation_1787448579.txt")?.status).toBe("imported");
+    expect(byName.get("conversation_1787448579.txt")?.clean_prompts_kept).toBe(2);
+
+    // 4. Gemini Gems HTML extracts 5 Custom Gems
+    expect(byName.get("gemini_gems_data.html")?.status).toBe("imported");
+    expect(byName.get("gemini_gems_data.html")?.clean_prompts_kept).toBe(5);
+
+    // 5. Gemini Scheduled Actions HTML is flagged as empty (0 records)
+    expect(byName.get("gemini_scheduled_actions_data.html")?.status).toBe("empty");
+
+    // 6. Both extensionless Markdown Canvas files import cleanly
+    expect(byName.get("Master Resume v2")?.status).toBe("imported");
+    expect(byName.get("Master Resume v2")?.clean_prompts_kept).toBe(16);
+    expect(byName.get("war_thunder_heatmap_plan_v1")?.status).toBe("imported");
+    expect(byName.get("war_thunder_heatmap_plan_v1")?.clean_prompts_kept).toBe(14);
+
+    // Total net-new across all files in Desktop/me = 842 + 2 + 5 + 16 + 14 = 879 unique prompts
+    expect(dashboard.summary.clean_prompts_kept).toBe(879);
+
+    // Also test direct .zip ingestion on takeout-20261030T164136Z-1-001.zip
+    await resetLocalVault();
+    const zipPath = path.join(meDir, "takeout-20261030T164136Z-1-001.zip");
+    if (fs.existsSync(zipPath)) {
+      const zipBuf = fs.readFileSync(zipPath);
+      const ab = zipBuf.buffer.slice(zipBuf.byteOffset, zipBuf.byteOffset + zipBuf.byteLength);
+      const zipRes = await importFilesBatch([
+        { name: "takeout-20261030T164136Z-1-001.zip", rawBuffer: ab },
+      ]);
+      expect(zipRes.report.files_processed).toBe(6);
+      expect(zipRes.dashboard.summary.clean_prompts_kept).toBe(879);
+    }
   });
 });

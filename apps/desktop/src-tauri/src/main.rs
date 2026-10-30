@@ -3,8 +3,8 @@
 
 use clearspace_onet_engine::{match_onet_paths, RoleMatchResult};
 use clearspace_prompt_parsers::{
-    parse_exported_conversations_json, scan_antigravity_brain_dir, summarize_persisted_prompts,
-    IngestionSummary, NormalizedPrompt, PromptSource,
+    classify_skill_tier, parse_exported_conversations_json, scan_antigravity_brain_dir,
+    summarize_persisted_prompts, IngestionSummary, NormalizedPrompt, PromptSource, SkillTier,
 };
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,9 @@ pub struct MirrorInsightCard {
     pub confidence_pct: u8,
     pub pinned: bool,
     pub quotes: Vec<QuoteCitation>,
+    pub assessed_tier: String,
+    pub assumption_challenged: String,
+    pub identified_gap: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,11 +280,30 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
 
     let calc_conf = |hits: usize| -> u8 {
         if hits == 0 {
-            68
+            0
         } else {
-            let norm = (hits as f32 / (prompts.len() as f32 * 0.25).max(2.0)).min(1.0);
-            (76.0 + 22.0 * norm).round().clamp(72.0, 98.0) as u8
+            let norm = (hits as f32 / (prompts.len() as f32 * 0.35).max(2.0)).min(1.0);
+            (32.0 + 62.0 * norm).round().clamp(25.0, 94.0) as u8
         }
+    };
+
+    let mut tier_counts = [0usize; 3];
+    for p in prompts {
+        match p.skill_tier {
+            SkillTier::Beginner => tier_counts[0] += 1,
+            SkillTier::Intermediate => tier_counts[1] += 1,
+            SkillTier::Advanced => tier_counts[2] += 1,
+        }
+    }
+    let total_prompts = prompts.len().max(1);
+    let weighted_tier_idx =
+        (tier_counts[1] as f32 + 2.0 * tier_counts[2] as f32) / (total_prompts as f32);
+    let overall_tier_label = if weighted_tier_idx < 0.65 {
+        SkillTier::Beginner.positioning_label()
+    } else if weighted_tier_idx < 1.35 {
+        SkillTier::Intermediate.positioning_label()
+    } else {
+        SkillTier::Advanced.positioning_label()
     };
 
     let (tool_quotes, tool_hits) = find_quotes_and_hits(
@@ -328,62 +350,117 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
             category: "Superpower".to_string(),
             title: "The 'Bottleneck → Build the System' Reflex".to_string(),
             summary: format!(
-                "Across {} matching prompts, when you encounter friction or manual overhead, you instinctively step back to design a reusable software tool, schema, or automated pipeline rather than grinding through repetitive tasks.",
-                tool_hits.max(1)
+                "Detected in {} of {} prompts ({} Beginner / {} Intermediate / {} Advanced across vault): when you encounter manual overhead, evaluate whether you are designing durable systems or just scripting one-off patches.",
+                tool_hits, prompts.len(), tier_counts[0], tier_counts[1], tier_counts[2]
             ),
             confidence_pct: calc_conf(tool_hits),
             pinned: true,
             quotes: tool_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: if tool_hits == 0 {
+                "Assumption Tested: 0 systems/tooling prompts found—do not position yourself as a platform architect without concrete build evidence.".to_string()
+            } else if tier_counts[2] == 0 {
+                "Assumption Tested: You reference tools/workflows, but your prompts lack Senior-level tradeoff, failure-mode, or scale constraints.".to_string()
+            } else {
+                "Assumption Tested: Building a new tool for every bottleneck can become procrastination if it avoids shipping and validating with real users.".to_string()
+            },
+            identified_gap: if tool_hits == 0 {
+                "Gap Identified: No architectural or workflow automation prompts recorded in your vault yet.".to_string()
+            } else {
+                format!(
+                    "Gap Identified: {} Beginner / {} Intermediate prompt(s) still rely on tactical execution rather than reusable schema or telemetry contracts.",
+                    tier_counts[0], tier_counts[1]
+                )
+            },
         },
         MirrorInsightCard {
             id: "card-bilingual-empathy".to_string(),
             category: "Superpower".to_string(),
             title: "Bilingual Translation: Systems Depth → Clear Human Value".to_string(),
             summary: format!(
-                "Identified across {} prompts: you bridge backend systems architecture with clear, human-centered positioning so stakeholders and end-users immediately grasp the practical outcome without jargon.",
-                empathy_hits.max(1)
+                "Identified across {} of {} prompts: measures how consistently you connect backend engineering decisions to user clarity, positioning, and measurable unit economics.",
+                empathy_hits, prompts.len()
             ),
             confidence_pct: calc_conf(empathy_hits),
             pinned: true,
             quotes: empathy_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: if empathy_hits == 0 {
+                "Assumption Tested: 0 user/positioning signals detected—technical code alone rarely speaks for itself without explicit value translation.".to_string()
+            } else {
+                "Assumption Tested: Clear positioning language in prompts must be backed by quantified customer outcomes (latency, revenue, retention), not just clean copy.".to_string()
+            },
+            identified_gap: if empathy_hits < 2 {
+                "Gap Identified: Sparse commercial/user-value framing—add explicit ICP, pricing, and outcome constraints when designing technical systems.".to_string()
+            } else {
+                "Gap Identified: Pair qualitative user empathy with hard unit-economics and conversion metrics to prove Staff/Principal business impact.".to_string()
+            },
         },
         MirrorInsightCard {
             id: "card-values-anchor".to_string(),
             category: "Core Value".to_string(),
             title: "Autonomy, Sustainable Stability & High-Leverage Ownership".to_string(),
             summary: format!(
-                "Synthesized from {} value-signal reflections: your core motivation centers on building durable personal equity, household stability, and authentic work aligned with your natural strengths.",
-                values_hits.max(1)
+                "Synthesized from {} value-signal prompt(s): tracks whether your daily technical work actually compounds toward household stability and autonomy.",
+                values_hits
             ),
             confidence_pct: calc_conf(values_hits),
             pinned: true,
             quotes: values_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: "Assumption Tested: Wanting autonomy or founder-level equity does not create it—if your daily prompts are 80% reactive maintenance, your trajectory will stay linear.".to_string(),
+            identified_gap: if values_hits == 0 {
+                "Gap Identified: 0 explicit career/value constraints logged—define your non-negotiables (comp floor, ownership scope, work rhythm) in the Reflective Journal.".to_string()
+            } else {
+                "Gap Identified: Audit how many hours per week go toward compounding assets vs. unleveraged ad-hoc requests.".to_string()
+            },
         },
         MirrorInsightCard {
             id: "card-burnout-trigger".to_string(),
             category: "Burnout Trigger".to_string(),
             title: "The Repetitive Manual Maintenance Trap".to_string(),
             summary: format!(
-                "Detected {} friction signals: energy drain in your prompt archive correlates strongly with linear, repetitive asset maintenance or fragmented context-switching rather than 1-to-Many systems design.",
+                "Detected {} friction signal(s): tracks where repetitive hand-maintenance, boilerplate, or fragmented context-switching drains your cognitive output.",
                 burnout_hits
             ),
             confidence_pct: calc_conf(burnout_hits),
             pinned: true,
             quotes: burnout_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: "Assumption Tested: High output during crunch periods is not sustainable leverage—ignoring repetitive maintenance drag leads to silent skill stagnation.".to_string(),
+            identified_gap: if burnout_hits == 0 {
+                "Gap Identified: 0 explicit burnout markers detected yet—proactively document which weekly tasks drain your energy so Clearspace can flag role mismatches.".to_string()
+            } else {
+                format!(
+                    "Gap Identified: {} prompt(s) show maintenance friction; convert the top recurring manual chore into a deterministic script or test suite.",
+                    burnout_hits
+                )
+            },
         },
         MirrorInsightCard {
             id: "card-grill-me".to_string(),
             category: "Cognitive Rhythm".to_string(),
             title: format!("First-Principles Truth-Seeking & {} Deep Flow", peak_window),
             summary: format!(
-                "With {}% of your timestamped prompts concentrated during {} and {} skeptical inquiry signals, you use AI as a dialectical sparring partner to stress-test assumptions before committing engineering effort.",
+                "With {}% of timestamped prompts in {} and {} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions before building.",
                 peak_share,
                 peak_window,
-                skeptic_hits.max(1)
+                skeptic_hits
             ),
             confidence_pct: calc_conf(skeptic_hits),
             pinned: true,
             quotes: skeptic_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: if skeptic_hits == 0 {
+                "Assumption Tested: 0 skeptical/adversarial prompts found—using AI only for confirmation or code generation creates blind spots and inflates confidence.".to_string()
+            } else {
+                "Assumption Tested: Stress-testing ideas in chat is only half the loop—verify that critiques translate into shipped tests and falsifiable benchmarks.".to_string()
+            },
+            identified_gap: if skeptic_hits == 0 {
+                "Gap Identified: Start asking AI to expose flaws, edge cases, and failure modes in your designs before writing implementation code.".to_string()
+            } else {
+                "Gap Identified: Expand adversarial verification from product strategy into automated regression and load-testing benchmarks.".to_string()
+            },
         },
     ]
 }
@@ -421,20 +498,24 @@ fn load_prompts_from_sqlite(conn: &Connection) -> Vec<NormalizedPrompt> {
     };
     let Ok(rows) = stmt.query_map([], |row| {
         let source_str: String = row.get(1)?;
+        let cleaned_text: String = row.get(5)?;
+        let word_count: usize = row.get(6)?;
         let cats_str: String = row.get(9)?;
         let signal_categories: Vec<String> =
             serde_json::from_str(&cats_str).unwrap_or_default();
+        let skill_tier = classify_skill_tier(&cleaned_text, word_count, &signal_categories);
         Ok(NormalizedPrompt {
             id: row.get(0)?,
             source: PromptSource::from_str_lossy(&source_str),
             conversation_id: row.get(2)?,
             created_at: row.get(3)?,
             local_hour: row.get::<_, Option<u8>>(4)?,
-            cleaned_text: row.get(5)?,
-            word_count: row.get::<_, usize>(6)?,
+            cleaned_text,
+            word_count,
             redactions_made: row.get::<_, usize>(7)?,
             is_high_signal: row.get::<_, i64>(8)? != 0,
             signal_categories,
+            skill_tier,
         })
     }) else {
         return Vec::new();
