@@ -1,0 +1,12 @@
+# Commercial / Proprietary License (`ee/`)
+
+Copyright (c) 2026 Christian Gomez (G3Z Creative, LLC). All rights reserved.
+
+The source code and assets inside the `ee/` directory are made available in this
+public repository strictly for **security auditing, transparency, and verification**
+so users can verify how their data is processed.
+
+You may inspect and audit all code in `ee/`, and run it as part of an officially
+licensed binary or valid subscription/unlock key. You may NOT redistribute,
+resell, white-label, or bypass license checks for code inside `ee/` without
+explicit written permission from G3Z Creative, LLC.

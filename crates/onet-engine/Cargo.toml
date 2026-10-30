@@ -1,0 +1,11 @@
+[package]
+name = "clearspace-onet-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Local O*NET 29.x + Modern Tech/Creator Role Matcher & Behavioral Fit Scoring Engine."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+clearspace-prompt-parsers = { path = "../prompt-parsers" }

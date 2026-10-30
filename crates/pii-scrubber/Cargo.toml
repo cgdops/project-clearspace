@@ -1,0 +1,10 @@
+[package]
+name = "clearspace-pii-scrubber"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Deterministic local PII, secret, and code-dump scrubber for personal AI prompt logs."
+
+[dependencies]
+serde.workspace = true
+regex.workspace = true

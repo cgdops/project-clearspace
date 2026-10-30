@@ -1,0 +1,18 @@
+name: New AI Platform Parser Request
+description: Request or contribute a local parser for a new AI chat / IDE platform
+labels: ["parser", "open-source"]
+body:
+  - type: input
+    id: platform
+    attributes:
+      label: AI Platform / Tool Name
+      placeholder: e.g., Cursor, Windsurf, Perplexity, Poe
+    validations:
+      required: true
+  - type: textarea
+    id: format
+    attributes:
+      label: Export File Format or Local Directory Path
+      description: Describe the JSON/JSONL/SQLite schema (with dummy data only — never paste personal prompts).
+    validations:
+      required: true

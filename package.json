@@ -1,0 +1,13 @@
+{
+  "name": "clearspace-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev:desktop": "npm --workspace=apps/desktop run tauri dev",
+    "build:desktop": "npm --workspace=apps/desktop run tauri build",
+    "test:rust": "cargo test --workspace"
+  }
+}

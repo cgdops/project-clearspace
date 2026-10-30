@@ -1,0 +1,20 @@
+name: Clearspace Open-Core CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust-crates-test:
+    name: Verify MIT Open-Source Crates (Scrubber, Parsers, O*NET Engine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run cargo test on open-source crates
+        run: |
+          cargo test -p clearspace-pii-scrubber
+          cargo test -p clearspace-prompt-parsers
+          cargo test -p clearspace-onet-engine

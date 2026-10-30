@@ -1,0 +1,19 @@
+[package]
+name = "clearspace-desktop-tauri"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tauri v2 native desktop shell for Clearspace."
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+chrono.workspace = true
+clearspace-pii-scrubber = { path = "../../../crates/pii-scrubber" }
+clearspace-prompt-parsers = { path = "../../../crates/prompt-parsers" }
+clearspace-onet-engine = { path = "../../../crates/onet-engine" }

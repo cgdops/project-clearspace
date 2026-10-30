@@ -1,0 +1,15 @@
+[package]
+name = "clearspace-prompt-parsers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Universal local prompt parsers for Antigravity, Claude, ChatGPT, Gemini Takeout, and Markdown journals."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+walkdir.workspace = true
+sha2.workspace = true
+hex.workspace = true
+clearspace-pii-scrubber = { path = "../pii-scrubber" }
