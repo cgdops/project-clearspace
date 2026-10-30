@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export type SkillTier = "beginner" | "intermediate" | "advanced";
+
 export interface IngestionSummary {
   total_files_scanned: number;
   total_raw_prompts: number;
@@ -13,6 +15,8 @@ export interface IngestionSummary {
   hourly_distribution: number[];
   category_counts: [string, number][];
   source_counts?: [string, number][];
+  tier_counts?: [number, number, number];
+  overall_positioning?: string;
 }
 
 export interface QuoteCitation {
@@ -29,6 +33,9 @@ export interface MirrorInsightCard {
   confidence_pct: number;
   pinned: boolean;
   quotes: QuoteCitation[];
+  assessed_tier?: string;
+  assumption_challenged?: string;
+  identified_gap?: string;
 }
 
 export interface EvidenceQuote {
@@ -43,6 +50,12 @@ export interface RoleMatchResult {
   modern_titles: string[];
   bucket: string;
   salary_range_usd: string;
+  assessed_tier: string;
+  positioned_title: string;
+  positioned_salary_usd: string;
+  honest_positioning_rationale: string;
+  identified_gaps: string[];
+  tested_assumptions: string[];
   overall_fit_pct: number;
   skill_overlap_pct: number;
   energy_alignment_pct: number;
@@ -83,6 +96,7 @@ export interface NormalizedPrompt {
   redactions_made: number;
   is_high_signal: boolean;
   signal_categories: string[];
+  skill_tier?: SkillTier;
 }
 
 export interface VaultDashboardPayload {
@@ -313,6 +327,65 @@ function classifySignalsClient(text: string, wordCount: number): { isHigh: boole
   return { isHigh: cats.length > 0 && wordCount >= 12, categories: cats };
 }
 
+export function classifySkillTierClient(
+  text: string,
+  wordCount: number,
+  signalCategories: string[]
+): SkillTier {
+  const hasBeginner =
+    /\b(what is a|what is an|how do i|how to basic|explain like i'm|for a beginner|step by step tutorial|fix this syntax|syntax error|what does this error mean|help me understand basic|beginner|newbie|just starting out|hello world)\b/i.test(
+      text
+    );
+  const hasAdvanced =
+    /(\/grill-me|\b(architect|architecture|tradeoff|trade-off|scale|scalability|unit economics|first principles|bottleneck|telemetry|idempoten|concurrency|distributed|schema|compiler|pipeline|deterministic|zero-knowledge|autonomy|icp|positioning|multi-tenant|latency|throughput)\b)/i.test(
+      text
+    );
+  const hasIntermediate =
+    /\b(integrate|refactor|implement|workflow|api|database|sqlite|rust|typescript|test|endpoint|component|deployment|optimize|automation|query|parser)\b/i.test(
+      text
+    );
+
+  if (hasBeginner && !hasAdvanced) {
+    return "beginner";
+  }
+
+  const hasArchOrSkeptic = signalCategories.some(
+    (c) => c === "Systems & Architecture" || c === "Skeptical Truth-Seeking"
+  );
+
+  if (hasAdvanced && (hasArchOrSkeptic || signalCategories.length >= 2 || wordCount >= 14)) {
+    return "advanced";
+  }
+
+  if (hasIntermediate || signalCategories.length > 0) {
+    return "intermediate";
+  }
+
+  return "beginner";
+}
+
+export function formatTierLabel(tier: SkillTier): string {
+  switch (tier) {
+    case "beginner":
+      return "Beginner → Junior";
+    case "intermediate":
+      return "Intermediate → Mid-Level";
+    case "advanced":
+      return "Advanced → Senior / Staff";
+  }
+}
+
+function tierDepthWeight(tier: SkillTier): number {
+  switch (tier) {
+    case "beginner":
+      return 0.35;
+    case "intermediate":
+      return 0.75;
+    case "advanced":
+      return 1.15;
+  }
+}
+
 function simpleHash(str: string): string {
   const norm = str.trim().toLowerCase().slice(0, 180);
   let h1 = 0xdeadbeef ^ norm.length;
@@ -401,6 +474,7 @@ function parseMultiProviderClient(rawInput: string): {
     seenHashes.add(id);
     const localHour = extractHourClient(createdAt);
     const sig = classifySignalsClient(scrubbed.cleanedText, scrubbed.wordCount);
+    const skillTier = classifySkillTierClient(scrubbed.cleanedText, scrubbed.wordCount, sig.categories);
     prompts.push({
       id,
       source,
@@ -412,6 +486,7 @@ function parseMultiProviderClient(rawInput: string): {
       redactions_made: scrubbed.redactionsMade,
       is_high_signal: sig.isHigh,
       signal_categories: sig.categories,
+      skill_tier: skillTier,
     });
   };
 
@@ -508,6 +583,7 @@ function summarizePromptsClient(
 ): IngestionSummary {
   const sorted = [...prompts].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const hourly = new Array<number>(24).fill(0);
+  const tier_counts: [number, number, number] = [0, 0, 0];
   const catMap = new Map<string, number>();
   const srcMap = new Map<string, number>();
   const convos = new Set<string>();
@@ -521,6 +597,12 @@ function summarizePromptsClient(
     if (typeof p.local_hour === "number" && p.local_hour >= 0 && p.local_hour < 24) {
       hourly[p.local_hour] += 1;
     }
+    const tier =
+      p.skill_tier ?? classifySkillTierClient(p.cleaned_text, p.word_count, p.signal_categories);
+    if (tier === "beginner") tier_counts[0] += 1;
+    else if (tier === "intermediate") tier_counts[1] += 1;
+    else tier_counts[2] += 1;
+
     for (const c of p.signal_categories) {
       catMap.set(c, (catMap.get(c) ?? 0) + 1);
     }
@@ -530,6 +612,14 @@ function summarizePromptsClient(
 
   const category_counts = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
   const source_counts = Array.from(srcMap.entries()).sort((a, b) => b[1] - a[1]);
+
+  let overall_positioning = "Awaiting Evidence";
+  if (sorted.length > 0) {
+    const weightedIdx = (tier_counts[1] + 2 * tier_counts[2]) / sorted.length;
+    if (weightedIdx < 0.65) overall_positioning = "Beginner → Junior";
+    else if (weightedIdx < 1.35) overall_positioning = "Intermediate → Mid-Level";
+    else overall_positioning = "Advanced → Senior / Staff";
+  }
 
   return {
     total_files_scanned: filesScanned ?? convos.size,
@@ -544,11 +634,29 @@ function summarizePromptsClient(
     hourly_distribution: hourly,
     category_counts,
     source_counts,
+    tier_counts,
+    overall_positioning,
   };
 }
 
 function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[] {
   if (prompts.length === 0) return [];
+
+  const tierCounts: [number, number, number] = [0, 0, 0];
+  for (const p of prompts) {
+    const tier =
+      p.skill_tier ?? classifySkillTierClient(p.cleaned_text, p.word_count, p.signal_categories);
+    if (tier === "beginner") tierCounts[0] += 1;
+    else if (tier === "intermediate") tierCounts[1] += 1;
+    else tierCounts[2] += 1;
+  }
+  const weightedTierIdx = (tierCounts[1] + 2 * tierCounts[2]) / Math.max(1, prompts.length);
+  const overallTierLabel =
+    weightedTierIdx < 0.65
+      ? "Beginner → Junior"
+      : weightedTierIdx < 1.35
+      ? "Intermediate → Mid-Level"
+      : "Advanced → Senior / Staff";
 
   const findQuotesAndHits = (keywords: string[], limit: number) => {
     const quotes: QuoteCitation[] = [];
@@ -571,9 +679,9 @@ function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[
   };
 
   const calcConf = (hits: number) => {
-    if (hits === 0) return 68;
-    const norm = Math.min(1, hits / Math.max(2, prompts.length * 0.25));
-    return Math.min(98, Math.max(72, Math.round(76 + 22 * norm)));
+    if (hits === 0) return 0;
+    const norm = Math.min(1, hits / Math.max(2, prompts.length * 0.35));
+    return Math.min(94, Math.max(25, Math.round(32 + 62 * norm)));
   };
 
   const tool = findQuotesAndHits(
@@ -602,46 +710,89 @@ function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[
       id: "card-tool-builder",
       category: "Superpower",
       title: "The 'Bottleneck → Build the System' Reflex",
-      summary: `Across ${Math.max(1, tool.hits)} matching prompts, when you encounter friction or manual overhead, you instinctively step back to design a reusable software tool, schema, or automated pipeline rather than grinding through repetitive tasks.`,
+      summary: `Detected in ${tool.hits} of ${prompts.length} prompts (${tierCounts[0]} Beginner / ${tierCounts[1]} Intermediate / ${tierCounts[2]} Advanced across vault): when you encounter manual overhead, evaluate whether you are designing durable systems or just scripting one-off patches.`,
       confidence_pct: calcConf(tool.hits),
       pinned: true,
       quotes: tool.quotes,
+      assessed_tier: overallTierLabel,
+      assumption_challenged:
+        tool.hits === 0
+          ? "Assumption Tested: 0 systems/tooling prompts found—do not position yourself as a platform architect without concrete build evidence."
+          : tierCounts[2] === 0
+          ? "Assumption Tested: You reference tools/workflows, but your prompts lack Senior-level tradeoff, failure-mode, or scale constraints."
+          : "Assumption Tested: Building a new tool for every bottleneck can become procrastination if it avoids shipping and validating with real users.",
+      identified_gap:
+        tool.hits === 0
+          ? "Gap Identified: No architectural or workflow automation prompts recorded in your vault yet."
+          : `Gap Identified: ${tierCounts[0]} Beginner / ${tierCounts[1]} Intermediate prompt(s) still rely on tactical execution rather than reusable schema or telemetry contracts.`,
     },
     {
       id: "card-bilingual-empathy",
       category: "Superpower",
       title: "Bilingual Translation: Systems Depth → Clear Human Value",
-      summary: `Identified across ${Math.max(1, empathy.hits)} prompts: you bridge backend systems architecture with clear, human-centered positioning so stakeholders and end-users immediately grasp the practical outcome without jargon.`,
+      summary: `Identified across ${empathy.hits} of ${prompts.length} prompts: measures how consistently you connect backend engineering decisions to user clarity, positioning, and measurable unit economics.`,
       confidence_pct: calcConf(empathy.hits),
       pinned: true,
       quotes: empathy.quotes,
+      assessed_tier: overallTierLabel,
+      assumption_challenged:
+        empathy.hits === 0
+          ? "Assumption Tested: 0 user/positioning signals detected—technical code alone rarely speaks for itself without explicit value translation."
+          : "Assumption Tested: Clear positioning language in prompts must be backed by quantified customer outcomes (latency, revenue, retention), not just clean copy.",
+      identified_gap:
+        empathy.hits < 2
+          ? "Gap Identified: Sparse commercial/user-value framing—add explicit ICP, pricing, and outcome constraints when designing technical systems."
+          : "Gap Identified: Pair qualitative user empathy with hard unit-economics and conversion metrics to prove Staff/Principal business impact.",
     },
     {
       id: "card-values-anchor",
       category: "Core Value",
       title: "Autonomy, Sustainable Stability & High-Leverage Ownership",
-      summary: `Synthesized from ${Math.max(1, values.hits)} value-signal reflections: your core motivation centers on building durable personal equity, household stability, and authentic work aligned with your natural strengths.`,
+      summary: `Synthesized from ${values.hits} value-signal prompt(s): tracks whether your daily technical work actually compounds toward household stability and autonomy.`,
       confidence_pct: calcConf(values.hits),
       pinned: true,
       quotes: values.quotes,
+      assessed_tier: overallTierLabel,
+      assumption_challenged:
+        "Assumption Tested: Wanting autonomy or founder-level equity does not create it—if your daily prompts are 80% reactive maintenance, your trajectory will stay linear.",
+      identified_gap:
+        values.hits === 0
+          ? "Gap Identified: 0 explicit career/value constraints logged—define your non-negotiables (comp floor, ownership scope, work rhythm) in the Reflective Journal."
+          : "Gap Identified: Audit how many hours per week go toward compounding assets vs. unleveraged ad-hoc requests.",
     },
     {
       id: "card-burnout-trigger",
       category: "Burnout Trigger",
       title: "The Repetitive Manual Maintenance Trap",
-      summary: `Detected ${burnout.hits} friction signals: energy drain in your prompt archive correlates strongly with linear, repetitive asset maintenance or fragmented context-switching rather than 1-to-Many systems design.`,
+      summary: `Detected ${burnout.hits} friction signal(s): tracks where repetitive hand-maintenance, boilerplate, or fragmented context-switching drains your cognitive output.`,
       confidence_pct: calcConf(burnout.hits),
       pinned: true,
       quotes: burnout.quotes,
+      assessed_tier: overallTierLabel,
+      assumption_challenged:
+        "Assumption Tested: High output during crunch periods is not sustainable leverage—ignoring repetitive maintenance drag leads to silent skill stagnation.",
+      identified_gap:
+        burnout.hits === 0
+          ? "Gap Identified: 0 explicit burnout markers detected yet—proactively document which weekly tasks drain your energy so Clearspace can flag role mismatches."
+          : `Gap Identified: ${burnout.hits} prompt(s) show maintenance friction; convert the top recurring manual chore into a deterministic script or test suite.`,
     },
     {
       id: "card-grill-me",
       category: "Cognitive Rhythm",
       title: "First-Principles Truth-Seeking & Dialectical Verification",
-      summary: `With ${Math.max(1, skeptic.hits)} skeptical inquiry signals, you use AI as a dialectical sparring partner to stress-test assumptions from first principles before committing engineering effort.`,
+      summary: `With ${skeptic.hits} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions from first principles before committing engineering effort.`,
       confidence_pct: calcConf(skeptic.hits),
       pinned: true,
       quotes: skeptic.quotes,
+      assessed_tier: overallTierLabel,
+      assumption_challenged:
+        skeptic.hits === 0
+          ? "Assumption Tested: 0 skeptical/adversarial prompts found—using AI only for confirmation or code generation creates blind spots and inflates confidence."
+          : "Assumption Tested: Stress-testing ideas in chat is only half the loop—verify that critiques translate into shipped tests and falsifiable benchmarks.",
+      identified_gap:
+        skeptic.hits === 0
+          ? "Gap Identified: Start asking AI to expose flaws, edge cases, and failure modes in your designs before writing implementation code."
+          : "Gap Identified: Expand adversarial verification from product strategy into automated regression and load-testing benchmarks.",
     },
   ];
 }
@@ -656,16 +807,28 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
         "AI Automation & Revenue Architect",
         "Principal Marketing & GTM Technologist",
       ],
+      junior_title: "Junior Systems & Marketing Automation Engineer",
+      junior_salary_usd: "$75,000 – $100,000",
+      mid_title: "Mid-Level Growth Systems & Automation Engineer",
+      mid_salary_usd: "$110,000 – $140,000",
+      senior_title: "Staff Growth Systems Architect",
+      senior_salary_usd: "$145,000 – $185,000",
       bucket: "Immediate High-Leverage Upgrade",
       salary_range_usd: "$145,000 – $185,000",
       why_it_fits_template:
-        "Your prompt history shows a strong focus on replacing manual operational bottlenecks with programmatic 1-to-Many pipelines, automated data workflows, and measurable unit economics.",
+        "Your prompt history shows a focus on replacing manual operational bottlenecks with programmatic 1-to-Many pipelines, automated data workflows, and measurable unit economics.",
       burnout_guardrail:
         "Avoid roles where you are treated as a ticket-taking execution coordinator; require architectural ownership over the automation stack.",
       skill_keywords: ["seo", "pseo", "n8n", "automation", "api", "pipeline", "architecture", "system", "scale", "telemetry"],
       energy_keywords: ["unfair advantage", "specialize", "compound", "velocity", "automat", "scale", "system", "optimize"],
       value_keywords: ["efficiency", "costs", "stability", "benefits", "clear", "simple", "impact", "autonomy"],
       burnout_conflict_keywords: ["manual maintenance", "repetitive", "hand-editing", "tedious"],
+      competency_pillars: [
+        { name: "Programmatic Pipeline & Workflow Automation", kws: ["pipeline", "automation", "n8n", "workflow"] },
+        { name: "Cloud & Edge Systems Architecture", kws: ["cloudflare", "astro", "architecture", "system", "scale"] },
+        { name: "Search, Telemetry & Ranking Analytics", kws: ["seo", "pseo", "ranking", "search console", "telemetry"] },
+        { name: "API Integration & Unit-Economics Modeling", kws: ["api", "crm", "scraper", "costs", "efficiency"] },
+      ],
     },
     {
       onet_code: "15-1252.00",
@@ -675,16 +838,28 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
         "Forward-Deployed AI Solutions Engineer",
         "Internal Tools & Agentic Workflow Architect",
       ],
+      junior_title: "Junior Developer Tools & SDK Engineer",
+      junior_salary_usd: "$80,000 – $105,000",
+      mid_title: "Mid-Level Platform & Agentic Tooling Engineer",
+      mid_salary_usd: "$115,000 – $145,000",
+      senior_title: "Developer Experience (DX) & AI Tooling Engineer (Senior / Staff)",
+      senior_salary_usd: "$150,000 – $195,000",
       bucket: "Immediate High-Leverage Upgrade",
       salary_range_usd: "$150,000 – $195,000",
       why_it_fits_template:
-        "Whenever you encounter a workflow bottleneck, your immediate reflex is to design a custom developer tool, schema, or agentic workflow while translating complex architecture into clear human value.",
+        "Whenever you encounter a workflow bottleneck, your reflex is to design a custom developer tool, schema, or agentic workflow while translating complex architecture into clear human value.",
       burnout_guardrail:
         "Stay focused on the reusable tooling and platform layer rather than repetitive manual asset or ticket production.",
       skill_keywords: ["agent", "mcp", "editor", "tool", "token", "model", "database", "sqlite", "graph", "workflow", "rust", "schema"],
       energy_keywords: ["build a tool", "fast", "spin up", "prototype", "architect", "design", "solve"],
       value_keywords: ["skeptic", "worth solving", "honestly", "first principles", "clarity"],
       burnout_conflict_keywords: ["burnout", "so much work", "boilerplate", "manual"],
+      competency_pillars: [
+        { name: "Agentic & MCP Workflow Orchestration", kws: ["agent", "mcp", "workflow", "token", "model", "skill"] },
+        { name: "Systems Languages & SDK Compilation", kws: ["rust", "typescript", "compiler", "sdk", "editor", "tool"] },
+        { name: "Local-First Storage & Graph/Vector Schemas", kws: ["database", "sqlite", "graph", "vector", "schema"] },
+        { name: "First-Principles Verification & Stress-Testing", kws: ["skeptic", "worth solving", "first principles", "clarity"] },
+      ],
     },
     {
       onet_code: "15-1255.01",
@@ -694,16 +869,28 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
         "Technical Growth PM — Interactive Media & Simulation",
         "Simulation Tools & Economy Systems Designer",
       ],
+      junior_title: "Junior Gameplay & Companion Tools Developer",
+      junior_salary_usd: "$70,000 – $95,000",
+      mid_title: "Mid-Level Simulation & Interactive Systems Designer",
+      mid_salary_usd: "$105,000 – $135,000",
+      senior_title: "Interactive Ecosystem & Companion Platform Lead",
+      senior_salary_usd: "$135,000 – $175,000",
       bucket: "Hidden Natural Fit (Unexplored Path)",
       salary_range_usd: "$135,000 – $175,000",
       why_it_fits_template:
-        "Your deep-flow prompts frequently explore interactive state machines, simulation economies, routing algorithms, and telemetry-driven companion tools—blending systems engineering with user engagement.",
+        "Your deep-flow prompts explore interactive state machines, simulation economies, routing algorithms, and telemetry-driven companion tools—blending systems engineering with user engagement.",
       burnout_guardrail:
         "Do not enter through manual content or asset grinding; lead through Companion Platforms, Data Telemetry, or Systems Design.",
       skill_keywords: ["game", "quest", "route", "economy", "balance", "simulation", "interactive", "state", "telemetry"],
       energy_keywords: ["designing", "building", "playing", "optimizing", "flow", "deep"],
       value_keywords: ["fun", "immersive", "player", "community", "guide", "craft", "creative"],
       burnout_conflict_keywords: ["manual maintenance", "asset grind", "repetitive"],
+      competency_pillars: [
+        { name: "Simulation Economy & Balance Modeling", kws: ["economy", "balance", "simulation", "telemetry"] },
+        { name: "Interactive State Machines & Routing", kws: ["quest", "route", "state", "interactive", "rpg"] },
+        { name: "Engine & Addon Tooling (Godot / Lua)", kws: ["game", "godot", "addon", "lua", "hero", "character"] },
+        { name: "Player Community & Companion Craft", kws: ["player", "community", "guide", "craft", "immersive"] },
+      ],
     },
     {
       onet_code: "11-2021.00",
@@ -713,16 +900,28 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
         "VP / Director of Technical Growth & GTM Engineering",
         "Founder — Productized B2B Automation & Open-Core Software",
       ],
+      junior_title: "Junior Technical Product & GTM Analyst",
+      junior_salary_usd: "$80,000 – $105,000",
+      mid_title: "Mid-Level Technical Product & Growth Manager",
+      mid_salary_usd: "$120,000 – $155,000",
+      senior_title: "Head of AI Growth & Product-Led Acquisition (Senior / Staff)",
+      senior_salary_usd: "$180,000 – $250,000+ (or Equity / ARR)",
       bucket: "5-Year North Star Track",
       salary_range_usd: "$180,000 – $250,000+ (or Equity / ARR)",
       why_it_fits_template:
-        "You naturally synthesize systems engineering, unit economics, buyer psychology, and adversarial truth-seeking. Over a 5-year horizon, owning both product architecture and organic distribution compounds your personal equity fastest.",
+        "You synthesize systems engineering, unit economics, buyer psychology, and adversarial truth-seeking. Over a 5-year horizon, owning both product architecture and organic distribution compounds your personal equity fastest.",
       burnout_guardrail:
         "Protect your cognitive bandwidth by focusing on 1 flagship product and 1 automated distribution engine at a time, eliminating fragmented ad-hoc client work.",
       skill_keywords: ["product", "pricing", "icp", "competitor", "market", "business", "client", "strategy", "positioning", "growth"],
       energy_keywords: ["niche", "unfair advantage", "vision", "big picture", "compound", "strategy", "leader"],
       value_keywords: ["authentic", "stability", "home", "equity", "journey", "clarity", "autonomy"],
       burnout_conflict_keywords: ["adhoc", "fragmented", "conflicting", "context switching"],
+      competency_pillars: [
+        { name: "ICP Positioning & Competitive Differentiation", kws: ["icp", "positioning", "competitor", "value prop", "market"] },
+        { name: "Pricing Architecture & Revenue Unit Economics", kws: ["pricing", "revenue", "retainer", "business", "equity"] },
+        { name: "Product-Led Growth & Acquisition Strategy", kws: ["product", "growth", "strategy", "outreach", "client"] },
+        { name: "Long-Term Portfolio & Autonomy Governance", kws: ["autonomy", "stability", "compound", "unfair advantage"] },
+      ],
     },
   ];
 
@@ -733,6 +932,15 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       modern_titles: r.modern_titles,
       bucket: r.bucket,
       salary_range_usd: r.salary_range_usd,
+      assessed_tier: "Awaiting Evidence",
+      positioned_title: r.junior_title,
+      positioned_salary_usd: "Import vault to calibrate",
+      honest_positioning_rationale:
+        "No prompts analyzed yet. Clearspace never guesses or inflates seniority without behavioral evidence.",
+      identified_gaps: r.competency_pillars.map((p) => `Unverified competency: ${p.name}`),
+      tested_assumptions: [
+        "Upload your prompt history to test how your actual daily inquiries compare against your target career track.",
+      ],
       overall_fit_pct: 0,
       skill_overlap_pct: 0,
       energy_alignment_pct: 0,
@@ -752,15 +960,27 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
     let energyHits = 0;
     let valueHits = 0;
     let burnoutHits = 0;
+
+    let weightedSkill = 0;
+    let weightedEnergy = 0;
+    let weightedValue = 0;
+
+    const matchedTierCounts: [number, number, number] = [0, 0, 0];
     const matchedTerms: string[] = [];
     const quotes: EvidenceQuote[] = [];
+    const pillarHits = new Array<number>(role.competency_pillars.length).fill(0);
 
     for (const p of prompts) {
       const lower = p.cleaned_text.toLowerCase();
+      const effectiveTier: SkillTier =
+        p.skill_tier ?? classifySkillTierClient(p.cleaned_text, p.word_count, p.signal_categories);
+      const weight = tierDepthWeight(effectiveTier);
       let matched = false;
+
       for (const kw of role.skill_keywords) {
         if (lower.includes(kw)) {
           skillHits += 1;
+          weightedSkill += weight;
           matched = true;
           if (matchedTerms.length < 5 && !matchedTerms.includes(kw)) matchedTerms.push(kw);
         }
@@ -768,16 +988,33 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       for (const kw of role.energy_keywords) {
         if (lower.includes(kw)) {
           energyHits += 2;
+          weightedEnergy += 2 * weight;
           matched = true;
           if (matchedTerms.length < 5 && !matchedTerms.includes(kw)) matchedTerms.push(kw);
         }
       }
       for (const kw of role.value_keywords) {
-        if (lower.includes(kw)) valueHits += 1;
+        if (lower.includes(kw)) {
+          valueHits += 1;
+          weightedValue += weight;
+        }
       }
       for (const kw of role.burnout_conflict_keywords) {
         if (lower.includes(kw)) burnoutHits += 1;
       }
+
+      role.competency_pillars.forEach((pillar, idx) => {
+        if (pillar.kws.some((k) => lower.includes(k))) {
+          pillarHits[idx] += 1;
+        }
+      });
+
+      if (matched) {
+        if (effectiveTier === "beginner") matchedTierCounts[0] += 1;
+        else if (effectiveTier === "intermediate") matchedTierCounts[1] += 1;
+        else matchedTierCounts[2] += 1;
+      }
+
       if (matched && p.is_high_signal && quotes.length < 4 && p.word_count >= 12) {
         quotes.push({
           prompt_id: p.id,
@@ -787,15 +1024,37 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       }
     }
 
-    const scoreDim = (hits: number, factor: number) => {
-      if (hits === 0) return 0;
-      const ratio = Math.min(1, hits / (corpusScale * factor));
-      return Math.min(98, Math.max(0, Math.round(52 + 46 * ratio)));
+    const totalMatchedPrompts =
+      matchedTierCounts[0] + matchedTierCounts[1] + matchedTierCounts[2];
+
+    let assessedSkillTier: SkillTier | null = null;
+    if (skillHits > 0 || energyHits > 0 || valueHits > 0) {
+      if (totalMatchedPrompts === 0) {
+        assessedSkillTier = "beginner";
+      } else {
+        const tierScore =
+          (matchedTierCounts[1] + 2 * matchedTierCounts[2]) / totalMatchedPrompts;
+        if (tierScore < 0.65) assessedSkillTier = "beginner";
+        else if (tierScore < 1.35) assessedSkillTier = "intermediate";
+        else assessedSkillTier = "advanced";
+      }
+    }
+
+    const scoreDim = (wHits: number, factor: number, tier: SkillTier | null) => {
+      if (wHits <= 0 || !tier) return 0;
+      const ratio = Math.min(1, wHits / (corpusScale * factor));
+      if (tier === "beginner") {
+        return Math.min(46, Math.max(18, Math.round(22 + 24 * ratio)));
+      }
+      if (tier === "intermediate") {
+        return Math.min(72, Math.max(45, Math.round(48 + 24 * ratio)));
+      }
+      return Math.min(98, Math.max(56, Math.round(56 + 42 * ratio)));
     };
 
-    const skillPct = scoreDim(skillHits, 2.1);
-    const energyPct = scoreDim(energyHits, 1.3);
-    const valuesPct = scoreDim(valueHits, 1.4);
+    const skillPct = scoreDim(weightedSkill, 2.1, assessedSkillTier);
+    const energyPct = scoreDim(weightedEnergy, 1.3, assessedSkillTier);
+    const valuesPct = scoreDim(weightedValue, 1.4, assessedSkillTier);
     const burnoutPct =
       burnoutHits === 0
         ? 8
@@ -812,6 +1071,71 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
             )
           );
 
+    let assessed_tier = "No Demonstrated Evidence";
+    let positioned_title = role.junior_title;
+    let positioned_salary_usd = role.junior_salary_usd;
+    let honest_positioning_rationale =
+      "0 domain signals detected in your vault for this track. Positioned at baseline until concrete work samples are present.";
+
+    if (assessedSkillTier === "beginner") {
+      assessed_tier = "Beginner → Junior";
+      positioned_title = role.junior_title;
+      positioned_salary_usd = role.junior_salary_usd;
+      honest_positioning_rationale = `Objectively scored at Junior (${matchedTierCounts[0]} Beginner / ${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[2]} Advanced prompts). You touch domain keywords, but your prompts currently focus on foundational lookup or syntax rather than independent component or systems ownership.`;
+    } else if (assessedSkillTier === "intermediate") {
+      assessed_tier = "Intermediate → Mid-Level";
+      positioned_title = role.mid_title;
+      positioned_salary_usd = role.mid_salary_usd;
+      honest_positioning_rationale = `Objectively scored at Mid-Level (${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[2]} Advanced / ${matchedTierCounts[0]} Beginner prompts). You demonstrate solid component implementation and workflow wiring, but need more architectural tradeoff, scale, and unit-economics evidence for Senior/Staff.`;
+    } else if (assessedSkillTier === "advanced") {
+      assessed_tier = "Advanced → Senior / Staff";
+      positioned_title = role.senior_title;
+      positioned_salary_usd = role.senior_salary_usd;
+      honest_positioning_rationale = `Objectively scored at Senior / Staff (${matchedTierCounts[2]} Advanced / ${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[0]} Beginner prompts). Your prompts consistently frame problems around systems architecture, first-principles tradeoffs, and measurable leverage.`;
+    }
+
+    const identified_gaps: string[] = [];
+    role.competency_pillars.forEach((pillar, idx) => {
+      if (pillarHits[idx] === 0) {
+        const sampleKws = pillar.kws.slice(0, 3).join(", ");
+        identified_gaps.push(
+          `Missing evidence in ${pillar.name} (0 prompts covering ${sampleKws})`
+        );
+      }
+    });
+    if (matchedTierCounts[2] === 0 && totalMatchedPrompts > 0) {
+      identified_gaps.push(
+        "Seniority Gap: 0 prompts in this track demonstrate multi-constraint tradeoff analysis, failure-mode bounding, or unit-economics modeling required for Senior/Staff."
+      );
+    }
+    if (identified_gaps.length === 0) {
+      identified_gaps.push(
+        `Longitudinal Depth Gap: All 4 core pillars touched across ${prompts.length} prompt(s); sustain adversarial stress-testing and production post-mortems across 20+ sessions to harden Principal-level proof.`
+      );
+    }
+
+    const tested_assumptions: string[] = [];
+    if (matchedTierCounts[2] === 0 && totalMatchedPrompts > 0) {
+      tested_assumptions.push(
+        "Assumption Tested: Mentioning domain tools in prompts does not equate to Senior architectural readiness—scores are capped at Junior/Mid-Level until tradeoff & system-design prompts appear."
+      );
+    }
+    if (burnoutHits > 0) {
+      tested_assumptions.push(
+        `Assumption Tested: You logged ${burnoutHits} maintenance/burnout friction signal(s); taking this role in an execution-only culture without automation authority will replicate past burnout.`
+      );
+    }
+    if (valuesPct < skillPct) {
+      tested_assumptions.push(
+        `Assumption Tested: Technical skill overlap (${skillPct}%) exceeds explicit value alignment (${valuesPct}%)—verify you want the day-to-day operational accountability of this role, not just the title.`
+      );
+    }
+    if (tested_assumptions.length === 0) {
+      tested_assumptions.push(
+        "Assumption Tested: High architectural alignment verified, but confirm whether you want hands-on Staff IC systems ownership vs. people-management overhead before targeting Director titles."
+      );
+    }
+
     const whyItFits =
       matchedTerms.length === 0
         ? role.why_it_fits_template
@@ -823,6 +1147,12 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       modern_titles: role.modern_titles,
       bucket: role.bucket,
       salary_range_usd: role.salary_range_usd,
+      assessed_tier,
+      positioned_title,
+      positioned_salary_usd,
+      honest_positioning_rationale,
+      identified_gaps,
+      tested_assumptions,
       overall_fit_pct: overallFit,
       skill_overlap_pct: skillPct,
       energy_alignment_pct: energyPct,

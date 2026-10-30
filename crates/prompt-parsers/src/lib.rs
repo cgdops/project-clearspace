@@ -54,6 +54,41 @@ impl PromptSource {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillTier {
+    #[default]
+    Beginner,
+    Intermediate,
+    Advanced,
+}
+
+impl SkillTier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SkillTier::Beginner => "beginner",
+            SkillTier::Intermediate => "intermediate",
+            SkillTier::Advanced => "advanced",
+        }
+    }
+
+    pub fn positioning_label(&self) -> &'static str {
+        match self {
+            SkillTier::Beginner => "Beginner → Junior",
+            SkillTier::Intermediate => "Intermediate → Mid-Level",
+            SkillTier::Advanced => "Advanced → Senior / Staff",
+        }
+    }
+
+    pub fn depth_weight(&self) -> f32 {
+        match self {
+            SkillTier::Beginner => 0.35,
+            SkillTier::Intermediate => 0.75,
+            SkillTier::Advanced => 1.15,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NormalizedPrompt {
     pub id: String,
@@ -66,6 +101,8 @@ pub struct NormalizedPrompt {
     pub redactions_made: usize,
     pub is_high_signal: bool,
     pub signal_categories: Vec<String>,
+    #[serde(default)]
+    pub skill_tier: SkillTier,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -83,6 +120,10 @@ pub struct IngestionSummary {
     pub category_counts: Vec<(String, usize)>,
     #[serde(default)]
     pub source_counts: Vec<(String, usize)>,
+    #[serde(default)]
+    pub tier_counts: [usize; 3],
+    #[serde(default)]
+    pub overall_positioning: String,
 }
 
 struct SignalPatterns {
@@ -95,6 +136,9 @@ struct SignalPatterns {
     architecture: Regex,
     learning: Regex,
     grill_me: Regex,
+    beginner_markers: Regex,
+    intermediate_markers: Regex,
+    advanced_markers: Regex,
 }
 
 fn patterns() -> &'static SignalPatterns {
@@ -117,6 +161,12 @@ fn patterns() -> &'static SignalPatterns {
             .expect("valid learning regex"),
         grill_me: Regex::new(r"(?i)(/grill-me|as a skeptic|expose its flaws|super critical|worth solving|steelman|devil's advocate|blind spot|critique)\b")
             .expect("valid grill_me regex"),
+        beginner_markers: Regex::new(r"(?i)\b(what is a|what is an|how do i|how to basic|explain like i'm|for a beginner|step by step tutorial|fix this syntax|syntax error|what does this error mean|help me understand basic|beginner|newbie|just starting out|hello world)\b")
+            .expect("valid beginner_markers regex"),
+        intermediate_markers: Regex::new(r"(?i)\b(integrate|refactor|implement|workflow|api|database|sqlite|rust|typescript|test|endpoint|component|deployment|optimize|automation|query|parser)\b")
+            .expect("valid intermediate_markers regex"),
+        advanced_markers: Regex::new(r"(?i)(/grill-me|\b(architect|architecture|tradeoff|trade-off|scale|scalability|unit economics|first principles|bottleneck|telemetry|idempoten|concurrency|distributed|schema|compiler|pipeline|deterministic|zero-knowledge|autonomy|icp|positioning|multi-tenant|latency|throughput)\b)")
+            .expect("valid advanced_markers regex"),
     })
 }
 
@@ -223,6 +273,39 @@ pub fn classify_signals(text: &str, word_count: usize) -> (bool, Vec<String>) {
     (is_high, cats)
 }
 
+/// Objectively classifies a prompt's cognitive & technical depth into:
+/// - `Beginner` (`Beginner → Junior`): basic syntax, "how do I", introductory lookup
+/// - `Intermediate` (`Intermediate → Mid-Level`): feature implementation, component wiring, testing
+/// - `Advanced` (`Advanced → Senior / Staff`): systems architecture, tradeoffs, unit economics, adversarial verification
+pub fn classify_skill_tier(
+    text: &str,
+    word_count: usize,
+    signal_categories: &[String],
+) -> SkillTier {
+    let p = patterns();
+    let has_beginner = p.beginner_markers.is_match(text);
+    let has_advanced = p.advanced_markers.is_match(text);
+    let has_intermediate = p.intermediate_markers.is_match(text);
+
+    if has_beginner && !has_advanced {
+        return SkillTier::Beginner;
+    }
+
+    let has_arch_or_skeptic = signal_categories
+        .iter()
+        .any(|c| c == "Systems & Architecture" || c == "Skeptical Truth-Seeking");
+
+    if has_advanced && (has_arch_or_skeptic || signal_categories.len() >= 2 || word_count >= 14) {
+        return SkillTier::Advanced;
+    }
+
+    if has_intermediate || !signal_categories.is_empty() {
+        return SkillTier::Intermediate;
+    }
+
+    SkillTier::Beginner
+}
+
 fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSummary) {
     results.sort_by(|a, b| a.created_at.cmp(&b.created_at));
     summary.earliest_date = results
@@ -240,6 +323,7 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
     let mut cat_map: HashMap<String, usize> = HashMap::new();
     let mut src_map: HashMap<String, usize> = HashMap::new();
     summary.hourly_distribution = [0usize; 24];
+    summary.tier_counts = [0usize; 3];
     summary.high_signal_prompts = 0;
 
     for r in results.iter() {
@@ -250,6 +334,11 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
             if (h as usize) < 24 {
                 summary.hourly_distribution[h as usize] += 1;
             }
+        }
+        match r.skill_tier {
+            SkillTier::Beginner => summary.tier_counts[0] += 1,
+            SkillTier::Intermediate => summary.tier_counts[1] += 1,
+            SkillTier::Advanced => summary.tier_counts[2] += 1,
         }
         for c in &r.signal_categories {
             *cat_map.entry(c.clone()).or_insert(0usize) += 1;
@@ -267,6 +356,21 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
     src_vec.sort_by_key(|entry| Reverse(entry.1));
     summary.source_counts = src_vec;
     summary.clean_prompts_kept = results.len();
+
+    summary.overall_positioning = if results.is_empty() {
+        "Awaiting Evidence".to_string()
+    } else {
+        let total = results.len() as f32;
+        let weighted_idx =
+            (summary.tier_counts[1] as f32 + 2.0 * summary.tier_counts[2] as f32) / total;
+        if weighted_idx < 0.65 {
+            SkillTier::Beginner.positioning_label().to_string()
+        } else if weighted_idx < 1.35 {
+            SkillTier::Intermediate.positioning_label().to_string()
+        } else {
+            SkillTier::Advanced.positioning_label().to_string()
+        }
+    };
 }
 
 /// Rebuilds an `IngestionSummary` from a slice of persisted `NormalizedPrompt` items.
@@ -801,6 +905,11 @@ fn ingest_single_prompt_with_local_ts(
     let local_hour = extract_hour(local_ts);
     let (is_high_signal, signal_categories) =
         classify_signals(&scrubbed.cleaned_text, scrubbed.word_count);
+    let skill_tier = classify_skill_tier(
+        &scrubbed.cleaned_text,
+        scrubbed.word_count,
+        &signal_categories,
+    );
 
     results.push(NormalizedPrompt {
         id: hash,
@@ -813,6 +922,7 @@ fn ingest_single_prompt_with_local_ts(
         redactions_made: scrubbed.redactions_made,
         is_high_signal,
         signal_categories,
+        skill_tier,
     });
 }
 
@@ -1037,6 +1147,7 @@ mod tests {
             redactions_made: 1,
             is_high_signal: true,
             signal_categories: vec!["Systems & Architecture".to_string()],
+            skill_tier: SkillTier::Advanced,
         };
         let p2 = NormalizedPrompt {
             id: "h2".to_string(),
@@ -1049,6 +1160,7 @@ mod tests {
             redactions_made: 2,
             is_high_signal: true,
             signal_categories: vec!["Career & Positioning".to_string()],
+            skill_tier: SkillTier::Advanced,
         };
         let summary = summarize_persisted_prompts(&[p1, p2]);
         assert_eq!(summary.clean_prompts_kept, 2);
@@ -1062,6 +1174,32 @@ mod tests {
         assert_eq!(summary.hourly_distribution[8], 1);
         assert_eq!(summary.hourly_distribution[21], 1);
         assert_eq!(summary.source_counts.len(), 2);
+        assert_eq!(summary.tier_counts, [0, 0, 2]);
+        assert_eq!(summary.overall_positioning, "Advanced → Senior / Staff");
+    }
+
+    #[test]
+    fn classifies_beginner_intermediate_and_advanced_skill_tiers_honestly() {
+        let beg_text = "How do I write a basic hello world function for a beginner in python?";
+        let (_, beg_cats) = classify_signals(beg_text, 14);
+        assert_eq!(
+            classify_skill_tier(beg_text, 14, &beg_cats),
+            SkillTier::Beginner
+        );
+
+        let int_text = "Let us implement and test an API endpoint using SQLite and TypeScript for our user component.";
+        let (_, int_cats) = classify_signals(int_text, 16);
+        assert_eq!(
+            classify_skill_tier(int_text, 16, &int_cats),
+            SkillTier::Intermediate
+        );
+
+        let adv_text = "As a skeptic (/grill-me), critique our distributed schema architecture, latency tradeoffs, and unit economics from first principles.";
+        let (_, adv_cats) = classify_signals(adv_text, 17);
+        assert_eq!(
+            classify_skill_tier(adv_text, 17, &adv_cats),
+            SkillTier::Advanced
+        );
     }
 
     #[test]

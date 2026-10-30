@@ -251,4 +251,56 @@ describe("Clearspace Browser-Mode Vault Client", () => {
     const after = await getVaultDashboard();
     expect(after.summary.clean_prompts_kept).toBe(5);
   });
+
+  it("honestly positions Beginner -> Junior, Intermediate -> Mid-Level, and Advanced -> Senior / Staff without ego inflation", async () => {
+    const beginnerExport = JSON.stringify([
+      {
+        uuid: "beg-conv-1",
+        chat_messages: [
+          {
+            sender: "human",
+            created_at: "2026-03-01T10:00:00Z",
+            text: "How do I write a basic rust tool and sqlite database query for a beginner step by step tutorial?",
+          },
+        ],
+      },
+    ]);
+
+    const { dashboard: begDash } = await importExportedContent(beginnerExport);
+    expect(begDash.summary.overall_positioning).toBe("Beginner → Junior");
+    expect(begDash.summary.tier_counts).toEqual([1, 0, 0]);
+    const begTopRole = begDash.onet_matches[0];
+    expect(begTopRole.assessed_tier).toBe("Beginner → Junior");
+    expect(begTopRole.positioned_title).toContain("Junior");
+    expect(begTopRole.overall_fit_pct).toBeGreaterThan(0);
+    expect(begTopRole.overall_fit_pct).toBeLessThanOrEqual(46);
+    expect(begTopRole.identified_gaps.length).toBeGreaterThan(0);
+    expect(begTopRole.tested_assumptions.length).toBeGreaterThan(0);
+
+    // Zero-hit mirror cards must report 0% confidence rather than an inflated 68% floor
+    const zeroHitCard = begDash.mirror_cards.find((c) => c.id === "card-burnout-trigger");
+    expect(zeroHitCard?.confidence_pct).toBe(0);
+    expect(zeroHitCard?.assumption_challenged).toBeTruthy();
+    expect(zeroHitCard?.identified_gap).toBeTruthy();
+
+    await resetLocalVault();
+    const intermediateExport = JSON.stringify([
+      {
+        uuid: "int-conv-1",
+        chat_messages: [
+          {
+            sender: "human",
+            created_at: "2026-03-01T11:00:00Z",
+            text: "Let us implement and test an agent tool workflow with rust, typescript, and sqlite to solve developer tasks cleanly.",
+          },
+        ],
+      },
+    ]);
+    const { dashboard: intDash } = await importExportedContent(intermediateExport);
+    expect(intDash.summary.overall_positioning).toBe("Intermediate → Mid-Level");
+    expect(intDash.onet_matches[0].assessed_tier).toBe("Intermediate → Mid-Level");
+    expect(intDash.onet_matches[0].positioned_title).toContain("Mid-Level");
+    expect(intDash.onet_matches[0].overall_fit_pct).toBeGreaterThanOrEqual(45);
+    expect(intDash.onet_matches[0].overall_fit_pct).toBeLessThanOrEqual(74);
+  });
 });

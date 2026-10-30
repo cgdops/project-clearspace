@@ -26,6 +26,8 @@ import {
   resetLocalVault,
   toggleQuestState,
   addJournalEntry,
+  formatTierLabel,
+  classifySkillTierClient,
 } from "./vaultClient";
 
 type TabKey = "mirror" | "onet" | "equity" | "journal" | "vault";
@@ -567,39 +569,127 @@ export default function App() {
                 {isVaultEmpty ? (
                   renderOnboardingPanel()
                 ) : (
-                  <div className="card-stack">
-                    {data.mirror_cards.map((card) => (
-                      <div key={card.id} className="insight-card">
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span
-                            className={`badge ${
-                              card.category === "Burnout Trigger"
-                                ? "burnout"
-                                : card.category === "Core Value"
-                                ? "value"
-                                : "superpower"
-                            }`}
-                          >
-                            {card.category} • {card.confidence_pct}% Deterministic Confidence
+                  <>
+                    <div
+                      className="insight-card"
+                      style={{ marginTop: 20, borderLeft: "4px solid var(--accent-sage)" }}
+                      data-testid="honest-positioning-banner"
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 10,
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          <span className="badge superpower">
+                            Objective Positioning: {data.summary.overall_positioning ?? "Calibrated"}
+                          </span>
+                          <span className="badge value">
+                            Zero Ego-Inflation • Evidence-Weighted Rubric
                           </span>
                         </div>
-                        <h3 style={{ fontSize: "20px", marginTop: "10px", fontWeight: 700 }}>{card.title}</h3>
-                        <p style={{ color: "var(--text-secondary)", marginTop: "6px", fontSize: "14.5px" }}>
-                          {card.summary}
-                        </p>
-
-                        {card.quotes.map((q, idx) => (
-                          <div key={idx} className="quote-box">
-                            <div className="quote-meta">
-                              <Quote size={11} style={{ display: "inline", marginRight: 5 }} />
-                              {q.date} • Conversation #{q.convo_id}
-                            </div>
-                            <div>“{q.text}”</div>
-                          </div>
-                        ))}
+                        {data.summary.tier_counts && (
+                          <span
+                            style={{
+                              fontFamily: "var(--font-mono)",
+                              fontSize: 12,
+                              color: "var(--text-muted)",
+                            }}
+                          >
+                            Beginner→Junior: {data.summary.tier_counts[0]} • Intermediate→Mid-Level:{" "}
+                            {data.summary.tier_counts[1]} • Advanced→Senior/Staff:{" "}
+                            {data.summary.tier_counts[2]}
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                      <p style={{ marginTop: 8, fontSize: 13.5, color: "var(--text-secondary)" }}>
+                        <strong>Why you can trust this score:</strong> Clearspace never flatters your ego or assigns Senior/Staff titles for basic keyword mentions. Every prompt is weighted by demonstrated depth (0.35x Beginner, 0.75x Intermediate, 1.15x Advanced), assumptions are explicitly stress-tested, and missing evidence gaps are surfaced below.
+                      </p>
+                    </div>
+
+                    <div className="card-stack">
+                      {data.mirror_cards.map((card) => (
+                        <div key={card.id} className="insight-card">
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                              gap: 8,
+                            }}
+                          >
+                            <span
+                              className={`badge ${
+                                card.category === "Burnout Trigger"
+                                  ? "burnout"
+                                  : card.category === "Core Value"
+                                  ? "value"
+                                  : "superpower"
+                              }`}
+                            >
+                              {card.category} • {card.confidence_pct}% Evidence Confidence
+                            </span>
+                            {card.assessed_tier && (
+                              <span className="badge value">{card.assessed_tier}</span>
+                            )}
+                          </div>
+                          <h3 style={{ fontSize: "20px", marginTop: "10px", fontWeight: 700 }}>{card.title}</h3>
+                          <p style={{ color: "var(--text-secondary)", marginTop: "6px", fontSize: "14.5px" }}>
+                            {card.summary}
+                          </p>
+
+                          {card.assumption_challenged && (
+                            <div
+                              style={{
+                                marginTop: 10,
+                                padding: "9px 13px",
+                                background: "var(--bg-amber-soft)",
+                                borderRadius: 10,
+                                fontSize: 13,
+                                color: "var(--accent-gold)",
+                              }}
+                              data-testid="mirror-assumption-box"
+                            >
+                              <strong>Test Assumption:</strong>{" "}
+                              {card.assumption_challenged.replace(/^Assumption Tested:\s*/i, "")}
+                            </div>
+                          )}
+
+                          {card.identified_gap && (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                padding: "9px 13px",
+                                background: "var(--bg-rose-soft)",
+                                borderRadius: 10,
+                                fontSize: 13,
+                                color: "#7a2828",
+                              }}
+                              data-testid="mirror-gap-box"
+                            >
+                              <strong>Identify Gap:</strong>{" "}
+                              {card.identified_gap.replace(/^Gap Identified:\s*/i, "")}
+                            </div>
+                          )}
+
+                          {card.quotes.map((q, idx) => (
+                            <div key={idx} className="quote-box">
+                              <div className="quote-meta">
+                                <Quote size={11} style={{ display: "inline", marginRight: 5 }} />
+                                {q.date} • Conversation #{q.convo_id}
+                              </div>
+                              <div>“{q.text}”</div>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -620,22 +710,26 @@ export default function App() {
                     <div key={role.onet_code} className="insight-card">
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div>
-                          <span className="badge superpower">{role.bucket}</span>
-                          <span
-                            style={{
-                              marginLeft: 8,
-                              fontFamily: "var(--font-mono)",
-                              fontSize: 12,
-                              color: "var(--text-muted)",
-                            }}
-                          >
-                            O*NET {role.onet_code} • {role.salary_range_usd}
-                          </span>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                            <span className="badge superpower">{role.bucket}</span>
+                            <span className="badge value" data-testid="onet-assessed-tier">
+                              Objective Level: {role.assessed_tier}
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: "var(--font-mono)",
+                                fontSize: 12,
+                                color: "var(--text-muted)",
+                              }}
+                            >
+                              O*NET {role.onet_code} • Calibrated Band: {role.positioned_salary_usd}
+                            </span>
+                          </div>
                           <h3 style={{ fontSize: "21px", marginTop: "8px" }}>
-                            {role.modern_titles[0]}
+                            {role.positioned_title}
                           </h3>
                           <p style={{ fontSize: "12.5px", color: "var(--text-muted)", marginTop: 2 }}>
-                            Also titled: {role.modern_titles.slice(1).join(" • ")}
+                            Track Ceiling ({role.salary_range_usd}): {role.modern_titles.join(" • ")}
                           </p>
                         </div>
                         <div style={{ textAlign: "right" }}>
@@ -719,13 +813,62 @@ export default function App() {
                         </div>
                       </div>
 
-                      <p style={{ marginTop: 14, fontSize: 14.5, color: "var(--text-secondary)" }}>
-                        <strong>Why you were built for this:</strong> {role.why_it_fits}
+                      <p style={{ marginTop: 14, fontSize: 14, color: "var(--text-primary)" }}>
+                        <strong>Honest Seniority Calibration:</strong> {role.honest_positioning_rationale}
                       </p>
+
+                      <p style={{ marginTop: 8, fontSize: 14, color: "var(--text-secondary)" }}>
+                        <strong>Why this track fits your behavior:</strong> {role.why_it_fits}
+                      </p>
+
+                      {role.identified_gaps && role.identified_gaps.length > 0 && (
+                        <div
+                          style={{
+                            marginTop: 10,
+                            padding: "10px 14px",
+                            background: "var(--bg-warm)",
+                            border: "1px solid var(--border-warm)",
+                            borderRadius: 10,
+                            fontSize: 13,
+                            color: "var(--text-secondary)",
+                          }}
+                          data-testid="onet-identified-gaps"
+                        >
+                          <strong style={{ color: "var(--text-primary)" }}>
+                            Identified Gaps to Next Level:
+                          </strong>
+                          <ul style={{ marginTop: 4, paddingLeft: 18 }}>
+                            {role.identified_gaps.map((gap, gIdx) => (
+                              <li key={gIdx}>{gap}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {role.tested_assumptions && role.tested_assumptions.length > 0 && (
+                        <div
+                          style={{
+                            marginTop: 10,
+                            padding: "10px 14px",
+                            background: "var(--bg-amber-soft)",
+                            borderRadius: 10,
+                            fontSize: 13,
+                            color: "var(--accent-gold)",
+                          }}
+                          data-testid="onet-tested-assumptions"
+                        >
+                          <strong>Tested Assumptions:</strong>
+                          <ul style={{ marginTop: 4, paddingLeft: 18 }}>
+                            {role.tested_assumptions.map((ta, tIdx) => (
+                              <li key={tIdx}>{ta.replace(/^Assumption Tested:\s*/i, "")}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                       <div
                         style={{
-                          marginTop: 12,
+                          marginTop: 10,
                           padding: "10px 14px",
                           background: "var(--bg-rose-soft)",
                           borderRadius: 10,
@@ -1068,6 +1211,16 @@ export default function App() {
                               {p.word_count} words
                             </span>
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              <span className="badge value">
+                                {formatTierLabel(
+                                  p.skill_tier ??
+                                    classifySkillTierClient(
+                                      p.cleaned_text,
+                                      p.word_count,
+                                      p.signal_categories
+                                    )
+                                )}
+                              </span>
                               {p.redactions_made > 0 && (
                                 <span className="badge burnout">
                                   {p.redactions_made} PII Redacted
