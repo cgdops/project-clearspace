@@ -1,7 +1,7 @@
 {
   "iteration": 3,
   "phase": "loop-3-final-verification",
-  "timestamp": "2026-10-30T18:43:11.310Z",
+  "timestamp": "2026-10-30T20:03:11.575Z",
   "status": "PASS_CONVERGED_ZERO_DEFECTS",
   "screenshots": {
     "onboarding_1280x800": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter3-onboarding-1280x800.png",
@@ -103,8 +103,8 @@
     },
     "vaultPromptExplorer": {
       "explorerVisible": true,
-      "rhythmCardTopY": 347,
-      "explorerCardTopY": 553,
+      "rhythmCardTopY": 386,
+      "explorerCardTopY": 592,
       "bothVisibleAbove800pxFold": true,
       "initialPromptItemCount": 8,
       "searchFilterFoundRedactedEmail": true,
@@ -121,11 +121,11 @@
       "sidebarEquitySubAfterReset": "Compounding across 0 active career commitments."
     },
     "tabSwitchLatencyMs": {
-      "mirror": 41.4,
-      "onet": 35.6,
-      "equity": 39.9,
-      "journal": 30.1,
-      "vault": 70.9
+      "mirror": 78.6,
+      "onet": 64.5,
+      "equity": 34.8,
+      "journal": 26.4,
+      "vault": 109
     }
   },
   "contrastTelemetry": {
@@ -177,7 +177,7 @@
     "tabRoleCount": 5,
     "tabpanelRoleCount": 1,
     "ariaSelectedCount": 5,
-    "ariaLiveCount": 1,
+    "ariaLiveCount": 3,
     "hasFocusVisibleRule": true,
     "hasReducedMotionRule": true,
     "mediaQueryCount": 3,
@@ -199,7 +199,7 @@
         "mirror": {
           "heading": "Your Unmasked Cognitive Mirror",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 2561,
+          "verticalScrollHeight": 3957,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -210,15 +210,15 @@
             "x": 270,
             "y": 0,
             "width": 1010,
-            "height": 2561.27
+            "height": 3957
           },
-          "cardCount": 9,
+          "cardCount": 11,
           "overflowingCards": 0
         },
         "onet": {
           "heading": "O*NET Natural Path Finder",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 2575,
+          "verticalScrollHeight": 3727,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -229,7 +229,7 @@
             "x": 270,
             "y": 0,
             "width": 1010,
-            "height": 2575.17
+            "height": 3726.69
           },
           "cardCount": 4,
           "overflowingCards": 0,
@@ -276,7 +276,7 @@
         "vault": {
           "heading": "Zero-Knowledge Local Vault & Scrubber",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 2057,
+          "verticalScrollHeight": 2731,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -287,9 +287,9 @@
             "x": 270,
             "y": 0,
             "width": 1010,
-            "height": 2057.06
+            "height": 2730.7
           },
-          "cardCount": 4,
+          "cardCount": 5,
           "overflowingCards": 0
         }
       }
@@ -309,7 +309,7 @@
         "mirror": {
           "heading": "Your Unmasked Cognitive Mirror",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 2251,
+          "verticalScrollHeight": 3577,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -320,15 +320,15 @@
             "x": 270,
             "y": 0,
             "width": 1120,
-            "height": 2250.69
+            "height": 3576.5
           },
-          "cardCount": 9,
+          "cardCount": 11,
           "overflowingCards": 0
         },
         "onet": {
           "heading": "O*NET Natural Path Finder",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 2535,
+          "verticalScrollHeight": 3507,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -339,7 +339,7 @@
             "x": 270,
             "y": 0,
             "width": 1120,
-            "height": 2534.89
+            "height": 3506.69
           },
           "cardCount": 4,
           "overflowingCards": 0,
@@ -386,7 +386,7 @@
         "vault": {
           "heading": "Zero-Knowledge Local Vault & Scrubber",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 1662,
+          "verticalScrollHeight": 2251,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -397,9 +397,9 @@
             "x": 270,
             "y": 0,
             "width": 1120,
-            "height": 1661.59
+            "height": 2250.73
           },
-          "cardCount": 4,
+          "cardCount": 5,
           "overflowingCards": 0
         }
       }
@@ -419,7 +419,7 @@
         "mirror": {
           "heading": "Your Unmasked Cognitive Mirror",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 2435,
+          "verticalScrollHeight": 4114,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -430,15 +430,15 @@
             "x": 270,
             "y": 0,
             "width": 754,
-            "height": 2435.38
+            "height": 4113.56
           },
-          "cardCount": 9,
+          "cardCount": 11,
           "overflowingCards": 0
         },
         "onet": {
           "heading": "O*NET Natural Path Finder",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 2978,
+          "verticalScrollHeight": 4319,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -449,7 +449,7 @@
             "x": 270,
             "y": 0,
             "width": 754,
-            "height": 2977.5
+            "height": 4318.78
           },
           "cardCount": 4,
           "overflowingCards": 0,
@@ -496,7 +496,7 @@
         "vault": {
           "heading": "Zero-Knowledge Local Vault & Scrubber",
           "horizontalOverflowPx": 0,
-          "verticalScrollHeight": 1905,
+          "verticalScrollHeight": 2726,
           "sidebarRect": {
             "x": 0,
             "y": 0,
@@ -507,9 +507,9 @@
             "x": 270,
             "y": 0,
             "width": 754,
-            "height": 1904.92
+            "height": 2726.05
           },
-          "cardCount": 4,
+          "cardCount": 5,
           "overflowingCards": 0
         }
       }

@@ -187,6 +187,12 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
       });
       await page.waitForTimeout(200);
 
+      // Verify persistent Import Summary & Per-File Status Report panel is visible
+      const importSummaryPanel = page.getByTestId("import-summary-panel").first();
+      await expect(importSummaryPanel).toBeVisible();
+      await expect(importSummaryPanel).toContainText("multi-provider-export.json");
+      await expect(importSummaryPanel).toContainText("Net-New Prompts Added");
+
       // Verify interactive Scrubbed Prompt Explorer & above-the-fold geometry in Vault tab
       const explorer = page.getByTestId("vault-prompt-explorer");
       await expect(explorer).toBeVisible();
