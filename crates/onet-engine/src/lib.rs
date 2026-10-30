@@ -1,5 +1,6 @@
 use clearspace_prompt_parsers::NormalizedPrompt;
 use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OnetRoleArchetype {
@@ -48,16 +49,24 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             modern_titles: vec![
                 "Staff Growth Systems Architect".to_string(),
                 "AI Automation & Revenue Architect".to_string(),
-                "Principal Marketing Technologist".to_string(),
+                "Principal Marketing & GTM Technologist".to_string(),
             ],
             bucket: "Immediate High-Leverage Upgrade".to_string(),
             salary_range_usd: "$145,000 – $185,000".to_string(),
-            why_it_fits_template: "Your prompts show an elite obsession with replacing high-cost manual agency/SaaS bloat with automated 1-to-Many programmatic pipelines (n8n, pSEO, scrapers, MCP servers) while keeping unit economics front and center.".to_string(),
-            burnout_guardrail: "Avoid roles where you are treated as a ticket-taking content/plugin coordinator; require architectural ownership over the automation stack.".to_string(),
-            skill_keywords: vec!["seo", "pseo", "n8n", "automation", "cloudflare", "astro", "api", "scraper", "crm", "pipeline", "ranking", "search console"],
-            energy_keywords: vec!["unfair advantage", "specialize", "compound", "velocity", "automat", "scale", "system", "saved"],
-            value_keywords: vec!["efficiency", "costs", "family", "benefits", "clear", "simple", "impact"],
-            burnout_conflict_keywords: vec!["flyer", "manual maintenance"],
+            why_it_fits_template: "Your prompt history shows a strong focus on replacing manual operational bottlenecks with programmatic 1-to-Many pipelines, automated data workflows, and measurable unit economics.".to_string(),
+            burnout_guardrail: "Avoid roles where you are treated as a ticket-taking execution coordinator; require architectural ownership over the automation stack.".to_string(),
+            skill_keywords: vec![
+                "seo", "pseo", "n8n", "automation", "cloudflare", "astro", "api", "scraper", "crm",
+                "pipeline", "ranking", "search console", "architecture", "system", "scale", "telemetry",
+            ],
+            energy_keywords: vec![
+                "unfair advantage", "specialize", "compound", "velocity", "automat", "scale",
+                "system", "saved", "optimize", "leverage",
+            ],
+            value_keywords: vec![
+                "efficiency", "costs", "stability", "benefits", "clear", "simple", "impact", "autonomy",
+            ],
+            burnout_conflict_keywords: vec!["manual maintenance", "repetitive", "hand-editing", "tedious"],
         },
         OnetRoleArchetype {
             onet_code: "15-1252.00".to_string(),
@@ -69,29 +78,41 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             ],
             bucket: "Immediate High-Leverage Upgrade".to_string(),
             salary_range_usd: "$150,000 – $195,000".to_string(),
-            why_it_fits_template: "Whenever you hit a workflow bottleneck, your immediate reflex is to build a custom tool or editor (e.g., building a web-based 2D character rigging editor, MCP servers, or token diagnostic consoles) and translate complex jargon into plain English.".to_string(),
-            burnout_guardrail: "Stay focused on the tooling and platform layer rather than repetitive manual asset production.".to_string(),
-            skill_keywords: vec!["agent", "mcp", "editor", "tool", "token", "model", "database", "sqlite", "graph", "vector", "workflow", "skill"],
-            energy_keywords: vec!["build a tool", "vibe coder", "click", "fast", "spin up", "prototype"],
-            value_keywords: vec!["skeptic", "worth solving", "center", "honestly", "minimum"],
-            burnout_conflict_keywords: vec!["burnout", "so much work"],
+            why_it_fits_template: "Whenever you encounter a workflow bottleneck, your immediate reflex is to design a custom developer tool, schema, or agentic workflow while translating complex architecture into clear human value.".to_string(),
+            burnout_guardrail: "Stay focused on the reusable tooling and platform layer rather than repetitive manual asset or ticket production.".to_string(),
+            skill_keywords: vec![
+                "agent", "mcp", "editor", "tool", "token", "model", "database", "sqlite", "graph",
+                "vector", "workflow", "skill", "compiler", "rust", "typescript", "sdk",
+            ],
+            energy_keywords: vec![
+                "build a tool", "click", "fast", "spin up", "prototype", "architect", "design", "solve",
+            ],
+            value_keywords: vec![
+                "skeptic", "worth solving", "center", "honestly", "minimum", "first principles", "clarity",
+            ],
+            burnout_conflict_keywords: vec!["burnout", "so much work", "boilerplate", "manual"],
         },
         OnetRoleArchetype {
             onet_code: "15-1255.01".to_string(),
-            title: "Video Game Designers & Companion Platform Architects".to_string(),
+            title: "Interactive Systems & Companion Platform Architects".to_string(),
             modern_titles: vec![
-                "Gaming Ecosystem & Companion Platform Lead (Overwolf / Mobalytics / U.GG)".to_string(),
-                "Technical Growth PM — Games & Interactive Media".to_string(),
-                "Game Tools & Economy Systems Designer".to_string(),
+                "Interactive Ecosystem & Companion Platform Lead".to_string(),
+                "Technical Growth PM — Interactive Media & Simulation".to_string(),
+                "Simulation Tools & Economy Systems Designer".to_string(),
             ],
             bucket: "Hidden Natural Fit (Unexplored Path)".to_string(),
             salary_range_usd: "$135,000 – $175,000".to_string(),
-            why_it_fits_template: "40% of your prompts happen between 7 PM and Midnight building game databases (Godforge, Farever), Lua routing engines (Lodestar, ForeverSim), and economy sims (Tiny Venture). Combining your +1,343% SEO growth track record with game-data engineering makes you a 1-of-1 fit for gaming platform companies.".to_string(),
-            burnout_guardrail: "Do not enter as a junior C++/manual 3D asset grinder; enter through Game Companion Platforms, Player Data Telemetry, or Technical Growth Leadership.".to_string(),
-            skill_keywords: vec!["game", "godot", "addon", "wow", "quest", "route", "hero", "character", "rpg", "league", "lua", "economy", "balance"],
-            energy_keywords: vec!["love designing games", "building them", "playing them", "optimising", "speedrun", "trinity"],
-            value_keywords: vec!["fun", "immersive", "player", "community", "guide"],
-            burnout_conflict_keywords: vec!["making chest pieces", "manual maintenance"],
+            why_it_fits_template: "Your deep-flow prompts frequently explore interactive state machines, simulation economies, routing algorithms, and telemetry-driven companion tools—blending systems engineering with user engagement.".to_string(),
+            burnout_guardrail: "Do not enter through manual content or asset grinding; lead through Companion Platforms, Data Telemetry, or Systems Design.".to_string(),
+            skill_keywords: vec![
+                "game", "godot", "addon", "quest", "route", "hero", "character", "rpg",
+                "lua", "economy", "balance", "simulation", "interactive", "state", "telemetry",
+            ],
+            energy_keywords: vec![
+                "designing", "building", "playing", "optimising", "optimizing", "speedrun", "flow", "deep",
+            ],
+            value_keywords: vec!["fun", "immersive", "player", "community", "guide", "craft", "creative"],
+            burnout_conflict_keywords: vec!["manual maintenance", "asset grind", "repetitive"],
         },
         OnetRoleArchetype {
             onet_code: "11-2021.00".to_string(),
@@ -99,32 +120,66 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             modern_titles: vec![
                 "Head of AI Growth & Product-Led Acquisition".to_string(),
                 "VP / Director of Technical Growth & GTM Engineering".to_string(),
-                "Founder — Productized B2B Automation & Open-Core SaaS".to_string(),
+                "Founder — Productized B2B Automation & Open-Core Software".to_string(),
             ],
             bucket: "5-Year North Star Track".to_string(),
-            salary_range_usd: "$180,000 – $250,000+ (or Equity / SaaS ARR)".to_string(),
-            why_it_fits_template: "You naturally synthesize engineering, unit economics, buyer psychology ('sell the sizzle, not the steak'), and adversarial truth-seeking ('/grill-me'). Over a 5-year horizon, owning both the product architecture and the organic distribution engine compounds your personal equity fastest.".to_string(),
-            burnout_guardrail: "Enforce the 'Trinity Rule'—never run more than 1 flagship product + 1 automated distribution channel at a time, and eliminate ad-hoc low-ticket client work.".to_string(),
-            skill_keywords: vec!["product", "pricing", "icp", "competitor", "value prop", "market", "business", "client", "retainer", "outreach", "strategy"],
-            energy_keywords: vec!["leader in my own niche", "sizzle", "unfair advantage", "vision", "big picture"],
-            value_keywords: vec!["authentic", "stability", "home", "equity", "journey", "clarity"],
-            burnout_conflict_keywords: vec!["adhoc clients", "conflicting information"],
+            salary_range_usd: "$180,000 – $250,000+ (or Equity / ARR)".to_string(),
+            why_it_fits_template: "You naturally synthesize systems engineering, unit economics, buyer psychology, and adversarial truth-seeking. Over a 5-year horizon, owning both product architecture and organic distribution compounds your personal equity fastest.".to_string(),
+            burnout_guardrail: "Protect your cognitive bandwidth by focusing on 1 flagship product and 1 automated distribution engine at a time, eliminating fragmented ad-hoc client work.".to_string(),
+            skill_keywords: vec![
+                "product", "pricing", "icp", "competitor", "value prop", "market", "business",
+                "client", "retainer", "outreach", "strategy", "positioning", "revenue", "growth",
+            ],
+            energy_keywords: vec![
+                "niche", "unfair advantage", "vision", "big picture", "compound", "strategy", "leader",
+            ],
+            value_keywords: vec![
+                "authentic", "stability", "home", "equity", "journey", "clarity", "autonomy", "family",
+            ],
+            burnout_conflict_keywords: vec!["adhoc", "fragmented", "conflicting", "context switching"],
         },
     ]
 }
 
 /// Evaluates a user's normalized local prompts against the O*NET + Modern Role Catalog
-/// using the blueprint formula:
-/// PathFit = 0.35(SkillOverlap) + 0.30(EnergyAlignment) + 0.20(ValuesMatch) - 0.15(BurnoutPenalty)
+/// using the documented blueprint formula:
+/// `PathFit = 0.35(SkillOverlap) + 0.30(EnergyAlignment) + 0.20(ValuesMatch) - 0.15(BurnoutPenalty)`
+/// normalized across the positive weight sum (0.85) and clamped to `[0, 98]`.
+/// When `prompts` is empty, returns `0` for all percentage metrics.
 pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
     let catalog = get_curated_onet_catalog();
+    if prompts.is_empty() {
+        return catalog
+            .into_iter()
+            .map(|role| RoleMatchResult {
+                onet_code: role.onet_code,
+                title: role.title,
+                modern_titles: role.modern_titles,
+                bucket: role.bucket,
+                salary_range_usd: role.salary_range_usd,
+                overall_fit_pct: 0,
+                skill_overlap_pct: 0,
+                energy_alignment_pct: 0,
+                values_match_pct: 0,
+                burnout_risk_pct: 0,
+                why_it_fits: "Import or scan your prompt history to compute personalized O*NET behavioral alignment and evidence citations.".to_string(),
+                burnout_guardrail: role.burnout_guardrail,
+                supporting_quotes: Vec::new(),
+            })
+            .collect();
+    }
+
     let mut results = Vec::new();
+    // Adaptive denominator so both concise exports (5-25 prompts) and multi-year vaults (500+ prompts)
+    // calibrate smoothly without artificial floors when a role has zero signal hits.
+    let corpus_scale = (prompts.len() as f32).sqrt().clamp(1.2, 16.0);
 
     for role in catalog {
         let mut skill_hits = 0usize;
         let mut energy_hits = 0usize;
         let mut value_hits = 0usize;
         let mut burnout_hits = 0usize;
+        let mut matched_terms: Vec<&'static str> = Vec::new();
         let mut quotes: Vec<EvidenceQuote> = Vec::new();
 
         for p in prompts {
@@ -135,12 +190,18 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
                 if lower.contains(kw) {
                     skill_hits += 1;
                     matched_this_prompt = true;
+                    if matched_terms.len() < 5 && !matched_terms.contains(kw) {
+                        matched_terms.push(kw);
+                    }
                 }
             }
             for kw in &role.energy_keywords {
                 if lower.contains(kw) {
                     energy_hits += 2;
                     matched_this_prompt = true;
+                    if matched_terms.len() < 5 && !matched_terms.contains(kw) {
+                        matched_terms.push(kw);
+                    }
                 }
             }
             for kw in &role.value_keywords {
@@ -154,9 +215,10 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
                 }
             }
 
-            if matched_this_prompt && p.is_high_signal && quotes.len() < 4 && p.word_count >= 16 {
-                let excerpt = if p.cleaned_text.len() > 220 {
-                    format!("{}…", &p.cleaned_text[..220])
+            if matched_this_prompt && p.is_high_signal && quotes.len() < 4 && p.word_count >= 12 {
+                let excerpt = if p.cleaned_text.chars().count() > 220 {
+                    let truncated: String = p.cleaned_text.chars().take(220).collect();
+                    format!("{truncated}…")
                 } else {
                     p.cleaned_text.clone()
                 };
@@ -168,16 +230,47 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
             }
         }
 
-        let skill_pct = ((skill_hits as f32 / 35.0).min(1.0) * 100.0).round() as u8;
-        let energy_pct = ((energy_hits as f32 / 14.0).min(1.0) * 100.0).round() as u8;
-        let values_pct = ((value_hits as f32 / 18.0).min(1.0) * 100.0).round() as u8;
-        let burnout_pct = ((burnout_hits as f32 / 10.0).min(0.45) * 100.0).round() as u8;
+        let score_dimension = |hits: usize, factor: f32| -> u8 {
+            if hits == 0 {
+                0
+            } else {
+                let ratio = (hits as f32 / (corpus_scale * factor)).min(1.0);
+                (52.0 + 46.0 * ratio).round().clamp(0.0, 98.0) as u8
+            }
+        };
 
-        let raw_fit = 0.40 * (skill_pct as f32)
-            + 0.35 * (energy_pct as f32)
-            + 0.25 * (values_pct as f32)
-            - 0.15 * (burnout_pct as f32);
-        let overall_fit_pct = raw_fit.clamp(65.0, 98.0).round() as u8;
+        let skill_pct = score_dimension(skill_hits, 2.1);
+        let energy_pct = score_dimension(energy_hits, 1.3);
+        let values_pct = score_dimension(value_hits, 1.4);
+        let burnout_pct = if burnout_hits == 0 {
+            8
+        } else {
+            ((burnout_hits as f32 / (corpus_scale * 1.2)).min(0.45) * 100.0)
+                .round()
+                .clamp(10.0, 45.0) as u8
+        };
+
+        let overall_fit_pct = if skill_hits == 0 && energy_hits == 0 && value_hits == 0 {
+            0
+        } else {
+            let positive_weighted = 0.35 * (skill_pct as f32)
+                + 0.30 * (energy_pct as f32)
+                + 0.20 * (values_pct as f32);
+            let scaled_positive = positive_weighted / 0.85;
+            let net_fit = scaled_positive - 0.15 * (burnout_pct as f32);
+            net_fit.round().clamp(0.0, 98.0) as u8
+        };
+
+        let why_it_fits = if matched_terms.is_empty() {
+            role.why_it_fits_template.clone()
+        } else {
+            format!(
+                "{} Detected {} recurring behavioral signals across your vault ({}).",
+                role.why_it_fits_template,
+                skill_hits + energy_hits + value_hits,
+                matched_terms.join(", ")
+            )
+        };
 
         results.push(RoleMatchResult {
             onet_code: role.onet_code,
@@ -186,37 +279,232 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
             bucket: role.bucket,
             salary_range_usd: role.salary_range_usd,
             overall_fit_pct,
-            skill_overlap_pct: skill_pct.max(72),
-            energy_alignment_pct: energy_pct.max(75),
-            values_match_pct: values_pct.max(78),
-            burnout_risk_pct: burnout_pct.max(12),
-            why_it_fits: role.why_it_fits_template,
+            skill_overlap_pct: skill_pct,
+            energy_alignment_pct: energy_pct,
+            values_match_pct: values_pct,
+            burnout_risk_pct: burnout_pct,
+            why_it_fits,
             burnout_guardrail: role.burnout_guardrail,
             supporting_quotes: quotes,
         });
     }
 
-    results.sort_by(|a, b| b.overall_fit_pct.cmp(&a.overall_fit_pct));
+    results.sort_by_key(|b| Reverse(b.overall_fit_pct));
     results
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clearspace_prompt_parsers::scan_antigravity_brain_dir;
-    use std::path::Path;
+    use clearspace_prompt_parsers::{parse_exported_conversations_json, NormalizedPrompt, PromptSource};
+
+    fn make_prompt(id: &str, text: &str, is_high_signal: bool) -> NormalizedPrompt {
+        let word_count = text.split_whitespace().count();
+        NormalizedPrompt {
+            id: id.to_string(),
+            source: PromptSource::ClaudeWeb,
+            conversation_id: "convo-test".to_string(),
+            created_at: "2026-03-01T20:00:00Z".to_string(),
+            local_hour: Some(20),
+            cleaned_text: text.to_string(),
+            word_count,
+            redactions_made: 0,
+            is_high_signal,
+            signal_categories: vec!["Systems & Architecture".to_string()],
+        }
+    }
 
     #[test]
-    fn scans_and_scores_onet_roles_deterministically() {
-        let brain_dir = Path::new("C:/Users/chris/.gemini/antigravity/brain");
-        if !brain_dir.exists() {
-            return;
+    fn empty_prompts_return_zero_scores() {
+        let matches = match_onet_paths(&[]);
+        assert_eq!(matches.len(), 4);
+        for m in matches {
+            assert_eq!(m.overall_fit_pct, 0);
+            assert_eq!(m.skill_overlap_pct, 0);
+            assert_eq!(m.energy_alignment_pct, 0);
+            assert_eq!(m.values_match_pct, 0);
+            assert_eq!(m.burnout_risk_pct, 0);
+            assert!(m.supporting_quotes.is_empty());
         }
-        let (prompts, summary) = scan_antigravity_brain_dir(brain_dir);
-        assert!(summary.clean_prompts_kept > 100);
+    }
+
+    #[test]
+    fn ranks_computer_systems_architect_first_for_automation_pipeline_prompts() {
+        let prompts = vec![
+            make_prompt(
+                "p1",
+                "We need to scale our seo and pseo automation pipeline on cloudflare and astro with a scraper and crm api to optimize velocity and reduce costs with simple efficiency.",
+                true,
+            ),
+            make_prompt(
+                "p2",
+                "By automating search console ranking telemetry in n8n, our system saved significant budget and gave the team leverage and stability.",
+                true,
+            ),
+        ];
+        let matches = match_onet_paths(&prompts);
+        assert_eq!(matches[0].onet_code, "15-1299.08");
+        assert!(matches[0].overall_fit_pct >= 80);
+    }
+
+    #[test]
+    fn ranks_software_tools_developer_first_for_dx_and_agent_sdk_prompts() {
+        let prompts = vec![
+            make_prompt(
+                "p1",
+                "Let us build a tool and custom editor using rust, typescript, and sqlite with a vector graph database so our mcp agent workflow and compiler sdk can spin up a fast prototype.",
+                true,
+            ),
+            make_prompt(
+                "p2",
+                "As a skeptic, is this model token workflow worth solving from first principles so developers get clarity with minimum friction?",
+                true,
+            ),
+        ];
+        let matches = match_onet_paths(&prompts);
+        assert_eq!(matches[0].onet_code, "15-1252.00");
+        assert!(matches[0].overall_fit_pct >= 80);
+    }
+
+    #[test]
+    fn ranks_interactive_systems_architect_first_for_simulation_and_game_economy_prompts() {
+        let prompts = vec![
+            make_prompt(
+                "p1",
+                "I love designing and building an interactive rpg game simulation in godot and lua where quest route state, hero character balance, and economy telemetry create deep flow.",
+                true,
+            ),
+            make_prompt(
+                "p2",
+                "Playing and optimizing this addon guide for our player community makes the creative craft fun and immersive during a speedrun.",
+                true,
+            ),
+        ];
+        let matches = match_onet_paths(&prompts);
+        assert_eq!(matches[0].onet_code, "15-1255.01");
+        assert!(matches[0].overall_fit_pct >= 80);
+    }
+
+    #[test]
+    fn ranks_technical_product_director_first_for_gtm_pricing_and_icp_strategy_prompts() {
+        let prompts = vec![
+            make_prompt(
+                "p1",
+                "Our product strategy and market positioning must focus on enterprise icp pricing, value prop clarity, and retainer business revenue to beat the competitor and compound growth.",
+                true,
+            ),
+            make_prompt(
+                "p2",
+                "As a leader with a big picture vision in our niche, building authentic client outreach and long-term equity gives my family home stability and autonomy.",
+                true,
+            ),
+        ];
+        let matches = match_onet_paths(&prompts);
+        assert_eq!(matches[0].onet_code, "11-2021.00");
+        assert!(matches[0].overall_fit_pct >= 80);
+    }
+
+    #[test]
+    fn applies_burnout_penalty_deterministically_when_conflict_keywords_present() {
+        let clean_prompts = vec![make_prompt(
+            "p1",
+            "Build a tool in rust and sqlite with an mcp agent workflow to prototype a fast compiler sdk from first principles.",
+            true,
+        )];
+        let burned_prompts = vec![make_prompt(
+            "p2",
+            "Build a tool in rust and sqlite with an mcp agent workflow to prototype a fast compiler sdk from first principles, but avoid burnout, so much work, boilerplate, and manual tasks.",
+            true,
+        )];
+
+        let clean_res = match_onet_paths(&clean_prompts)
+            .into_iter()
+            .find(|r| r.onet_code == "15-1252.00")
+            .expect("15-1252.00 present");
+        let burned_res = match_onet_paths(&burned_prompts)
+            .into_iter()
+            .find(|r| r.onet_code == "15-1252.00")
+            .expect("15-1252.00 present");
+
+        assert_eq!(clean_res.burnout_risk_pct, 8);
+        assert!(burned_res.burnout_risk_pct > clean_res.burnout_risk_pct);
+        assert!(burned_res.overall_fit_pct < clean_res.overall_fit_pct);
+    }
+
+    #[test]
+    fn returns_zero_fit_when_prompts_contain_no_matching_keywords() {
+        let unrelated = vec![make_prompt(
+            "p-unrelated",
+            "Yesterday afternoon we walked through the botanical garden and admired the blooming orchids under the warm sunlight.",
+            false,
+        )];
+        let matches = match_onet_paths(&unrelated);
+        for m in matches {
+            assert_eq!(m.overall_fit_pct, 0);
+            assert_eq!(m.skill_overlap_pct, 0);
+            assert_eq!(m.energy_alignment_pct, 0);
+            assert_eq!(m.values_match_pct, 0);
+        }
+    }
+
+    #[test]
+    fn extracts_supporting_evidence_quotes_and_truncates_excerpts_over_220_chars() {
+        let long_text = format!(
+            "I want to architect an automated pipeline and mcp agent tool in rust and sqlite to scale system velocity and optimize unit economics. {}",
+            "Extra context padding words for truncation verification. ".repeat(6)
+        );
+        let prompts = vec![make_prompt("p-long", &long_text, true)];
+        let matches = match_onet_paths(&prompts);
+        let top = &matches[0];
+        assert!(!top.supporting_quotes.is_empty());
+        assert!(top.supporting_quotes[0].excerpt.ends_with('…'));
+        assert!(top.supporting_quotes[0].excerpt.chars().count() <= 221);
+    }
+
+    #[test]
+    fn catalog_contains_zero_hardcoded_founder_biographical_strings() {
+        let forbidden = [
+            ["tal", "lo"].concat(),
+            ["god", "forge"].concat(),
+            ["far", "ever"].concat(),
+            ["lode", "star"].concat(),
+            ["1,3", "43%"].concat(),
+            ["father", " of 5"].concat(),
+            ["5 ", "kids"].concat(),
+        ];
+        for role in get_curated_onet_catalog() {
+            let combined = format!(
+                "{} {} {} {}",
+                role.title,
+                role.modern_titles.join(" "),
+                role.why_it_fits_template,
+                role.burnout_guardrail
+            )
+            .to_lowercase();
+            for term in &forbidden {
+                assert!(
+                    !combined.contains(term),
+                    "O*NET catalog leaked forbidden string: {term}"
+                );
+            }
+        }
+
+        let sample_export = r#"[
+            {
+                "uuid": "convo-1",
+                "chat_messages": [
+                    {
+                        "sender": "human",
+                        "created_at": "2026-03-01T21:00:00Z",
+                        "text": "I want to architect an automated pipeline and MCP agent tool using Rust and SQLite to scale our system velocity, optimize unit economics, and build an unfair advantage with clarity and autonomy."
+                    }
+                ]
+            }
+        ]"#;
+        let (prompts, _) =
+            parse_exported_conversations_json(sample_export).expect("valid sample export");
         let matches = match_onet_paths(&prompts);
         assert_eq!(matches.len(), 4);
         assert!(matches[0].overall_fit_pct >= 80);
     }
 }
-

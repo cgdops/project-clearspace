@@ -24,15 +24,17 @@ struct ScrubberRegexes {
 fn regexes() -> &'static ScrubberRegexes {
     static INSTANCE: OnceLock<ScrubberRegexes> = OnceLock::new();
     INSTANCE.get_or_init(|| ScrubberRegexes {
-        email: Regex::new(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b").unwrap(),
-        phone: Regex::new(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b").unwrap(),
-        ssn: Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap(),
+        email: Regex::new(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
+            .expect("valid email regex"),
+        phone: Regex::new(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
+            .expect("valid phone regex"),
+        ssn: Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").expect("valid ssn regex"),
         api_key: Regex::new(
-            r"\b(?:sk-[a-zA-Z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|xox[baprs]-[0-9a-zA-Z-]{10,})\b",
+            r"\b(?:sk-[a-zA-Z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,45}|ghp_[a-zA-Z0-9]{30,45}|xox[baprs]-[0-9a-zA-Z-]{10,})\b",
         )
-        .unwrap(),
-        credit_card: Regex::new(r"\b(?:\d[ -]*?){13,16}\b").unwrap(),
-        fenced_code: Regex::new(r"(?s)```[\s\S]*?```").unwrap(),
+        .expect("valid api_key regex"),
+        credit_card: Regex::new(r"\b(?:\d[ -]*?){13,16}\b").expect("valid credit_card regex"),
+        fenced_code: Regex::new(r"(?s)```[\s\S]*?```").expect("valid fenced_code regex"),
     })
 }
 
@@ -110,10 +112,11 @@ pub fn scrub_prompt(raw: &str) -> ScrubResult {
 
     let word_count = cleaned.split_whitespace().count();
     let total_chars = cleaned.chars().count().max(1);
-    let syntax_chars = cleaned
+    let raw_syntax_chars = cleaned
         .chars()
         .filter(|c| matches!(c, '{' | '}' | '[' | ']' | '<' | '>' | ';' | '='))
         .count();
+    let syntax_chars = raw_syntax_chars.saturating_sub(redactions * 2);
     let symbol_ratio = (syntax_chars as f32) / (total_chars as f32);
 
     // Tactical commands < 5 words ("continue", "proceed", "commit push") or raw stack traces
@@ -144,11 +147,14 @@ mod tests {
 
     #[test]
     fn scrubs_secrets_and_emails_deterministically() {
-        let input = "Reach me at chris@example.com or 305-555-1234 with key sk-proj1234567890abcdefghijklmno and let's discuss my career strategy.";
+        let input = "Reach me at alex@example.com or 305-555-1234 with key sk-proj1234567890abcdefghijklmno and let's discuss my career strategy.";
         let res = scrub_prompt(input);
-        assert!(!res.cleaned_text.contains("chris@example.com"));
+        assert!(!res.cleaned_text.contains("alex@example.com"));
         assert!(!res.cleaned_text.contains("305-555-1234"));
         assert!(!res.cleaned_text.contains("sk-proj"));
+        assert!(res.cleaned_text.contains("[REDACTED_EMAIL]"));
+        assert!(res.cleaned_text.contains("[REDACTED_PHONE]"));
+        assert!(res.cleaned_text.contains("[REDACTED_API_KEY]"));
         assert_eq!(res.redactions_made, 3);
         assert!(!res.is_noise_or_boilerplate);
     }
@@ -158,5 +164,85 @@ mod tests {
         let res = scrub_prompt("commit push main");
         assert!(res.is_noise_or_boilerplate);
         assert_eq!(res.noise_reason.as_deref(), Some("short_tactical_command"));
+    }
+
+    #[test]
+    fn flags_empty_or_whitespace_prompts_as_noise() {
+        let res = scrub_prompt("   \n\t  ");
+        assert!(res.is_noise_or_boilerplate);
+        assert_eq!(res.word_count, 0);
+        assert_eq!(res.noise_reason.as_deref(), Some("empty"));
+    }
+
+    #[test]
+    fn filters_system_and_subagent_role_delegations() {
+        let res1 = scrub_prompt("You are a senior software engineer reviewing this pull request for security defects.");
+        assert!(res1.is_noise_or_boilerplate);
+        assert_eq!(
+            res1.noise_reason.as_deref(),
+            Some("system_or_subagent_delegation")
+        );
+
+        let res2 = scrub_prompt("Your sole job is to format the JSON payload and return valid schema output.");
+        assert!(res2.is_noise_or_boilerplate);
+        assert_eq!(
+            res2.noise_reason.as_deref(),
+            Some("system_or_subagent_delegation")
+        );
+    }
+
+    #[test]
+    fn scrubs_ssn_and_credit_cards_accurately() {
+        let input = "Please verify why test record 123-45-6789 and card 4532 0151 1283 0366 appeared in our staging logs during the audit.";
+        let res = scrub_prompt(input);
+        assert!(!res.cleaned_text.contains("123-45-6789"));
+        assert!(!res.cleaned_text.contains("4532 0151 1283 0366"));
+        assert!(res.cleaned_text.contains("[REDACTED_SSN]"));
+        assert!(res.cleaned_text.contains("[REDACTED_CARD]"));
+        assert_eq!(res.redactions_made, 2);
+        assert!(!res.is_noise_or_boilerplate);
+    }
+
+    #[test]
+    fn scrubs_github_google_and_slack_api_tokens() {
+        let input = "We need to rotate ghp_1234567890abcdefghijklmnopqrstuvwxyz, AIzaSyA1234567890abcdefghijklmnopqrstuv, and xoxb-1234567890-abcdefghij immediately.";
+        let res = scrub_prompt(input);
+        assert!(!res.cleaned_text.contains("ghp_"));
+        assert!(!res.cleaned_text.contains("AIzaSy"));
+        assert!(!res.cleaned_text.contains("xoxb-"));
+        assert_eq!(res.redactions_made, 3);
+        assert!(!res.is_noise_or_boilerplate);
+    }
+
+    #[test]
+    fn omits_fenced_code_blocks_while_preserving_surrounding_human_prose() {
+        let input = "I want to understand why this Rust pipeline is blocking our async worker:\n```rust\nfn main() {\n    let x = vec![1, 2, 3];\n}\n```\nHow should we redesign the architecture for better throughput?";
+        let res = scrub_prompt(input);
+        assert!(res.cleaned_text.contains("[CODE_BLOCK_OMITTED]"));
+        assert!(!res.cleaned_text.contains("vec![1, 2, 3]"));
+        assert!(res
+            .cleaned_text
+            .contains("How should we redesign the architecture for better throughput?"));
+        assert!(!res.is_noise_or_boilerplate);
+    }
+
+    #[test]
+    fn flags_high_symbol_ratio_stack_traces_as_code_dump() {
+        let input = "error[E0308]: {{{ [[[ <<< === ;;; >>> ]]] }}} {{{ [[[ <<< === ;;; >>> ]]] }}} mismatched types in compiler ast node";
+        let res = scrub_prompt(input);
+        assert!(res.is_noise_or_boilerplate);
+        assert_eq!(res.noise_reason.as_deref(), Some("code_or_log_dump"));
+        assert!(res.symbol_ratio > 0.06);
+    }
+
+    #[test]
+    fn flags_excessively_long_paste_dumps_over_650_words() {
+        let word_list = std::iter::repeat_n("architecture", 660)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let res = scrub_prompt(&word_list);
+        assert!(res.is_noise_or_boilerplate);
+        assert_eq!(res.noise_reason.as_deref(), Some("code_or_log_dump"));
+        assert!(res.word_count > 650);
     }
 }

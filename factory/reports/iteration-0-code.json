@@ -1,0 +1,203 @@
+{
+  "iteration": 0,
+  "phase": "baseline_code_and_security_audit",
+  "timestamp": "2026-10-30T18:15:00Z",
+  "test_execution": {
+    "rust_cargo_test": {
+      "command": "cargo test -p clearspace-pii-scrubber -p clearspace-prompt-parsers -p clearspace-onet-engine",
+      "exit_code": 0,
+      "passed": 3,
+      "failed": 0,
+      "crates": {
+        "clearspace-pii-scrubber": {
+          "passed": 2,
+          "failed": 0,
+          "tests": [
+            "tests::flags_short_commands_as_noise",
+            "tests::scrubs_secrets_and_emails_deterministically"
+          ]
+        },
+        "clearspace-prompt-parsers": {
+          "passed": 0,
+          "failed": 0,
+          "tests": [],
+          "finding": "Zero unit tests exist for Antigravity, Claude, ChatGPT, or Gemini Takeout parsing."
+        },
+        "clearspace-onet-engine": {
+          "passed": 1,
+          "failed": 0,
+          "tests": [
+            "tests::scans_and_scores_onet_roles_deterministically"
+          ],
+          "finding": "Single unit test depends on hardcoded local path 'C:/Users/chris/.gemini/antigravity/brain' and silently returns ok if path does not exist."
+        }
+      }
+    },
+    "rust_cargo_clippy": {
+      "command": "cargo clippy -p clearspace-pii-scrubber -p clearspace-prompt-parsers -p clearspace-onet-engine",
+      "exit_code": 0,
+      "warning_count": 2,
+      "warnings": [
+        {
+          "crate": "clearspace-prompt-parsers",
+          "file": "crates/prompt-parsers/src/lib.rs",
+          "line": 257,
+          "lint": "clippy::unnecessary_sort_by",
+          "message": "consider using `sort_by_key`: `cat_vec.sort_by(|a, b| b.1.cmp(&a.1));`"
+        },
+        {
+          "crate": "clearspace-onet-engine",
+          "file": "crates/onet-engine/src/lib.rs",
+          "line": 199,
+          "lint": "clippy::unnecessary_sort_by",
+          "message": "consider using `sort_by_key`: `results.sort_by(|a, b| b.overall_fit_pct.cmp(&a.overall_fit_pct));`"
+        }
+      ]
+    },
+    "typescript_typecheck": {
+      "command": "npx --workspace=apps/desktop tsc --noEmit",
+      "exit_code": 0,
+      "error_count": 0,
+      "frontend_unit_tests_configured": false
+    }
+  },
+  "hardcoded_personal_founder_data": {
+    "total_exact_target_matches": 11,
+    "unique_lines_with_target_matches": 8,
+    "by_pattern": {
+      "Tallo": {
+        "count": 1,
+        "locations": [
+          "apps/desktop/src-tauri/src/main.rs:122"
+        ]
+      },
+      "father of 5": {
+        "count": 2,
+        "locations": [
+          "apps/desktop/src-tauri/src/main.rs:242",
+          "apps/desktop/src-tauri/src/main.rs:245"
+        ]
+      },
+      "5 kids": {
+        "count": 3,
+        "locations": [
+          "apps/desktop/src-tauri/src/main.rs:172",
+          "apps/desktop/src-tauri/src/main.rs:242",
+          "apps/desktop/src-tauri/src/main.rs:245"
+        ]
+      },
+      "Godforge": {
+        "count": 1,
+        "locations": [
+          "crates/onet-engine/src/lib.rs:89"
+        ]
+      },
+      "C:/Users/chris": {
+        "count": 2,
+        "locations": [
+          "crates/onet-engine/src/lib.rs:211",
+          "apps/desktop/src-tauri/src/main.rs:335"
+        ]
+      },
+      "1,343%": {
+        "count": 2,
+        "locations": [
+          "crates/onet-engine/src/lib.rs:89",
+          "apps/desktop/src-tauri/src/main.rs:122"
+        ]
+      }
+    },
+    "additional_hardcoded_founder_biographical_leaks": [
+      {
+        "file": "apps/desktop/src-tauri/src/main.rs",
+        "lines": "117-178",
+        "description": "All 6 default 5-Year Equity Quests are hardcoded to the founder's personal history ('$90k SEO Marketer', '$46,000/mo in agency & SaaS costs at Tallo', 'Aug 8 prompt', 'June 9, June 10, Sept 6', 'Oct 22 prompt', 'Aug 5 North Star prompt: I'm 36, I have a big family, 5 kids, a wife')."
+      },
+      {
+        "file": "apps/desktop/src-tauri/src/main.rs",
+        "lines": "219-265",
+        "description": "All 5 MirrorInsightCards in build_mirror_cards() have static titles, summaries, and confidence percentages (94%-99%) hardcoded to the founder's exact biography ('2D skeletal animation', 'FTS5 MCP servers, n8n pipelines, and pSEO engines', 'wife and 5 kids', 'married father of 5, gamer dad, nerd, techy', '/grill-me')."
+      },
+      {
+        "file": "crates/onet-engine/src/lib.rs",
+        "lines": "43-114",
+        "description": "get_curated_onet_catalog() hardcodes founder-specific project names and metrics ('n8n, pSEO, scrapers, MCP servers', '2D character rigging editor', 'Godforge, Farever', 'Lodestar, ForeverSim', 'Tiny Venture', '+1,343% SEO growth', 'Trinity Rule') and clamps all role fit scores to >=65% (skill>=72%, energy>=75%, values>=78%) even when prompts is empty."
+      },
+      {
+        "file": "apps/desktop/src/App.tsx",
+        "lines": "98-103, 280-283, 551-553",
+        "description": "Hardcoded founder-specific UI copy: Peak Deep-Flow Window hardcoded to '7 PM - 12 AM' / '40% of all architectural & lab prompts', 24-hour rhythm subtitle hardcoded to '10 AM-1 PM (Execution) and 7 PM-Midnight (Deep Architecture Lab)', and Socratic prompts referencing '9 PM deep flow' and 'Trinity Rule'."
+      }
+    ]
+  },
+  "runtime_unwrap_audit": {
+    "total_non_test_unwraps": 18,
+    "breakdown": {
+      "apps/desktop/src-tauri/src/main.rs": {
+        "count": 4,
+        "locations": [
+          {
+            "line": 295,
+            "code": "conn.prepare(\"SELECT id, horizon, title, rationale, equity_category, equity_points, accepted, completed FROM quests\").unwrap()"
+          },
+          {
+            "line": 309,
+            "code": "stmt.query_map(..., |row| { ... }).unwrap()"
+          },
+          {
+            "line": 316,
+            "code": "conn.prepare(\"SELECT id, created_at, prompt_question, reflection_text, mood_valence FROM journals ORDER BY id DESC\").unwrap()"
+          },
+          {
+            "line": 327,
+            "code": "stmt.query_map(..., |row| { ... }).unwrap()"
+          }
+        ],
+        "notes": "Also contains 3 .expect() calls in main() at lines 444, 445, and 459."
+      },
+      "crates/pii-scrubber/src/lib.rs": {
+        "count": 6,
+        "locations": [
+          { "line": 27, "code": "Regex::new(email).unwrap()" },
+          { "line": 28, "code": "Regex::new(phone).unwrap()" },
+          { "line": 29, "code": "Regex::new(ssn).unwrap()" },
+          { "line": 33, "code": "Regex::new(api_key).unwrap()" },
+          { "line": 34, "code": "Regex::new(credit_card).unwrap()" },
+          { "line": 35, "code": "Regex::new(fenced_code).unwrap()" }
+        ]
+      },
+      "crates/prompt-parsers/src/lib.rs": {
+        "count": 8,
+        "locations": [
+          { "line": 65, "code": "Regex::new(user_req).unwrap()" },
+          { "line": 66, "code": "Regex::new(local_time).unwrap()" },
+          { "line": 67, "code": "Regex::new(hour_iso).unwrap()" },
+          { "line": 68, "code": "Regex::new(career).unwrap()" },
+          { "line": 69, "code": "Regex::new(values_emotion).unwrap()" },
+          { "line": 70, "code": "Regex::new(architecture).unwrap()" },
+          { "line": 71, "code": "Regex::new(learning).unwrap()" },
+          { "line": 72, "code": "Regex::new(grill_me).unwrap()" }
+        ]
+      },
+      "crates/onet-engine/src/lib.rs": {
+        "count": 0,
+        "locations": []
+      }
+    }
+  },
+  "parser_and_persistence_defects": {
+    "gemini_takeout_implemented": false,
+    "markdown_journal_implemented": false,
+    "parser_findings": [
+      "PromptSource::GeminiTakeout and PromptSource::MarkdownJournal in crates/prompt-parsers/src/lib.rs (lines 18-19) are dead enum variants with zero parsing logic.",
+      "parse_exported_conversations_json (lines 264-355) only parses Claude ('chat_messages') and ChatGPT ('mapping') arrays, and fails to populate summary.earliest_date, summary.latest_date, or summary.category_counts.",
+      "ChatGPT create_time is a Unix epoch float (e.g. 1729000000.0), so extract_hour() (which looks for ISO 'T(\\d{2}):\\d{2}') always returns None for ChatGPT exports."
+    ],
+    "persist_prompts_wipes_existing_records": true,
+    "persistence_findings": [
+      "persist_prompts_to_sqlite in apps/desktop/src-tauri/src/main.rs (line 269) executes 'DELETE FROM prompts' unconditionally and hardcodes source = 'antigravity' (line 278).",
+      "In apps/desktop/src/App.tsx (lines 155-161), handleFileUpload invokes import_exported_json and immediately calls runScan(), which calls scan_local_vault -> persist_prompts_to_sqlite -> DELETE FROM prompts, wiping all newly imported Claude/ChatGPT prompts and replacing the dashboard exclusively with local Antigravity brain files.",
+      "scan_local_vault automatically scans %USERPROFILE%/.gemini/antigravity/brain on app launch without user opt-in and provides no Reset/Clear Vault capability."
+    ]
+  }
+}

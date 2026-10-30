@@ -1,0 +1,58 @@
+{
+  "admin": "Christian",
+  "min_loops": 3,
+  "max_loops": 5,
+  "composite_threshold": 92.0,
+  "pillars": {
+    "rust_core_and_privacy": {
+      "weight": 0.25,
+      "threshold": 95.0,
+      "requirements": [
+        "100% cargo test pass rate across workspace crates",
+        "Minimum 25 Rust unit/integration tests covering PII scrubber, multi-provider parsers (OpenAI, Anthropic, Google Takeout), and O*NET engine",
+        "0 hardcoded personal/founder strings ('Tallo', 'father of 5', 'Godforge', 'C:/Users/chris')",
+        "0 runtime .unwrap() calls in SQLite or parser paths",
+        "Calibrated O*NET formula matching documented weights without artificial 65% empty-prompt floor"
+      ]
+    },
+    "frontend_and_data_integrity": {
+      "weight": 0.20,
+      "threshold": 92.0,
+      "requirements": [
+        "0 TypeScript compiler errors (tsc --noEmit)",
+        "100% Vitest & Playwright functional checks passing",
+        "True New-User Onboarding Experience when vault is empty (guided multi-provider import for Google Takeout, OpenAI, Anthropic, or opt-in Local Scan)",
+        "Non-destructive additive SQLite persistence (importing multiple provider exports merges cleanly without DELETE FROM prompts)",
+        "Vault Reset / Clear Local Vault control so user can re-test onboarding anytime"
+      ]
+    },
+    "visual_design_and_geometry": {
+      "weight": 0.25,
+      "threshold": 90.0,
+      "requirements": [
+        "0 horizontal overflow or clipped text across 1024x768, 1280x800, and 1440x900 viewports",
+        "Screenshot verification across Onboarding state and all 5 tabs",
+        "Visual progress bars for O*NET sub-metrics and 5-Year Equity horizons",
+        "Interactive search & source/category filter in Local Vault tab"
+      ]
+    },
+    "accessibility_and_ergonomics": {
+      "weight": 0.15,
+      "threshold": 92.0,
+      "requirements": [
+        "WCAG 2.1 AA contrast compliance (>= 4.5:1 normal text, >= 3.0:1 large text)",
+        "Semantic ARIA tablist, tab, and tabpanel roles with keyboard navigation",
+        "Visible :focus-visible rings on all interactive buttons, inputs, and upload dropzones"
+      ]
+    },
+    "performance_and_responsiveness": {
+      "weight": 0.15,
+      "threshold": 90.0,
+      "requirements": [
+        "Rust parser + PII scrubber processes 1,000 prompts in < 150ms",
+        "Tab switching latency < 16ms",
+        "Clean Vite production bundle build"
+      ]
+    }
+  }
+}

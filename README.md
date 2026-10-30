@@ -10,7 +10,7 @@ Clearspace is a **100% local-first, zero-knowledge desktop application** (built 
 
 1. **We Never See Your Raw Prompts:** All parsing, code-dump filtering, and PII scrubbing happen **100% locally on your machine** via our open-source Rust crates (`crates/prompt-parsers` and `crates/pii-scrubber`).
 2. **Your Data Is Never For Sale:** Your local database (`clearspace.db`) lives on your hard drive.
-3. **Auditable Open-Core Monorepo (The PostHog Pattern):**
+3. **Auditable Open-Core Monorepo:**
    - Everything outside `ee/` is **MIT Licensed**. Anyone can inspect, audit, and verify every line of code that reads local files or scrubs sensitive data.
    - Paid trajectory & synthesis modules live in `ee/` and are publicly readable in this repository so you never have to trust a black box.
 

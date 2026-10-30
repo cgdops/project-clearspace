@@ -1,0 +1,88 @@
+name: CI & Security Gate
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-and-privacy-gate:
+    name: Rust Core, Clippy & Privacy Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Privacy & hardcoded-path regression check
+        run: |
+          echo "Checking source files for hardcoded user paths or personal identifiers..."
+          if grep -RInE "(C:\\\\Users\\\\|C:/Users/|/Users/[a-zA-Z0-9_-]+)" crates/ apps/desktop/src/ apps/desktop/src-tauri/src/; then
+            echo "::error::Hardcoded local user path detected in source code."
+            exit 1
+          fi
+          echo "Zero hardcoded local paths found."
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Cargo Clippy (Linter)
+        run: cargo clippy -p clearspace-pii-scrubber -p clearspace-prompt-parsers -p clearspace-onet-engine --all-targets -- -D warnings
+
+      - name: Run Rust core unit & benchmark tests (29 tests)
+        run: cargo test -p clearspace-pii-scrubber -p clearspace-prompt-parsers -p clearspace-onet-engine
+
+  frontend-build-and-test:
+    name: Frontend Typecheck, Vitest & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Vitest unit suite (11 tests)
+        run: npm --workspace=apps/desktop test
+
+      - name: Verify production TypeScript & Vite bundle
+        run: npm --workspace=apps/desktop run build
+
+  dependency-and-secret-scan:
+    name: Supply-Chain CVE & Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Dependency Review (CVE & License Gate)
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+      - name: Scan for leaked secrets with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
