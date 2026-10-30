@@ -1,0 +1,119 @@
+{
+  "iteration": 1,
+  "phase": "loop_1_code_and_security_qa_verification",
+  "timestamp": "2026-10-30T18:30:00Z",
+  "test_execution": {
+    "rust_cargo_test": {
+      "command": "cargo test -p clearspace-pii-scrubber -p clearspace-prompt-parsers -p clearspace-onet-engine",
+      "exit_code": 0,
+      "passed": 29,
+      "failed": 0,
+      "crates": {
+        "clearspace-pii-scrubber": {
+          "passed": 9,
+          "failed": 0,
+          "tests": [
+            "tests::scrubs_secrets_and_emails_deterministically",
+            "tests::flags_short_commands_as_noise",
+            "tests::flags_empty_or_whitespace_prompts_as_noise",
+            "tests::filters_system_and_subagent_role_delegations",
+            "tests::scrubs_ssn_and_credit_cards_accurately",
+            "tests::scrubs_github_google_and_slack_api_tokens",
+            "tests::omits_fenced_code_blocks_while_preserving_surrounding_human_prose",
+            "tests::flags_high_symbol_ratio_stack_traces_as_code_dump",
+            "tests::flags_excessively_long_paste_dumps_over_650_words"
+          ]
+        },
+        "clearspace-prompt-parsers": {
+          "passed": 11,
+          "failed": 0,
+          "tests": [
+            "tests::parses_openai_chatgpt_export_with_epoch_timestamps",
+            "tests::parses_anthropic_claude_export_with_text_and_content_blocks",
+            "tests::parses_google_gemini_takeout_activity_records",
+            "tests::parses_markdown_journals_with_date_headings_and_sections",
+            "tests::unwraps_container_objects_for_conversations_and_activities",
+            "tests::deduplicates_identical_prompts_and_counts_redactions_and_noise",
+            "tests::classifies_all_five_behavioral_signal_categories_accurately",
+            "tests::summarizes_persisted_multi_provider_prompts_with_source_breakdown",
+            "tests::scans_antigravity_brain_dir_and_prefers_transcript_full_over_transcript",
+            "tests::returns_error_on_empty_or_malformed_json_payloads",
+            "tests::benchmark_1000_prompts_ingestion_completes_under_150ms"
+          ],
+          "benchmark_1000_prompts_under_150ms": true
+        },
+        "clearspace-onet-engine": {
+          "passed": 9,
+          "failed": 0,
+          "tests": [
+            "tests::empty_prompts_return_zero_scores",
+            "tests::ranks_computer_systems_architect_first_for_automation_pipeline_prompts",
+            "tests::ranks_software_tools_developer_first_for_dx_and_agent_sdk_prompts",
+            "tests::ranks_interactive_systems_architect_first_for_simulation_and_game_economy_prompts",
+            "tests::ranks_technical_product_director_first_for_gtm_pricing_and_icp_strategy_prompts",
+            "tests::applies_burnout_penalty_deterministically_when_conflict_keywords_present",
+            "tests::returns_zero_fit_when_prompts_contain_no_matching_keywords",
+            "tests::extracts_supporting_evidence_quotes_and_truncates_excerpts_over_220_chars",
+            "tests::catalog_contains_zero_hardcoded_founder_biographical_strings"
+          ]
+        }
+      }
+    },
+    "rust_cargo_clippy": {
+      "command": "cargo clippy -p clearspace-pii-scrubber -p clearspace-prompt-parsers -p clearspace-onet-engine -- -D warnings",
+      "exit_code": 0,
+      "warning_count": 0,
+      "warnings": []
+    },
+    "typescript_typecheck": {
+      "command": "npx --workspace=apps/desktop tsc --noEmit",
+      "exit_code": 0,
+      "error_count": 0
+    },
+    "frontend_vitest_suite": {
+      "command": "npm --workspace=apps/desktop test",
+      "exit_code": 0,
+      "test_files_passed": 1,
+      "tests_passed": 7,
+      "tests_failed": 0,
+      "tests": [
+        "starts in a clean empty-vault onboarding state with 0% O*NET scores and 0 mirror cards",
+        "imports OpenAI ChatGPT conversations.json with epoch timestamps and scrubs PII locally",
+        "additively merges Anthropic Claude, Google Gemini Takeout, and Markdown Journal imports without wiping prior providers",
+        "loads the sample multi-provider vault and computes non-zero O*NET fit scores and evidence quotes",
+        "toggles quest commitment and completion states and persists journal entries",
+        "resets the local vault cleanly back to 0 prompts and 0% O*NET scores",
+        "contains zero hardcoded founder biographical strings in any synthesized output"
+      ]
+    }
+  },
+  "hardcoded_personal_founder_data": {
+    "total_exact_target_matches": 0,
+    "unique_lines_with_target_matches": 0,
+    "by_pattern": {
+      "Tallo": { "count": 0, "locations": [] },
+      "father of 5": { "count": 0, "locations": [] },
+      "5 kids": { "count": 0, "locations": [] },
+      "Godforge": { "count": 0, "locations": [] },
+      "C:/Users/chris": { "count": 0, "locations": [] },
+      "1,343%": { "count": 0, "locations": [] }
+    }
+  },
+  "runtime_unwrap_audit": {
+    "total_non_test_unwraps": 0,
+    "breakdown": {
+      "apps/desktop/src-tauri/src/main.rs": { "count": 0, "locations": [] },
+      "crates/pii-scrubber/src/lib.rs": { "count": 0, "locations": [] },
+      "crates/prompt-parsers/src/lib.rs": { "count": 0, "locations": [] },
+      "crates/onet-engine/src/lib.rs": { "count": 0, "locations": [] }
+    }
+  },
+  "parser_and_persistence_verification": {
+    "gemini_takeout_implemented": true,
+    "markdown_journal_implemented": true,
+    "openai_epoch_timestamps_implemented": true,
+    "anthropic_claude_implemented": true,
+    "additive_upsert_persistence_verified": true,
+    "reset_local_vault_verified": true
+  }
+}

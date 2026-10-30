@@ -1,0 +1,605 @@
+{
+  "iteration": 0,
+  "phase": "baseline",
+  "timestamp": "2026-10-30T18:16:25.185Z",
+  "status": "FAIL_BLOCKING_ONBOARDING_AND_A11Y",
+  "artifacts": {
+    "baselineStuckScreenshot": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter0-baseline-stuck.png"
+  },
+  "summaryOfDefects": [
+    {
+      "id": "DEFECT-01",
+      "severity": "CRITICAL",
+      "category": "Onboarding / Runtime Fallback",
+      "location": "apps/desktop/src/App.tsx:114-124, 241-247",
+      "description": "invoke('scan_local_vault') throws outside Tauri (or when vault fails to load), setting loading=false while data remains null. Because line 241 checks (loading || !data), the UI stays permanently trapped on 'Scanning local prompt history…' with zero interactive recovery, sample data fallback, or onboarding import CTA."
+    },
+    {
+      "id": "DEFECT-02",
+      "severity": "HIGH",
+      "category": "Data Integrity / Hardcoded Sidebar Metrics",
+      "location": "apps/desktop/src/App.tsx:167-170, 231-237, 280-283",
+      "description": "Sidebar displays '420 pts' alongside 'Compounding across 0 active career commitments' even when data is null or empty. Additionally, Mirror tab hardcodes '7 PM – 12 AM' and '40% of all architectural & lab prompts' (lines 281-282) and Vault tab hardcodes 'Notice your two distinct peaks: 10 AM–1 PM (Execution) and 7 PM–Midnight (Deep Architecture Lab)' (line 552) regardless of actual user prompt distribution."
+    },
+    {
+      "id": "DEFECT-03",
+      "severity": "HIGH",
+      "category": "Accessibility / ARIA Semantics",
+      "location": "apps/desktop/src/App.tsx:192-228",
+      "description": "Navigation tabs lack role='tablist' (or aria-label on nav), buttons lack role='tab', aria-selected, and aria-controls, and main content lacks role='tabpanel' and aria-live status announcements during scanning."
+    },
+    {
+      "id": "DEFECT-04",
+      "severity": "HIGH",
+      "category": "Accessibility / Keyboard Focus & Contrast",
+      "location": "apps/desktop/src/styles.css:10, 15, 225-228",
+      "description": "Zero :focus-visible styles exist anywhere in styles.css. Furthermore, --text-muted (#76827c) fails WCAG AA 4.5:1 normal text contrast on --bg-warm (#faf7f2, ratio 3.55:1), --bg-card (#ffffff, ratio 3.85:1), and sidebar (#f4efe6, ratio 3.32:1); --accent-gold (#b8862d) on --bg-amber-soft (#fdf3e7) also fails WCAG AA at 2.91:1."
+    },
+    {
+      "id": "DEFECT-05",
+      "severity": "MEDIUM",
+      "category": "Responsive Layout & Architecture",
+      "location": "apps/desktop/src/styles.css:160-165, 323-331 & apps/desktop/src/App.tsx:1-600",
+      "description": "Zero responsive @media queries in styles.css (.stats-grid and .meter-row are rigid 4-column grids that squeeze cards at 1024x768). Entire application is a 600-line monolithic App.tsx with extensive inline styles."
+    }
+  ],
+  "contrastAudit": {
+    "textPrimary_on_bgWarm": {
+      "fg": "#1c2421",
+      "bg": "#faf7f2",
+      "ratio": 14.85,
+      "wcagAA": true
+    },
+    "textSecondary_on_bgWarm": {
+      "fg": "#4a5550",
+      "bg": "#faf7f2",
+      "ratio": 7.26,
+      "wcagAA": true
+    },
+    "textMuted_on_bgWarm": {
+      "fg": "#76827c",
+      "bg": "#faf7f2",
+      "ratio": 3.74,
+      "wcagAA": false
+    },
+    "textMuted_on_bgCard": {
+      "fg": "#76827c",
+      "bg": "#ffffff",
+      "ratio": 4,
+      "wcagAA": false
+    },
+    "textMuted_on_sidebarBg": {
+      "fg": "#76827c",
+      "bg": "#f4efe6",
+      "ratio": 3.49,
+      "wcagAA": false
+    },
+    "accentGold_on_amberSoft": {
+      "fg": "#b8862d",
+      "bg": "#fdf3e7",
+      "ratio": 2.95,
+      "wcagAA": false
+    },
+    "accentSage_on_accentSoft": {
+      "fg": "#2b5b48",
+      "bg": "#e8f0ec",
+      "ratio": 6.72,
+      "wcagAA": true
+    },
+    "burnoutRed_on_roseSoft": {
+      "fg": "#a93b3b",
+      "bg": "#fbecec",
+      "ratio": 5.42,
+      "wcagAA": true
+    }
+  },
+  "viewports": {
+    "1280x800": {
+      "viewport": {
+        "width": 1280,
+        "height": 800,
+        "label": "Standard Desktop"
+      },
+      "consoleErrors": [
+        {
+          "type": "error",
+          "text": "Failed to scan local vault: TypeError: Cannot read properties of undefined (reading 'invoke')\n    at invoke (http://localhost:1420/node_modules/.vite/deps/@tauri-apps_api_core.js?v=51d7cb55:130:37)\n    at runScan (http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:51:25)\n    at http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:60:5\n    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:20317:20)\n    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:1133:72)\n    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9773:163)\n    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9827:60)\n    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12031:29)\n    at recursivelyTraversePassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:11999:61)\n    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12207:13)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to scan local vault: TypeError: Cannot read properties of undefined (reading 'invoke')\n    at invoke (http://localhost:1420/node_modules/.vite/deps/@tauri-apps_api_core.js?v=51d7cb55:130:37)\n    at runScan (http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:51:25)\n    at http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:60:5\n    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:20317:20)\n    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:1133:72)\n    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9773:163)\n    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9827:60)\n    at reconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12279:13)\n    at recursivelyTraverseReconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12246:11)\n    at reconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12323:13)"
+        }
+      ],
+      "pageErrors": [],
+      "overflow": {
+        "horizontalOverflowPx": 0,
+        "verticalScrollHeight": 800,
+        "clientWidth": 1280,
+        "clientHeight": 800
+      },
+      "geometry": {
+        "appShell": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 800
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 270,
+          "height": 800
+        },
+        "mainContent": {
+          "x": 270,
+          "y": 0,
+          "width": 1010,
+          "height": 800
+        },
+        "stuckCard": {
+          "x": 314,
+          "y": 34,
+          "width": 922,
+          "height": 122.94
+        },
+        "equityWidget": {
+          "x": 18,
+          "y": 632.44,
+          "width": 233,
+          "height": 143.56
+        }
+      },
+      "contentState": {
+        "mainHeadingText": "Scanning local prompt history…",
+        "mainLeadText": "Running deterministic Rust PII scrubber and O*NET behavioral matcher on your local machine.",
+        "sidebarEquityScore": "420 pts",
+        "sidebarEquitySub": "Compounding across 0 active career commitments.",
+        "interactiveControlsInMainCount": 0
+      },
+      "ariaAndA11y": {
+        "navRole": null,
+        "navAriaLabel": null,
+        "tablistCount": 0,
+        "tabRoleCount": 0,
+        "tabpanelRoleCount": 0,
+        "ariaSelectedCount": 0,
+        "ariaLiveCount": 0,
+        "navButtons": [
+          {
+            "text": "Cognitive Mirror",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn active",
+            "rect": {
+              "x": 18,
+              "y": 211.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "O*NET Path Finder",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 258.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "5-Year Equity & Quests",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 305.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "Reflective Journal",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 352.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "Local Vault & Scrubber",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 399.67,
+              "width": 233,
+              "height": 41
+            }
+          }
+        ],
+        "hasFocusVisibleRule": false,
+        "hasReducedMotionRule": false,
+        "hasResponsiveMediaQueries": false
+      },
+      "tabSwitchResults": [
+        {
+          "tabClicked": "Cognitive Mirror",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "O*NET Path Finder",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "5-Year Equity & Quests",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "Reflective Journal",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "Local Vault & Scrubber",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        }
+      ]
+    },
+    "1440x900": {
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "label": "Wide Desktop"
+      },
+      "consoleErrors": [
+        {
+          "type": "error",
+          "text": "Failed to scan local vault: TypeError: Cannot read properties of undefined (reading 'invoke')\n    at invoke (http://localhost:1420/node_modules/.vite/deps/@tauri-apps_api_core.js?v=51d7cb55:130:37)\n    at runScan (http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:51:25)\n    at http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:60:5\n    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:20317:20)\n    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:1133:72)\n    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9773:163)\n    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9827:60)\n    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12031:29)\n    at recursivelyTraversePassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:11999:61)\n    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12207:13)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to scan local vault: TypeError: Cannot read properties of undefined (reading 'invoke')\n    at invoke (http://localhost:1420/node_modules/.vite/deps/@tauri-apps_api_core.js?v=51d7cb55:130:37)\n    at runScan (http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:51:25)\n    at http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:60:5\n    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:20317:20)\n    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:1133:72)\n    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9773:163)\n    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9827:60)\n    at reconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12279:13)\n    at recursivelyTraverseReconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12246:11)\n    at reconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12323:13)"
+        }
+      ],
+      "pageErrors": [],
+      "overflow": {
+        "horizontalOverflowPx": 0,
+        "verticalScrollHeight": 900,
+        "clientWidth": 1440,
+        "clientHeight": 900
+      },
+      "geometry": {
+        "appShell": {
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 900
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 270,
+          "height": 900
+        },
+        "mainContent": {
+          "x": 270,
+          "y": 0,
+          "width": 1120,
+          "height": 900
+        },
+        "stuckCard": {
+          "x": 314,
+          "y": 34,
+          "width": 1032,
+          "height": 122.94
+        },
+        "equityWidget": {
+          "x": 18,
+          "y": 732.44,
+          "width": 233,
+          "height": 143.56
+        }
+      },
+      "contentState": {
+        "mainHeadingText": "Scanning local prompt history…",
+        "mainLeadText": "Running deterministic Rust PII scrubber and O*NET behavioral matcher on your local machine.",
+        "sidebarEquityScore": "420 pts",
+        "sidebarEquitySub": "Compounding across 0 active career commitments.",
+        "interactiveControlsInMainCount": 0
+      },
+      "ariaAndA11y": {
+        "navRole": null,
+        "navAriaLabel": null,
+        "tablistCount": 0,
+        "tabRoleCount": 0,
+        "tabpanelRoleCount": 0,
+        "ariaSelectedCount": 0,
+        "ariaLiveCount": 0,
+        "navButtons": [
+          {
+            "text": "Cognitive Mirror",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn active",
+            "rect": {
+              "x": 18,
+              "y": 211.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "O*NET Path Finder",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 258.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "5-Year Equity & Quests",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 305.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "Reflective Journal",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 352.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "Local Vault & Scrubber",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 399.67,
+              "width": 233,
+              "height": 41
+            }
+          }
+        ],
+        "hasFocusVisibleRule": false,
+        "hasReducedMotionRule": false,
+        "hasResponsiveMediaQueries": false
+      },
+      "tabSwitchResults": [
+        {
+          "tabClicked": "Cognitive Mirror",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "O*NET Path Finder",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "5-Year Equity & Quests",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "Reflective Journal",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "Local Vault & Scrubber",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        }
+      ]
+    },
+    "1024x768": {
+      "viewport": {
+        "width": 1024,
+        "height": 768,
+        "label": "Compact/Split-Screen"
+      },
+      "consoleErrors": [
+        {
+          "type": "error",
+          "text": "Failed to scan local vault: TypeError: Cannot read properties of undefined (reading 'invoke')\n    at invoke (http://localhost:1420/node_modules/.vite/deps/@tauri-apps_api_core.js?v=51d7cb55:130:37)\n    at runScan (http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:51:25)\n    at http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:60:5\n    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:20317:20)\n    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:1133:72)\n    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9773:163)\n    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9827:60)\n    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12031:29)\n    at recursivelyTraversePassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:11999:61)\n    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12207:13)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to scan local vault: TypeError: Cannot read properties of undefined (reading 'invoke')\n    at invoke (http://localhost:1420/node_modules/.vite/deps/@tauri-apps_api_core.js?v=51d7cb55:130:37)\n    at runScan (http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:51:25)\n    at http://localhost:1420/@fs/E:/GitHub/project-clearspace/apps/desktop/src/App.tsx:60:5\n    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:20317:20)\n    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:1133:72)\n    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9773:163)\n    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:9827:60)\n    at reconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12279:13)\n    at recursivelyTraverseReconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12246:11)\n    at reconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=7de410dc:12323:13)"
+        }
+      ],
+      "pageErrors": [],
+      "overflow": {
+        "horizontalOverflowPx": 0,
+        "verticalScrollHeight": 768,
+        "clientWidth": 1024,
+        "clientHeight": 768
+      },
+      "geometry": {
+        "appShell": {
+          "x": 0,
+          "y": 0,
+          "width": 1024,
+          "height": 768
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 270,
+          "height": 768
+        },
+        "mainContent": {
+          "x": 270,
+          "y": 0,
+          "width": 754,
+          "height": 768
+        },
+        "stuckCard": {
+          "x": 314,
+          "y": 34,
+          "width": 666,
+          "height": 146.19
+        },
+        "equityWidget": {
+          "x": 18,
+          "y": 600.44,
+          "width": 233,
+          "height": 143.56
+        }
+      },
+      "contentState": {
+        "mainHeadingText": "Scanning local prompt history…",
+        "mainLeadText": "Running deterministic Rust PII scrubber and O*NET behavioral matcher on your local machine.",
+        "sidebarEquityScore": "420 pts",
+        "sidebarEquitySub": "Compounding across 0 active career commitments.",
+        "interactiveControlsInMainCount": 0
+      },
+      "ariaAndA11y": {
+        "navRole": null,
+        "navAriaLabel": null,
+        "tablistCount": 0,
+        "tabRoleCount": 0,
+        "tabpanelRoleCount": 0,
+        "ariaSelectedCount": 0,
+        "ariaLiveCount": 0,
+        "navButtons": [
+          {
+            "text": "Cognitive Mirror",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn active",
+            "rect": {
+              "x": 18,
+              "y": 211.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "O*NET Path Finder",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 258.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "5-Year Equity & Quests",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 305.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "Reflective Journal",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 352.67,
+              "width": 233,
+              "height": 41
+            }
+          },
+          {
+            "text": "Local Vault & Scrubber",
+            "role": null,
+            "ariaSelected": null,
+            "ariaControls": null,
+            "className": "nav-btn ",
+            "rect": {
+              "x": 18,
+              "y": 399.67,
+              "width": 233,
+              "height": 41
+            }
+          }
+        ],
+        "hasFocusVisibleRule": false,
+        "hasReducedMotionRule": false,
+        "hasResponsiveMediaQueries": false
+      },
+      "tabSwitchResults": [
+        {
+          "tabClicked": "Cognitive Mirror",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "O*NET Path Finder",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "5-Year Equity & Quests",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "Reflective Journal",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        },
+        {
+          "tabClicked": "Local Vault & Scrubber",
+          "mainHeadingAfterClick": "Scanning local prompt history…",
+          "remainedStuck": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,472 @@
+{
+  "iteration": 1,
+  "phase": "loop-1-verification",
+  "timestamp": "2026-10-30T18:28:48.975Z",
+  "status": "PASS_FUNCTIONAL_ONBOARDING_NEEDS_A11Y_AND_CONTRAST_POLISH",
+  "screenshots": {
+    "onboarding_1280x800": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter1-onboarding-1280x800.png",
+    "onboarding_1024x768": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter1-onboarding-1024x768.png",
+    "tab_mirror": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter1-tab-mirror.png",
+    "tab_onet": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter1-tab-onet.png",
+    "tab_equity": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter1-tab-equity.png",
+    "tab_journal": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter1-tab-journal.png",
+    "tab_vault": "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d\\iter1-tab-vault.png"
+  },
+  "functionalFlows": {
+    "onboardingEmptyVault": {
+      "horizontalOverflowPx": 0,
+      "mainHeading": "Your Unmasked Cognitive Mirror",
+      "onboardingTitle": "Welcome to Clearspace — Your Career & Cognitive Compass",
+      "providerStepCount": 4,
+      "statValues": [
+        "0",
+        "0",
+        "0",
+        "Awaiting Data"
+      ],
+      "sidebarEquityScoreOnFreshStorage": "788 pts",
+      "sidebarEquitySubOnFreshStorage": "Compounding across 5 active career commitments."
+    },
+    "sampleMultiProviderLoad": {
+      "uniquePromptsStat": "5",
+      "highSignalStat": "5",
+      "piiRedactionsStat": "0",
+      "peakFlowWindowStat": "7 PM – 11 PM",
+      "mirrorCardCount": 5
+    },
+    "multiProviderFileUpload": {
+      "importStatusText": "Imported 3 clean prompts from 1 file(s) (2 PII redactions made locally).",
+      "providerBadges": [
+        "OpenAI ChatGPT: 3 prompts",
+        "Anthropic Claude: 3 prompts",
+        "Google Gemini Takeout: 2 prompts"
+      ]
+    },
+    "resetVaultFlow": {
+      "onboardingVisibleAfterReset": true,
+      "uniquePromptsAfterReset": "0",
+      "highSignalAfterReset": "0",
+      "piiRedactionsAfterReset": "0",
+      "peakWindowAfterReset": "Awaiting Data",
+      "sidebarEquityScoreAfterReset": "0 pts",
+      "sidebarEquitySubAfterReset": "Compounding across 0 active career commitments."
+    },
+    "tabSwitchLatencyMs": {
+      "mirror": 32.8,
+      "onet": 58.9,
+      "equity": 48.1,
+      "journal": 41.9,
+      "vault": 42
+    }
+  },
+  "contrastTelemetry": {
+    "statLabel_textMuted_on_statCard": {
+      "fg": "rgb(118, 130, 124)",
+      "bg": "rgb(255, 255, 255)",
+      "ratio": 4,
+      "wcagAA_4_5": false
+    },
+    "quoteMeta_textMuted_on_quoteBox": {
+      "fg": "rgb(118, 130, 124)",
+      "bg": "rgb(250, 247, 242)",
+      "ratio": 3.74,
+      "wcagAA_4_5": false
+    },
+    "badgeSuperpower": {
+      "fg": "rgb(43, 91, 72)",
+      "bg": "rgb(232, 240, 236)",
+      "ratio": 6.72,
+      "wcagAA_4_5": true
+    },
+    "badgeValue": {
+      "fg": "rgb(184, 134, 45)",
+      "bg": "rgb(253, 243, 231)",
+      "ratio": 2.95,
+      "wcagAA_4_5": false
+    },
+    "badgeBurnout": {
+      "fg": "rgb(169, 59, 59)",
+      "bg": "rgb(251, 236, 236)",
+      "ratio": 5.42,
+      "wcagAA_4_5": true
+    },
+    "navBtnActive": {
+      "fg": "rgb(45, 91, 73)",
+      "bg": "rgba(255, 255, 255, 0.925)",
+      "ratio": 7.77,
+      "wcagAA_4_5": true
+    },
+    "navBtnInactive_on_sidebar": {
+      "fg": "rgb(74, 85, 80)",
+      "bg": "rgb(244, 239, 230)",
+      "ratio": 6.77,
+      "wcagAA_4_5": true
+    }
+  },
+  "ariaTelemetry": {
+    "tablistCount": 0,
+    "tabRoleCount": 0,
+    "tabpanelRoleCount": 0,
+    "ariaSelectedCount": 0,
+    "ariaLiveCount": 0,
+    "hasFocusVisibleRule": false,
+    "hasReducedMotionRule": false,
+    "mediaQueryCount": 0
+  },
+  "viewports": {
+    "1280x800": {
+      "viewport": {
+        "name": "1280x800",
+        "label": "Standard Desktop",
+        "width": 1280,
+        "height": 800
+      },
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "emptyStateHorizontalOverflowPx": 0,
+      "perTabGeometry": {
+        "mirror": {
+          "heading": "Your Unmasked Cognitive Mirror",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 2561,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 800
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1010,
+            "height": 2561.27
+          },
+          "cardCount": 9,
+          "overflowingCards": 0
+        },
+        "onet": {
+          "heading": "O*NET Natural Path Finder",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 2527,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 800
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1010,
+            "height": 2527.17
+          },
+          "cardCount": 4,
+          "overflowingCards": 0
+        },
+        "equity": {
+          "heading": "Your 5-Year Personal Equity Map",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 1272,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 800
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1010,
+            "height": 1271.69
+          },
+          "cardCount": 6,
+          "overflowingCards": 0
+        },
+        "journal": {
+          "heading": "Reflective Sanctuary & Socratic Journal",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 800,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 800
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1010,
+            "height": 800
+          },
+          "cardCount": 2,
+          "overflowingCards": 0
+        },
+        "vault": {
+          "heading": "Zero-Knowledge Local Vault & Scrubber",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 1240,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 800
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1010,
+            "height": 1240.22
+          },
+          "cardCount": 3,
+          "overflowingCards": 0
+        }
+      }
+    },
+    "1440x900": {
+      "viewport": {
+        "name": "1440x900",
+        "label": "Wide Desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "emptyStateHorizontalOverflowPx": 0,
+      "perTabGeometry": {
+        "mirror": {
+          "heading": "Your Unmasked Cognitive Mirror",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 2251,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 900
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1120,
+            "height": 2250.69
+          },
+          "cardCount": 9,
+          "overflowingCards": 0
+        },
+        "onet": {
+          "heading": "O*NET Natural Path Finder",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 2487,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 900
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1120,
+            "height": 2486.89
+          },
+          "cardCount": 4,
+          "overflowingCards": 0
+        },
+        "equity": {
+          "heading": "Your 5-Year Personal Equity Map",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 1272,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 900
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1120,
+            "height": 1271.69
+          },
+          "cardCount": 6,
+          "overflowingCards": 0
+        },
+        "journal": {
+          "heading": "Reflective Sanctuary & Socratic Journal",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 900,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 900
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1120,
+            "height": 900
+          },
+          "cardCount": 1,
+          "overflowingCards": 0
+        },
+        "vault": {
+          "heading": "Zero-Knowledge Local Vault & Scrubber",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 1220,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 900
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 1120,
+            "height": 1220.08
+          },
+          "cardCount": 3,
+          "overflowingCards": 0
+        }
+      }
+    },
+    "1024x768": {
+      "viewport": {
+        "name": "1024x768",
+        "label": "Compact/Split-Screen",
+        "width": 1024,
+        "height": 768
+      },
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "emptyStateHorizontalOverflowPx": 0,
+      "perTabGeometry": {
+        "mirror": {
+          "heading": "Your Unmasked Cognitive Mirror",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 2444,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 768
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 754,
+            "height": 2444.38
+          },
+          "cardCount": 9,
+          "overflowingCards": 0
+        },
+        "onet": {
+          "heading": "O*NET Natural Path Finder",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 2778,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 768
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 754,
+            "height": 2778.2
+          },
+          "cardCount": 4,
+          "overflowingCards": 0
+        },
+        "equity": {
+          "heading": "Your 5-Year Personal Equity Map",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 1506,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 768
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 754,
+            "height": 1505.56
+          },
+          "cardCount": 6,
+          "overflowingCards": 0
+        },
+        "journal": {
+          "heading": "Reflective Sanctuary & Socratic Journal",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 768,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 768
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 754,
+            "height": 768
+          },
+          "cardCount": 1,
+          "overflowingCards": 0
+        },
+        "vault": {
+          "heading": "Zero-Knowledge Local Vault & Scrubber",
+          "horizontalOverflowPx": 0,
+          "verticalScrollHeight": 1316,
+          "sidebarRect": {
+            "x": 0,
+            "y": 0,
+            "width": 270,
+            "height": 768
+          },
+          "mainRect": {
+            "x": 270,
+            "y": 0,
+            "width": 754,
+            "height": 1315.64
+          },
+          "cardCount": 3,
+          "overflowingCards": 0
+        }
+      }
+    }
+  },
+  "remainingDefectsForIteration2": [
+    {
+      "id": "ITER1-DEFECT-01",
+      "severity": "HIGH",
+      "category": "WCAG AA Contrast Ratios",
+      "location": "apps/desktop/src/styles.css:10, 15, 225-228",
+      "description": "--text-muted (#76827c) still fails WCAG AA 4.5:1 on --bg-card (#ffffff, 4.00:1) and --bg-warm (#faf7f2, 3.74:1); .badge.value (--accent-gold #b8862d on #fdf3e7) fails WCAG AA at 2.95:1."
+    },
+    {
+      "id": "ITER1-DEFECT-02",
+      "severity": "HIGH",
+      "category": "ARIA Tab Semantics & Keyboard Focus",
+      "location": "apps/desktop/src/App.tsx:311-347, apps/desktop/src/styles.css",
+      "description": "tablistCount=0, tabRoleCount=0, tabpanelRoleCount=0, ariaSelectedCount=0, ariaLiveCount=0, and hasFocusVisibleRule=false."
+    },
+    {
+      "id": "ITER1-DEFECT-03",
+      "severity": "MEDIUM",
+      "category": "Fresh Vault Quest Default vs Reset Vault Consistency",
+      "location": "apps/desktop/src/vaultClient.ts:106-173, 857-863",
+      "description": "On a brand-new localStorage before Reset is clicked, DEFAULT_QUESTS has 5 quests with accepted:true, causing the sidebar to show '788 pts / Compounding across 5 active career commitments' while 0 prompts are ingested (whereas after clicking Reset Vault it shows '0 pts / 0 active career commitments'). When clean_prompts_kept === 0, totalEquityPoints or initial quests should be consistent."
+    },
+    {
+      "id": "ITER1-DEFECT-04",
+      "severity": "MEDIUM",
+      "category": "Responsive Breakpoints at 1024x768",
+      "location": "apps/desktop/src/styles.css:160-165, 323-331",
+      "description": "mediaQueryCount=0 in styles.css; .stats-grid and .meter-row remain fixed 4-column grids at 1024x768."
+    }
+  ]
+}
