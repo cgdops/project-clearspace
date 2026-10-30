@@ -2,6 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type SkillTier = "beginner" | "intermediate" | "advanced";
 
+export interface ManifestFileLink {
+  filename: string;
+  category: string;
+  export_url: string;
+  size_bytes: number;
+}
+
 export interface IngestionSummary {
   total_files_scanned: number;
   total_raw_prompts: number;
@@ -17,6 +24,38 @@ export interface IngestionSummary {
   source_counts?: [string, number][];
   tier_counts?: [number, number, number];
   overall_positioning?: string;
+  daily_counts?: [string, number][];
+  detected_format: string;
+  warnings: string[];
+  manifest_links: ManifestFileLink[];
+}
+
+export interface FileImportReport {
+  file_name: string;
+  status: "imported" | "manifest_warning" | "empty" | "error";
+  detected_format: string;
+  raw_prompts_scanned: number;
+  clean_prompts_kept: number;
+  new_prompts_added: number;
+  noise_filtered_out: number;
+  duplicates_removed: number;
+  redactions_made: number;
+  sources: string[];
+  warnings: string[];
+  manifest_links: ManifestFileLink[];
+  error_message?: string;
+}
+
+export interface BatchImportReport {
+  timestamp_iso: string;
+  files_processed: number;
+  total_raw_scanned: number;
+  total_clean_kept: number;
+  total_new_added: number;
+  total_noise_filtered: number;
+  total_duplicates_skipped: number;
+  total_redactions: number;
+  file_reports: FileImportReport[];
 }
 
 export interface QuoteCitation {
@@ -189,12 +228,12 @@ const DEFAULT_QUESTS: EquityQuest[] = [
 export const SAMPLE_MULTI_PROVIDER_EXPORT = JSON.stringify([
   {
     id: "openai-conv-101",
-    create_time: 1739565000.0,
+    create_time: 1771101000.0,
     mapping: {
       "node-1": {
         message: {
           author: { role: "user" },
-          create_time: 1739565000.0,
+          create_time: 1771101000.0,
           content: {
             parts: [
               "I want to architect an automated pipeline and MCP agent workflow using Rust and SQLite so our team can eliminate manual maintenance and scale system throughput with clear unit economics.",
@@ -205,7 +244,7 @@ export const SAMPLE_MULTI_PROVIDER_EXPORT = JSON.stringify([
       "node-2": {
         message: {
           author: { role: "user" },
-          create_time: 1739655000.0,
+          create_time: 1771191000.0,
           content: {
             parts: [
               "Whenever our engineering workflow hits a bottleneck, my reflex is to build a tool or schema compiler that makes the complex architecture simple and clear for every user.",
@@ -441,7 +480,73 @@ function sourceDisplayLabel(source: string): string {
   }
 }
 
-function parseMultiProviderClient(rawInput: string): {
+function stripHtmlTagsClient(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractMessageContentTextClient(val: unknown): string {
+  if (typeof val === "string") return val;
+  if (Array.isArray(val)) {
+    const parts: string[] = [];
+    for (const part of val) {
+      if (typeof part === "string" && part.trim()) {
+        parts.push(part);
+      } else if (part && typeof part === "object") {
+        const obj = part as Record<string, unknown>;
+        const partType = typeof obj.type === "string" ? obj.type : "text";
+        if (partType === "text" || partType === "input_text" || !obj.type) {
+          if (typeof obj.text === "string" && obj.text.trim()) {
+            parts.push(obj.text);
+          } else if (typeof obj.content === "string" && obj.content.trim()) {
+            parts.push(obj.content);
+          }
+        }
+      }
+    }
+    return parts.join("\n");
+  }
+  if (val && typeof val === "object") {
+    const obj = val as Record<string, unknown>;
+    if (Array.isArray(obj.parts)) {
+      return extractMessageContentTextClient(obj.parts);
+    }
+    if (typeof obj.text === "string") {
+      return obj.text;
+    }
+  }
+  return "";
+}
+
+function isKnownConversationItemClient(obj: Record<string, unknown>): boolean {
+  return Boolean(
+    Array.isArray(obj.chat_messages) ||
+      Array.isArray(obj.messages) ||
+      (obj.mapping && typeof obj.mapping === "object") ||
+      Array.isArray(obj.conversation_turns) ||
+      (obj.user_turn && typeof obj.user_turn === "object") ||
+      typeof obj.title === "string" ||
+      typeof obj.header === "string" ||
+      obj.gemini_activity !== undefined ||
+      typeof obj.prompt === "string" ||
+      typeof obj.text === "string" ||
+      typeof obj.prompt_template === "string" ||
+      Array.isArray(obj.docs)
+  );
+}
+
+export function parseMultiProviderClient(rawInput: string): {
   prompts: NormalizedPrompt[];
   summary: IngestionSummary;
 } {
@@ -452,6 +557,9 @@ function parseMultiProviderClient(rawInput: string): {
 
   const seenHashes = new Set<string>();
   const prompts: NormalizedPrompt[] = [];
+  const warnings: string[] = [];
+  const manifestLinks: ManifestFileLink[] = [];
+  let detectedFormat = "Multi-Provider Export";
   let totalRaw = 0;
   let noiseFiltered = 0;
   let duplicatesRemoved = 0;
@@ -490,19 +598,110 @@ function parseMultiProviderClient(rawInput: string): {
     });
   };
 
-  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
+  if (trimmed.startsWith("<")) {
+    // HTML export handling (OpenAI ChatGPT chat.html, Google Gemini Gems HTML, or empty HTML)
+    const markerIdx = trimmed.indexOf("var jsonData =");
+    if (markerIdx !== -1) {
+      const afterMarker = trimmed.slice(markerIdx + "var jsonData =".length).trimStart();
+      const scriptEnd = afterMarker.indexOf("</script>");
+      if (scriptEnd !== -1) {
+        const jsonSlice = afterMarker.slice(0, scriptEnd).trim().replace(/;$/, "").trim();
+        if (jsonSlice.startsWith("[") || jsonSlice.startsWith("{")) {
+          const inner = parseMultiProviderClient(jsonSlice);
+          inner.summary.detected_format = "OpenAI ChatGPT HTML Export (chat.html)";
+          return inner;
+        }
+      }
+    }
+
+    if (trimmed.includes("<b>Name:</b>") && trimmed.includes("<b>Instructions:</b>")) {
+      detectedFormat = "Google Gemini Gems HTML Export";
+      const chunks = trimmed.split("<b>Name:</b>").slice(1);
+      filesScanned = Math.max(chunks.length, 1);
+      chunks.forEach((chunk, idx) => {
+        const afterName = chunk.replace(/^(?:\s*<br\s*\/?>\s*)+/i, "");
+        const nameEnd = afterName.indexOf("<br>");
+        const gemName = nameEnd !== -1 ? stripHtmlTagsClient(afterName.slice(0, nameEnd)) : `Gem ${idx + 1}`;
+        const instrMarker = "<b>Instructions:</b>";
+        const instrStart = chunk.indexOf(instrMarker);
+        let instructions = "";
+        if (instrStart !== -1) {
+          const afterInstr = chunk
+            .slice(instrStart + instrMarker.length)
+            .replace(/^(?:\s*<br\s*\/?>\s*)+/i, "");
+          const timeMarkerIdx = afterInstr.indexOf("<b>Creation Time:</b>");
+          const endDivIdx = afterInstr.indexOf("</div>");
+          const stopIdx =
+            timeMarkerIdx !== -1
+              ? timeMarkerIdx
+              : endDivIdx !== -1
+              ? endDivIdx
+              : afterInstr.length;
+          instructions = stripHtmlTagsClient(afterInstr.slice(0, stopIdx));
+        }
+        let createdAt = "2026-02-15T20:00:00Z";
+        const timeMarker = "<b>Creation Time:</b>";
+        const timeStart = chunk.indexOf(timeMarker);
+        if (timeStart !== -1) {
+          const afterTime = chunk
+            .slice(timeStart + timeMarker.length)
+            .replace(/^(?:\s*<br\s*\/?>\s*)+/i, "");
+          const endBr = afterTime.indexOf("<br>");
+          const rawTime = stripHtmlTagsClient(endBr !== -1 ? afterTime.slice(0, endBr) : afterTime);
+          if (rawTime) {
+            createdAt = normalizeTimestampClient(rawTime);
+          }
+        }
+        if (instructions.trim()) {
+          pushPrompt(
+            `Gemini Custom Gem (${gemName}): ${instructions}`,
+            createdAt,
+            `gemini-gem-${idx + 1}`,
+            "gemini_takeout"
+          );
+        }
+      });
+    } else {
+      const stripped = stripHtmlTagsClient(trimmed);
+      if (!stripped) {
+        detectedFormat = "Empty HTML Export (0 records)";
+        warnings.push("This HTML export file contains an empty container (<div></div>) with 0 prompt records.");
+      } else {
+        detectedFormat = "HTML Document Export";
+        pushPrompt(stripped, "2026-02-15T20:00:00Z", "html-doc-1", "markdown_journal");
+      }
+    }
+  } else if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
+    detectedFormat = "Markdown / Text Reflective Document";
     let currentDate = "2026-02-15T20:00:00Z";
-    const paragraphs = trimmed.split(/\n\s*\n/);
+    let bodySource = trimmed;
+    if (trimmed.startsWith("---")) {
+      const endMatch = trimmed.slice(3).match(/\r?\n---\r?\n/);
+      if (endMatch && endMatch.index !== undefined) {
+        const frontmatter = trimmed.slice(3, 3 + endMatch.index);
+        for (const fmLine of frontmatter.split(/\r?\n/)) {
+          const dm = fmLine.trim().match(/^date:\s*['"]?(\d{4}-\d{2}-\d{2})/i);
+          if (dm) {
+            currentDate = `${dm[1]}T20:00:00Z`;
+          }
+        }
+        bodySource = trimmed.slice(3 + endMatch.index + endMatch[0].length);
+      }
+    }
+
+    const paragraphs = bodySource.split(/\n\s*\n/);
     for (const block of paragraphs) {
       const lines = block.split("\n");
       const bodyLines: string[] = [];
       for (const l of lines) {
-        const hm = l.trim().match(/^#{1,4}\s*(\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2})?)/);
+        const trimmedLine = l.trim();
+        if (!trimmedLine || trimmedLine === "---") continue;
+        const hm = trimmedLine.match(/^#{1,4}\s*(\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2})?)/);
         if (hm) {
           const dt = hm[1].replace(" ", "T");
           currentDate = dt.includes("T") ? `${dt}:00Z` : `${dt}T20:00:00Z`;
         } else {
-          const cleanLine = l.trim().replace(/^[#*>-]+\s*/, "");
+          const cleanLine = trimmedLine.replace(/^[#*>-]+\s*/, "");
           if (cleanLine) bodyLines.push(cleanLine);
         }
       }
@@ -512,56 +711,243 @@ function parseMultiProviderClient(rawInput: string): {
     }
   } else {
     const parsed = JSON.parse(trimmed);
-    const items: Record<string, unknown>[] = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed.conversations)
-      ? parsed.conversations
-      : Array.isArray(parsed.activities)
-      ? parsed.activities
-      : [parsed];
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Expected JSON array or conversation container object");
+    }
+
+    // Detect Anthropic Claude Export Batch Manifest (e.g. anthropic_data_*.json or manifest-*.json)
+    if (!Array.isArray(parsed) && Array.isArray(parsed.data_files)) {
+      detectedFormat = "Anthropic Claude Export Manifest";
+      for (const df of parsed.data_files as Record<string, unknown>[]) {
+        const filename = typeof df.filename === "string" ? df.filename : "unknown";
+        const category = typeof df.category === "string" ? df.category : "unknown";
+        const export_url = typeof df.export_url === "string" ? df.export_url : "";
+        const size_bytes = typeof df.size_bytes === "number" ? df.size_bytes : 0;
+        manifestLinks.push({ filename, category, export_url, size_bytes });
+      }
+      const fileList = manifestLinks
+        .map((m) => `${m.filename} (${m.category}, ${m.size_bytes} bytes)`)
+        .join(", ");
+      warnings.push(
+        `Anthropic Export Batch Manifest detected (${manifestLinks.length} linked archives: ${fileList}). This file is a download index containing 'export_url' links rather than the conversation text itself. Download and import 'conversations-000.zip' (or 'conversations.json' / 'projects.json' inside it) using the links below.`
+      );
+      const summary = summarizePromptsClient(
+        prompts,
+        1,
+        0,
+        0,
+        0,
+        detectedFormat,
+        warnings,
+        manifestLinks
+      );
+      return { prompts, summary };
+    }
+
+    let items: Record<string, unknown>[];
+    if (Array.isArray(parsed)) {
+      items = parsed as Record<string, unknown>[];
+    } else if (Array.isArray(parsed.conversations)) {
+      detectedFormat = "Multi-Provider Conversations JSON";
+      items = parsed.conversations as Record<string, unknown>[];
+    } else if (Array.isArray(parsed.activities)) {
+      detectedFormat = "Google Takeout Activities JSON";
+      items = parsed.activities as Record<string, unknown>[];
+    } else if (Array.isArray(parsed.conversation_turns)) {
+      detectedFormat = "Google Gemini in Workspace Conversation History";
+      items = parsed.conversation_turns as Record<string, unknown>[];
+    } else if (Array.isArray(parsed.items)) {
+      items = parsed.items as Record<string, unknown>[];
+    } else if (Array.isArray(parsed.data)) {
+      items = parsed.data as Record<string, unknown>[];
+    } else if (isKnownConversationItemClient(parsed as Record<string, unknown>)) {
+      items = [parsed as Record<string, unknown>];
+    } else {
+      throw new Error("Expected JSON array or conversation container object");
+    }
+
     filesScanned = Math.max(items.length, 1);
 
     items.forEach((item, idx) => {
+      if (!item || typeof item !== "object") return;
       const convoId = String(item.uuid || item.id || item.conversation_id || `export-${idx + 1}`);
       const fallbackTs = normalizeTimestampClient(
-        item.created_at ?? item.create_time ?? item.time ?? item.timestamp
+        item.created_at ?? item.create_time ?? item.time ?? item.timestamp ?? item.turn_last_modified
       );
 
-      if (Array.isArray(item.chat_messages) || Array.isArray(item.messages)) {
-        const msgs = (item.chat_messages || item.messages) as Record<string, unknown>[];
+      if (Array.isArray(item.chat_messages)) {
+        if (detectedFormat === "Multi-Provider Export") {
+          detectedFormat = "Anthropic Claude Conversations (conversations.json)";
+        }
+        const msgs = item.chat_messages as Record<string, unknown>[];
         for (const msg of msgs) {
-          const sender = String(msg.sender || msg.role || "");
+          const sender = String(msg.sender || msg.role || "").toLowerCase();
           if (sender !== "human" && sender !== "user") continue;
-          const text = typeof msg.text === "string" ? msg.text : "";
-          const ts = normalizeTimestampClient(msg.created_at ?? msg.create_time) || fallbackTs;
-          pushPrompt(text, ts, convoId, "claude_web");
+          const text =
+            typeof msg.text === "string" && msg.text.trim()
+              ? msg.text
+              : extractMessageContentTextClient(msg.content);
+          const ts = normalizeTimestampClient(msg.created_at ?? msg.create_time ?? msg.updated_at) || fallbackTs;
+          if (text.trim()) {
+            pushPrompt(text, ts, convoId, "claude_web");
+          }
         }
       } else if (item.mapping && typeof item.mapping === "object") {
+        if (detectedFormat === "Multi-Provider Export") {
+          detectedFormat = "OpenAI ChatGPT Conversations (conversations.json)";
+        }
         const mapping = item.mapping as Record<string, Record<string, unknown>>;
         for (const node of Object.values(mapping)) {
           const message = node?.message as Record<string, unknown> | undefined;
           if (!message) continue;
           const author = message.author as Record<string, unknown> | undefined;
-          if (author?.role !== "user") continue;
-          const content = message.content as Record<string, unknown> | undefined;
-          const parts = Array.isArray(content?.parts) ? content.parts : [];
-          const text = parts.filter((p): p is string => typeof p === "string").join("\n");
+          const role = String(author?.role || message.role || "").toLowerCase();
+          if (role !== "user" && role !== "human") continue;
+          const content = message.content;
+          const text =
+            extractMessageContentTextClient(content) ||
+            (typeof message.text === "string" ? message.text : "");
           const ts = normalizeTimestampClient(message.create_time ?? message.created_at) || fallbackTs;
-          pushPrompt(text, ts, convoId, "chat_gpt_web");
+          if (text.trim()) {
+            pushPrompt(text, ts, convoId, "chat_gpt_web");
+          }
+        }
+      } else if (Array.isArray(item.messages)) {
+        const msgs = item.messages as Record<string, unknown>[];
+        const isClaude = msgs.some((m) => typeof m?.sender === "string");
+        const provider = isClaude ? "claude_web" : "chat_gpt_web";
+        if (detectedFormat === "Multi-Provider Export") {
+          detectedFormat = isClaude
+            ? "Anthropic Claude Messages JSON"
+            : "OpenAI ChatGPT Messages JSON";
+        }
+        for (const msg of msgs) {
+          const authorObj = msg.author as Record<string, unknown> | undefined;
+          const sender = String(msg.sender || msg.role || authorObj?.role || "").toLowerCase();
+          if (sender !== "human" && sender !== "user") continue;
+          const text =
+            typeof msg.text === "string" && msg.text.trim()
+              ? msg.text
+              : extractMessageContentTextClient(msg.content);
+          const ts = normalizeTimestampClient(msg.created_at ?? msg.create_time) || fallbackTs;
+          if (text.trim()) {
+            pushPrompt(text, ts, convoId, provider);
+          }
+        }
+      } else if (Array.isArray(item.conversation_turns)) {
+        detectedFormat = "Google Gemini in Workspace Conversation History";
+        const turns = item.conversation_turns as Record<string, unknown>[];
+        turns.forEach((turn, tIdx) => {
+          const turnTs = normalizeTimestampClient(turn.turn_last_modified ?? turn.created_at) || fallbackTs;
+          const userTurn = turn.user_turn as Record<string, unknown> | undefined;
+          if (userTurn && typeof userTurn.prompt === "string" && userTurn.prompt.trim()) {
+            pushPrompt(userTurn.prompt, turnTs, `${convoId}-turn-${tIdx + 1}`, "gemini_takeout");
+          }
+        });
+      } else if (item.user_turn && typeof item.user_turn === "object") {
+        detectedFormat = "Google Gemini in Workspace Conversation History";
+        const userTurn = item.user_turn as Record<string, unknown>;
+        if (typeof userTurn.prompt === "string" && userTurn.prompt.trim()) {
+          pushPrompt(userTurn.prompt, fallbackTs, convoId, "gemini_takeout");
+        }
+      } else if (
+        typeof item.prompt_template === "string" ||
+        Array.isArray(item.docs)
+      ) {
+        if (detectedFormat === "Multi-Provider Export") {
+          detectedFormat = "Anthropic Claude Projects (projects.json)";
+        }
+        const projectName = typeof item.name === "string" ? item.name : "Claude Project";
+        if (typeof item.prompt_template === "string" && item.prompt_template.trim()) {
+          pushPrompt(
+            `Claude Project (${projectName}) Instructions: ${item.prompt_template.trim()}`,
+            fallbackTs,
+            convoId,
+            "claude_web"
+          );
+        }
+        if (typeof item.description === "string" && item.description.trim()) {
+          pushPrompt(
+            `Claude Project (${projectName}) Description: ${item.description.trim()}`,
+            fallbackTs,
+            convoId,
+            "claude_web"
+          );
+        }
+        if (Array.isArray(item.docs)) {
+          for (const doc of item.docs as Record<string, unknown>[]) {
+            if (typeof doc.content === "string" && doc.content.trim()) {
+              const docTitle = typeof doc.filename === "string" ? doc.filename : "Doc";
+              const docTs = normalizeTimestampClient(doc.created_at) || fallbackTs;
+              pushPrompt(`Claude Project Doc (${docTitle}): ${doc.content.trim()}`, docTs, convoId, "claude_web");
+            }
+          }
         }
       } else if (
         typeof item.title === "string" ||
         typeof item.header === "string" ||
         item.gemini_activity
       ) {
-        const rawTitle = typeof item.title === "string" ? item.title : "";
+        if (detectedFormat === "Multi-Provider Export") {
+          detectedFormat = "Google Takeout Gemini Activity (MyActivity.json)";
+        }
+        const rawTitle = typeof item.title === "string" ? item.title.trim() : "";
+        const lowerTitle = rawTitle.toLowerCase();
+        const isSystemEvent =
+          lowerTitle.startsWith("cleared ") ||
+          lowerTitle.startsWith("created gemini canvas") ||
+          lowerTitle.startsWith("selected preferred draft") ||
+          lowerTitle.startsWith("used gemini apps") ||
+          lowerTitle.startsWith("gave feedback") ||
+          lowerTitle.startsWith("opened ") ||
+          lowerTitle === "gemini apps";
+
+        if (isSystemEvent) {
+          totalRaw += 1;
+          noiseFiltered += 1;
+          return;
+        }
+
         const stripped = rawTitle
           .replace(/^Prompted\s+/i, "")
           .replace(/^Asked\s+/i, "")
+          .replace(/^Submitted prompt:\s*/i, "")
+          .replace(/^Branched\s+/i, "")
+          .replace(/^Added chat from link:\s*/i, "")
           .trim();
+
+        const subtitleParts: string[] = [];
+        if (Array.isArray(item.subtitles)) {
+          for (const sub of item.subtitles as Record<string, unknown>[]) {
+            const s = typeof sub?.name === "string" ? sub.name.trim() : "";
+            const sl = s.toLowerCase();
+            if (
+              !s ||
+              sl.startsWith("from ") ||
+              sl.endsWith("generated image.") ||
+              sl.endsWith("generated images.") ||
+              sl.startsWith("attached ") ||
+              sl.startsWith("audio included") ||
+              sl.startsWith("http://") ||
+              sl.startsWith("https://") ||
+              sl.startsWith("<p>") ||
+              sl.startsWith("<div") ||
+              sl.startsWith("<ul")
+            ) {
+              continue;
+            }
+            subtitleParts.push(s);
+          }
+        }
+
+        const combined =
+          stripped && subtitleParts.length > 0
+            ? `${stripped}\n${subtitleParts.join("\n")}`
+            : stripped || subtitleParts.join("\n");
+
         const ts = normalizeTimestampClient(item.time ?? item.timestamp ?? item.created_at) || fallbackTs;
-        if (stripped) {
-          pushPrompt(stripped, ts, convoId, "gemini_takeout");
+        if (combined.trim()) {
+          pushPrompt(combined, ts, convoId, "gemini_takeout");
         }
       } else if (typeof item.prompt === "string" || typeof item.text === "string") {
         const text = String(item.prompt || item.text);
@@ -570,7 +956,22 @@ function parseMultiProviderClient(rawInput: string): {
     });
   }
 
-  const summary = summarizePromptsClient(prompts, filesScanned, totalRaw, noiseFiltered, duplicatesRemoved);
+  if (prompts.length === 0 && warnings.length === 0) {
+    warnings.push(
+      `0 qualifying prompts were kept from this file (${totalRaw} raw entries scanned, ${noiseFiltered} filtered as short/system noise).`
+    );
+  }
+
+  const summary = summarizePromptsClient(
+    prompts,
+    filesScanned,
+    totalRaw,
+    noiseFiltered,
+    duplicatesRemoved,
+    detectedFormat,
+    warnings,
+    manifestLinks
+  );
   return { prompts, summary };
 }
 
@@ -579,13 +980,17 @@ function summarizePromptsClient(
   filesScanned?: number,
   totalRaw?: number,
   noiseFiltered = 0,
-  duplicatesRemoved = 0
+  duplicatesRemoved = 0,
+  detectedFormat = "Local Vault",
+  warnings: string[] = [],
+  manifestLinks: ManifestFileLink[] = []
 ): IngestionSummary {
   const sorted = [...prompts].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const hourly = new Array<number>(24).fill(0);
   const tier_counts: [number, number, number] = [0, 0, 0];
   const catMap = new Map<string, number>();
   const srcMap = new Map<string, number>();
+  const dayMap = new Map<string, number>();
   const convos = new Set<string>();
   let highSignal = 0;
   let redactions = 0;
@@ -594,6 +999,11 @@ function summarizePromptsClient(
     convos.add(p.conversation_id);
     redactions += p.redactions_made;
     if (p.is_high_signal) highSignal += 1;
+    const trimmedDt = p.created_at.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmedDt)) {
+      const dayKey = trimmedDt.slice(0, 10);
+      dayMap.set(dayKey, (dayMap.get(dayKey) ?? 0) + 1);
+    }
     if (typeof p.local_hour === "number" && p.local_hour >= 0 && p.local_hour < 24) {
       hourly[p.local_hour] += 1;
     }
@@ -612,6 +1022,7 @@ function summarizePromptsClient(
 
   const category_counts = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
   const source_counts = Array.from(srcMap.entries()).sort((a, b) => b[1] - a[1]);
+  const daily_counts = Array.from(dayMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
   let overall_positioning = "Awaiting Evidence";
   if (sorted.length > 0) {
@@ -636,6 +1047,10 @@ function summarizePromptsClient(
     source_counts,
     tier_counts,
     overall_positioning,
+    daily_counts,
+    detected_format: detectedFormat,
+    warnings,
+    manifest_links: manifestLinks,
   };
 }
 
@@ -1257,23 +1672,457 @@ export async function scanLocalVault(): Promise<VaultDashboardPayload> {
   return buildBrowserDashboard();
 }
 
+const BINARY_MEDIA_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".wav",
+  ".mp3",
+  ".mp4",
+  ".mov",
+  ".avi",
+  ".ogg",
+  ".pdf",
+  ".ico",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".eot",
+  ".exe",
+  ".dll",
+  ".bin",
+]);
+
+function isBinaryMediaFilename(name: string): boolean {
+  const lower = name.toLowerCase();
+  const dotIdx = lower.lastIndexOf(".");
+  if (dotIdx === -1) return false;
+  return BINARY_MEDIA_EXTENSIONS.has(lower.slice(dotIdx));
+}
+
+export async function extractZipTextEntriesClient(
+  arrayBuffer: ArrayBuffer
+): Promise<{ entries: Array<{ name: string; content: string }>; skippedBinaryCount: number }> {
+  const bytes = new Uint8Array(arrayBuffer);
+  const view = new DataView(arrayBuffer);
+
+  // Locate End of Central Directory (EOCD) signature 0x06054b50
+  let eocdOffset = -1;
+  const minEocdSearch = Math.max(0, bytes.length - 65558);
+  for (let i = bytes.length - 22; i >= minEocdSearch; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) {
+      eocdOffset = i;
+      break;
+    }
+  }
+  if (eocdOffset === -1) {
+    throw new Error("Invalid or unsupported ZIP archive (EOCD header not found)");
+  }
+
+  const cdCount = view.getUint16(eocdOffset + 10, true);
+  const cdOffset = view.getUint32(eocdOffset + 16, true);
+
+  let pos = cdOffset;
+  const entries: Array<{ name: string; content: string }> = [];
+  let skippedBinaryCount = 0;
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+
+  for (let i = 0; i < cdCount; i++) {
+    if (pos + 46 > bytes.length || view.getUint32(pos, true) !== 0x02014b50) break;
+    const compressionMethod = view.getUint16(pos + 10, true);
+    const compressedSize = view.getUint32(pos + 20, true);
+    const uncompressedSize = view.getUint32(pos + 24, true);
+    const fileNameLen = view.getUint16(pos + 28, true);
+    const extraLen = view.getUint16(pos + 30, true);
+    const commentLen = view.getUint16(pos + 32, true);
+    const localHeaderOffset = view.getUint32(pos + 42, true);
+
+    const fileName = decoder.decode(bytes.subarray(pos + 46, pos + 46 + fileNameLen));
+    pos += 46 + fileNameLen + extraLen + commentLen;
+
+    if (fileName.endsWith("/")) continue;
+    if (isBinaryMediaFilename(fileName)) {
+      skippedBinaryCount += 1;
+      continue;
+    }
+    // Skip files > 25MB uncompressed in browser memory
+    if (uncompressedSize > 25 * 1024 * 1024) {
+      skippedBinaryCount += 1;
+      continue;
+    }
+
+    if (
+      localHeaderOffset + 30 > bytes.length ||
+      view.getUint32(localHeaderOffset, true) !== 0x04034b50
+    ) {
+      continue;
+    }
+    const localNameLen = view.getUint16(localHeaderOffset + 26, true);
+    const localExtraLen = view.getUint16(localHeaderOffset + 28, true);
+    const dataStart = localHeaderOffset + 30 + localNameLen + localExtraLen;
+    const compressedSlice = bytes.subarray(dataStart, dataStart + compressedSize);
+
+    if (compressionMethod === 0) {
+      entries.push({ name: fileName, content: decoder.decode(compressedSlice) });
+    } else if (compressionMethod === 8 && typeof DecompressionStream !== "undefined") {
+      const ds = new DecompressionStream("deflate-raw");
+      const writer = ds.writable.getWriter();
+      writer.write(compressedSlice).catch(() => {});
+      writer.close().catch(() => {});
+      const decompressedBuffer = await new Response(ds.readable).arrayBuffer();
+      entries.push({ name: fileName, content: decoder.decode(new Uint8Array(decompressedBuffer)) });
+    }
+  }
+
+  return { entries, skippedBinaryCount };
+}
+
+export interface UploadableFileInput {
+  name: string;
+  size?: number;
+  text?: () => Promise<string>;
+  arrayBuffer?: () => Promise<ArrayBuffer>;
+  rawText?: string;
+  rawBuffer?: ArrayBuffer;
+}
+
+export async function importFilesBatch(
+  files: UploadableFileInput[]
+): Promise<{ report: BatchImportReport; dashboard: VaultDashboardPayload }> {
+  const existingBefore = loadBrowserPrompts();
+  const promptMap = new Map<string, NormalizedPrompt>();
+  for (const p of existingBefore) {
+    promptMap.set(p.id, p);
+  }
+
+  const fileReports: FileImportReport[] = [];
+  let totalRawScanned = 0;
+  let totalCleanKept = 0;
+  let totalNewAdded = 0;
+  let totalNoiseFiltered = 0;
+  let totalDuplicatesSkipped = 0;
+  let totalRedactions = 0;
+
+  const processSingleTextEntry = async (entryName: string, rawContent: string) => {
+    try {
+      if (isTauriRuntime()) {
+        const beforeCount = (await invoke<VaultDashboardPayload>("get_vault_dashboard")).summary
+          .clean_prompts_kept;
+        const summary = await invoke<IngestionSummary>("import_exported_json", {
+          jsonContent: rawContent,
+        });
+        const afterDashboard = await invoke<VaultDashboardPayload>("get_vault_dashboard");
+        const newAdded = Math.max(0, afterDashboard.summary.clean_prompts_kept - beforeCount);
+        const isManifest = summary.detected_format.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
+        const status: FileImportReport["status"] = isManifest
+          ? "manifest_warning"
+          : summary.clean_prompts_kept > 0
+          ? "imported"
+          : "empty";
+
+        totalRawScanned += summary.total_raw_prompts;
+        totalCleanKept += summary.clean_prompts_kept;
+        totalNewAdded += newAdded;
+        totalNoiseFiltered += summary.noise_filtered_out;
+        totalDuplicatesSkipped += summary.duplicates_removed + Math.max(0, summary.clean_prompts_kept - newAdded);
+        totalRedactions += summary.total_redactions;
+
+        fileReports.push({
+          file_name: entryName,
+          status,
+          detected_format: summary.detected_format,
+          raw_prompts_scanned: summary.total_raw_prompts,
+          clean_prompts_kept: summary.clean_prompts_kept,
+          new_prompts_added: newAdded,
+          noise_filtered_out: summary.noise_filtered_out,
+          duplicates_removed:
+            summary.duplicates_removed + Math.max(0, summary.clean_prompts_kept - newAdded),
+          redactions_made: summary.total_redactions,
+          sources: (summary.source_counts ?? []).map(([label]) => label),
+          warnings: summary.warnings ?? [],
+          manifest_links: summary.manifest_links ?? [],
+        });
+        return;
+      }
+
+      const { prompts, summary } = parseMultiProviderClient(rawContent);
+      let newAddedForFile = 0;
+      let existingDupsForFile = 0;
+      for (const p of prompts) {
+        if (promptMap.has(p.id)) {
+          existingDupsForFile += 1;
+        } else {
+          promptMap.set(p.id, p);
+          newAddedForFile += 1;
+        }
+      }
+
+      const isManifest =
+        summary.detected_format.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
+      const status: FileImportReport["status"] = isManifest
+        ? "manifest_warning"
+        : summary.clean_prompts_kept > 0
+        ? "imported"
+        : "empty";
+
+      const combinedDuplicates = summary.duplicates_removed + existingDupsForFile;
+      totalRawScanned += summary.total_raw_prompts;
+      totalCleanKept += summary.clean_prompts_kept;
+      totalNewAdded += newAddedForFile;
+      totalNoiseFiltered += summary.noise_filtered_out;
+      totalDuplicatesSkipped += combinedDuplicates;
+      totalRedactions += summary.total_redactions;
+
+      const warnings = [...(summary.warnings ?? [])];
+      if (summary.clean_prompts_kept > 0 && newAddedForFile === 0 && existingDupsForFile > 0) {
+        warnings.push(
+          `All ${summary.clean_prompts_kept} valid prompts in this file were already present in your vault (deduplicated by SHA-256 hash).`
+        );
+      }
+
+      fileReports.push({
+        file_name: entryName,
+        status,
+        detected_format: summary.detected_format,
+        raw_prompts_scanned: summary.total_raw_prompts,
+        clean_prompts_kept: summary.clean_prompts_kept,
+        new_prompts_added: newAddedForFile,
+        noise_filtered_out: summary.noise_filtered_out,
+        duplicates_removed: combinedDuplicates,
+        redactions_made: summary.total_redactions,
+        sources: (summary.source_counts ?? []).map(([label]) => label),
+        warnings,
+        manifest_links: summary.manifest_links ?? [],
+      });
+    } catch (err) {
+      fileReports.push({
+        file_name: entryName,
+        status: "error",
+        detected_format: "Unrecognized / Invalid File",
+        raw_prompts_scanned: 0,
+        clean_prompts_kept: 0,
+        new_prompts_added: 0,
+        noise_filtered_out: 0,
+        duplicates_removed: 0,
+        redactions_made: 0,
+        sources: [],
+        warnings: [],
+        manifest_links: [],
+        error_message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  for (const file of files) {
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith(".zip")) {
+      try {
+        const buf =
+          file.rawBuffer ??
+          (typeof file.arrayBuffer === "function" ? await file.arrayBuffer() : null);
+        if (!buf) {
+          throw new Error("Could not read binary buffer from ZIP archive");
+        }
+        const { entries, skippedBinaryCount } = await extractZipTextEntriesClient(buf);
+        if (entries.length === 0) {
+          fileReports.push({
+            file_name: file.name,
+            status: "empty",
+            detected_format: "ZIP Archive (No Text Exports Found)",
+            raw_prompts_scanned: 0,
+            clean_prompts_kept: 0,
+            new_prompts_added: 0,
+            noise_filtered_out: 0,
+            duplicates_removed: 0,
+            redactions_made: 0,
+            sources: [],
+            warnings: [
+              `Scanned ZIP archive (${skippedBinaryCount} binary media files skipped), but found 0 text/JSON prompt files inside.`,
+            ],
+            manifest_links: [],
+          });
+        } else {
+          for (const entry of entries) {
+            const shortEntryName = entry.name.split("/").slice(-2).join("/");
+            await processSingleTextEntry(`${file.name} → ${shortEntryName}`, entry.content);
+          }
+        }
+      } catch (err) {
+        fileReports.push({
+          file_name: file.name,
+          status: "error",
+          detected_format: "ZIP Archive Error",
+          raw_prompts_scanned: 0,
+          clean_prompts_kept: 0,
+          new_prompts_added: 0,
+          noise_filtered_out: 0,
+          duplicates_removed: 0,
+          redactions_made: 0,
+          sources: [],
+          warnings: [],
+          manifest_links: [],
+          error_message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    } else if (isBinaryMediaFilename(file.name)) {
+      fileReports.push({
+        file_name: file.name,
+        status: "empty",
+        detected_format: "Binary Media Attachment (Skipped)",
+        raw_prompts_scanned: 0,
+        clean_prompts_kept: 0,
+        new_prompts_added: 0,
+        noise_filtered_out: 0,
+        duplicates_removed: 0,
+        redactions_made: 0,
+        sources: [],
+        warnings: [
+          "Binary media/document file skipped. Clearspace ingests text/JSON/HTML/Markdown/ZIP conversation exports.",
+        ],
+        manifest_links: [],
+      });
+    } else {
+      try {
+        const rawText =
+          file.rawText ?? (typeof file.text === "function" ? await file.text() : "");
+        await processSingleTextEntry(file.name, rawText);
+      } catch (err) {
+        fileReports.push({
+          file_name: file.name,
+          status: "error",
+          detected_format: "File Read Error",
+          raw_prompts_scanned: 0,
+          clean_prompts_kept: 0,
+          new_prompts_added: 0,
+          noise_filtered_out: 0,
+          duplicates_removed: 0,
+          redactions_made: 0,
+          sources: [],
+          warnings: [],
+          manifest_links: [],
+          error_message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  if (!isTauriRuntime()) {
+    saveBrowserPrompts(Array.from(promptMap.values()));
+  }
+
+  const dashboard = await getVaultDashboard();
+  const report: BatchImportReport = {
+    timestamp_iso: new Date().toISOString(),
+    files_processed: fileReports.length,
+    total_raw_scanned: totalRawScanned,
+    total_clean_kept: totalCleanKept,
+    total_new_added: totalNewAdded,
+    total_noise_filtered: totalNoiseFiltered,
+    total_duplicates_skipped: totalDuplicatesSkipped,
+    total_redactions: totalRedactions,
+    file_reports: fileReports,
+  };
+
+  return { report, dashboard };
+}
+
 export async function importExportedContent(
-  rawContent: string
-): Promise<{ summary: IngestionSummary; dashboard: VaultDashboardPayload }> {
+  rawContent: string,
+  fileName = "uploaded-export.json"
+): Promise<{
+  summary: IngestionSummary;
+  report: BatchImportReport;
+  dashboard: VaultDashboardPayload;
+}> {
   if (isTauriRuntime()) {
     const summary = await invoke<IngestionSummary>("import_exported_json", {
       jsonContent: rawContent,
     });
     const dashboard = await invoke<VaultDashboardPayload>("get_vault_dashboard");
-    return { summary, dashboard };
+    const isManifest =
+      summary.detected_format?.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
+    const report: BatchImportReport = {
+      timestamp_iso: new Date().toISOString(),
+      files_processed: 1,
+      total_raw_scanned: summary.total_raw_prompts,
+      total_clean_kept: summary.clean_prompts_kept,
+      total_new_added: summary.clean_prompts_kept,
+      total_noise_filtered: summary.noise_filtered_out,
+      total_duplicates_skipped: summary.duplicates_removed,
+      total_redactions: summary.total_redactions,
+      file_reports: [
+        {
+          file_name: fileName,
+          status: isManifest
+            ? "manifest_warning"
+            : summary.clean_prompts_kept > 0
+            ? "imported"
+            : "empty",
+          detected_format: summary.detected_format ?? "Multi-Provider Export",
+          raw_prompts_scanned: summary.total_raw_prompts,
+          clean_prompts_kept: summary.clean_prompts_kept,
+          new_prompts_added: summary.clean_prompts_kept,
+          noise_filtered_out: summary.noise_filtered_out,
+          duplicates_removed: summary.duplicates_removed,
+          redactions_made: summary.total_redactions,
+          sources: (summary.source_counts ?? []).map(([label]) => label),
+          warnings: summary.warnings ?? [],
+          manifest_links: summary.manifest_links ?? [],
+        },
+      ],
+    };
+    return { summary, report, dashboard };
   }
   const { prompts, summary } = parseMultiProviderClient(rawContent);
   const existing = loadBrowserPrompts();
   const map = new Map<string, NormalizedPrompt>();
   for (const p of existing) map.set(p.id, p);
-  for (const p of prompts) map.set(p.id, p);
+  let newAdded = 0;
+  let existingDups = 0;
+  for (const p of prompts) {
+    if (map.has(p.id)) {
+      existingDups += 1;
+    } else {
+      map.set(p.id, p);
+      newAdded += 1;
+    }
+  }
   saveBrowserPrompts(Array.from(map.values()));
-  return { summary, dashboard: buildBrowserDashboard() };
+  const isManifest =
+    summary.detected_format.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
+  const report: BatchImportReport = {
+    timestamp_iso: new Date().toISOString(),
+    files_processed: 1,
+    total_raw_scanned: summary.total_raw_prompts,
+    total_clean_kept: summary.clean_prompts_kept,
+    total_new_added: newAdded,
+    total_noise_filtered: summary.noise_filtered_out,
+    total_duplicates_skipped: summary.duplicates_removed + existingDups,
+    total_redactions: summary.total_redactions,
+    file_reports: [
+      {
+        file_name: fileName,
+        status: isManifest
+          ? "manifest_warning"
+          : summary.clean_prompts_kept > 0
+          ? "imported"
+          : "empty",
+        detected_format: summary.detected_format,
+        raw_prompts_scanned: summary.total_raw_prompts,
+        clean_prompts_kept: summary.clean_prompts_kept,
+        new_prompts_added: newAdded,
+        noise_filtered_out: summary.noise_filtered_out,
+        duplicates_removed: summary.duplicates_removed + existingDups,
+        redactions_made: summary.total_redactions,
+        sources: (summary.source_counts ?? []).map(([label]) => label),
+        warnings: summary.warnings ?? [],
+        manifest_links: summary.manifest_links ?? [],
+      },
+    ],
+  };
+  return { summary, report, dashboard: buildBrowserDashboard() };
 }
 
 export async function loadSampleMultiProviderVault(): Promise<VaultDashboardPayload> {

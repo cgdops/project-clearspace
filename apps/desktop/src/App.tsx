@@ -19,16 +19,20 @@ import {
 } from "lucide-react";
 import {
   VaultDashboardPayload,
+  BatchImportReport,
   getVaultDashboard,
   scanLocalVault,
-  importExportedContent,
+  importFilesBatch,
   loadSampleMultiProviderVault,
   resetLocalVault,
   toggleQuestState,
   addJournalEntry,
   formatTierLabel,
   classifySkillTierClient,
+  SAMPLE_MULTI_PROVIDER_EXPORT,
+  parseMultiProviderClient,
 } from "./vaultClient";
+import { ContributionGrid } from "./ContributionGrid";
 
 type TabKey = "mirror" | "onet" | "equity" | "journal" | "vault";
 
@@ -116,6 +120,8 @@ export default function App() {
   const [journalText, setJournalText] = useState<string>("");
   const [mood, setMood] = useState<string>("Energized & Clear");
   const [importStatus, setImportStatus] = useState<string>("");
+  const [isImporting, setIsImporting] = useState<boolean>(false);
+  const [lastImportReport, setLastImportReport] = useState<BatchImportReport | null>(null);
 
   // Interactive Prompt Explorer state
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -163,32 +169,89 @@ export default function App() {
   };
 
   const handleScanLocal = async () => {
-    setLoading(true);
+    setIsImporting(true);
+    setImportStatus("Scanning local Antigravity prompt logs & scrubbing PII…");
     try {
       const res = await scanLocalVault();
       setData(res);
+      const s = res.summary;
+      setLastImportReport({
+        timestamp_iso: new Date().toISOString(),
+        files_processed: s.total_files_scanned,
+        total_raw_scanned: s.total_raw_prompts,
+        total_clean_kept: s.clean_prompts_kept,
+        total_new_added: s.clean_prompts_kept,
+        total_noise_filtered: s.noise_filtered_out,
+        total_duplicates_skipped: s.duplicates_removed,
+        total_redactions: s.total_redactions,
+        file_reports: [
+          {
+            file_name: "Antigravity Local Prompt Logs",
+            status: s.clean_prompts_kept > 0 ? "imported" : "empty",
+            detected_format: "Antigravity Local Workspace",
+            raw_prompts_scanned: s.total_raw_prompts,
+            clean_prompts_kept: s.clean_prompts_kept,
+            new_prompts_added: s.clean_prompts_kept,
+            noise_filtered_out: s.noise_filtered_out,
+            duplicates_removed: s.duplicates_removed,
+            redactions_made: s.total_redactions,
+            sources: (s.source_counts ?? []).map(([label]) => label),
+            warnings: s.warnings ?? [],
+            manifest_links: [],
+          },
+        ],
+      });
       setImportStatus(
-        `Scanned & merged local vault: ${res.summary.clean_prompts_kept.toLocaleString()} clean prompts ready.`
+        `Scanned & merged local vault: ${s.clean_prompts_kept.toLocaleString()} clean prompts ready (${s.total_redactions} PII redactions).`
       );
     } catch (err) {
       setImportStatus(`Local scan error: ${String(err)}`);
     } finally {
-      setLoading(false);
+      setIsImporting(false);
     }
   };
 
   const handleLoadSample = async () => {
-    setLoading(true);
+    setIsImporting(true);
+    setImportStatus("Loading & scrubbing multi-provider sample archive…");
     try {
       const res = await loadSampleMultiProviderVault();
       setData(res);
+      const sampleParsed = parseMultiProviderClient(SAMPLE_MULTI_PROVIDER_EXPORT);
+      const s = sampleParsed.summary;
+      setLastImportReport({
+        timestamp_iso: new Date().toISOString(),
+        files_processed: 1,
+        total_raw_scanned: s.total_raw_prompts,
+        total_clean_kept: s.clean_prompts_kept,
+        total_new_added: s.clean_prompts_kept,
+        total_noise_filtered: s.noise_filtered_out,
+        total_duplicates_skipped: s.duplicates_removed,
+        total_redactions: s.total_redactions,
+        file_reports: [
+          {
+            file_name: "sample-multi-provider-vault.json",
+            status: "imported",
+            detected_format: "Multi-Provider Conversations JSON (OpenAI + Claude + Gemini)",
+            raw_prompts_scanned: s.total_raw_prompts,
+            clean_prompts_kept: s.clean_prompts_kept,
+            new_prompts_added: s.clean_prompts_kept,
+            noise_filtered_out: s.noise_filtered_out,
+            duplicates_removed: s.duplicates_removed,
+            redactions_made: s.total_redactions,
+            sources: (s.source_counts ?? []).map(([label]) => label),
+            warnings: [],
+            manifest_links: [],
+          },
+        ],
+      });
       setImportStatus(
         `Loaded multi-provider sample vault (${res.summary.clean_prompts_kept} prompts across OpenAI, Anthropic & Gemini).`
       );
     } catch (err) {
       setImportStatus(`Sample load error: ${String(err)}`);
     } finally {
-      setLoading(false);
+      setIsImporting(false);
     }
   };
 
@@ -200,6 +263,7 @@ export default function App() {
       setSearchQuery("");
       setSelectedSource("ALL");
       setSelectedCategory("All Categories");
+      setLastImportReport(null);
       setImportStatus("Local vault cleared. Ready for fresh multi-provider onboarding.");
     } catch (err) {
       setImportStatus(`Reset error: ${String(err)}`);
@@ -228,27 +292,42 @@ export default function App() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    let totalImported = 0;
-    let totalRedactions = 0;
-    let latestDashboard: VaultDashboardPayload | null = null;
+    const fileArray = Array.from(files);
+    setIsImporting(true);
+    setImportStatus(`Parsing & scrubbing ${fileArray.length} file(s) locally…`);
 
     try {
-      for (const file of Array.from(files)) {
-        const text = await file.text();
-        const { summary, dashboard } = await importExportedContent(text);
-        totalImported += summary.clean_prompts_kept;
-        totalRedactions += summary.total_redactions;
-        latestDashboard = dashboard;
+      // Deliberate 60ms visual beat so local sub-millisecond parsing renders a clear transition state
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const { report, dashboard } = await importFilesBatch(fileArray);
+      setData(dashboard);
+      setLastImportReport(report);
+
+      const errorCount = report.file_reports.filter((r) => r.status === "error").length;
+      const manifestCount = report.file_reports.filter((r) => r.status === "manifest_warning").length;
+      const emptyCount = report.file_reports.filter((r) => r.status === "empty").length;
+
+      if (manifestCount > 0 && report.total_clean_kept === 0) {
+        setImportStatus(
+          `Action needed on ${manifestCount} file(s): Anthropic Claude Export Manifest detected (0 prompts inside manifest index — use the download links below to grab conversations-000.zip).`
+        );
+      } else if (errorCount > 0 && report.total_clean_kept === 0) {
+        setImportStatus(
+          `Import error across ${errorCount} file(s): see per-file diagnostics below.`
+        );
+      } else {
+        const issueNote =
+          errorCount + manifestCount + emptyCount > 0
+            ? ` • ${errorCount + manifestCount + emptyCount} file(s) flagged with warnings/notices below.`
+            : "";
+        setImportStatus(
+          `Imported ${report.total_clean_kept.toLocaleString()} clean prompts (+${report.total_new_added.toLocaleString()} net-new) from ${report.files_processed} file(s) (${report.total_redactions.toLocaleString()} PII redactions made locally)${issueNote}`
+        );
       }
-      if (latestDashboard) {
-        setData(latestDashboard);
-      }
-      setImportStatus(
-        `Imported ${totalImported} clean prompts from ${files.length} file(s) (${totalRedactions} PII redactions made locally).`
-      );
     } catch (err) {
       setImportStatus(`Import error: ${String(err)}`);
     } finally {
+      setIsImporting(false);
       e.target.value = "";
     }
   };
@@ -306,8 +385,9 @@ export default function App() {
           <strong>1. OpenAI ChatGPT</strong>
         </div>
         <p>
-          Settings → Data Controls → Export Data. Upload <code>conversations.json</code> (Unix epoch
-          timestamps & message trees normalized automatically).
+          Settings → Data Controls → Export Data. Upload <code>conversations.json</code>,{" "}
+          <code>chat.html</code>, or the exported <code>.zip</code> archive (Unix timestamps & message
+          trees normalized automatically).
         </p>
       </div>
       <div className="provider-step">
@@ -316,8 +396,9 @@ export default function App() {
           <strong>2. Anthropic Claude</strong>
         </div>
         <p>
-          Settings → Account → Export Data. Upload Claude’s <code>conversations.json</code> (extracts
-          human prompts & ISO timestamps).
+          Settings → Account → Export Data. Upload <code>conversations.json</code>,{" "}
+          <code>projects.json</code>, or <code>conversations-000.zip</code> (if you upload a{" "}
+          <code>manifest-*.json</code> batch file, Clearspace extracts the download links for you).
         </p>
       </div>
       <div className="provider-step">
@@ -326,8 +407,9 @@ export default function App() {
           <strong>3. Google Gemini Takeout</strong>
         </div>
         <p>
-          Google Takeout → My Activity → Gemini Apps. Upload <code>MyActivity.json</code> to map your
-          Gemini prompt history.
+          Google Takeout → My Activity → Gemini Apps (<code>MyActivity.json</code>), Workspace History (
+          <code>conversation_*.txt</code>), Custom Gems (<code>.html</code>), or the{" "}
+          <code>takeout-*.zip</code> archive.
         </p>
       </div>
       <div className="provider-step">
@@ -336,12 +418,233 @@ export default function App() {
           <strong>4. Markdown & Notes</strong>
         </div>
         <p>
-          Upload local <code>.md</code> journals or plain-text reflections with date headings (e.g.,{" "}
-          <code># 2026-03-10</code>).
+          Upload local <code>.md</code> / <code>.txt</code> journals, extensionless notes, or YAML
+          frontmatter docs with date headings (e.g., <code># 2026-03-10</code>).
         </p>
       </div>
     </div>
   );
+
+  const renderImportSummaryPanel = (compactVaultHeader = false) => {
+    if (!isImporting && !lastImportReport && !importStatus) {
+      return null;
+    }
+
+    if (isImporting) {
+      return (
+        <div
+          className="import-summary-panel"
+          role="status"
+          aria-live="polite"
+          data-testid="import-summary-panel"
+        >
+          <div className="import-summary-header">
+            <div className="import-summary-title">
+              <RefreshCw size={16} className="spin-icon" color="#2b5b48" />
+              <span>Processing Local Vault Import…</span>
+            </div>
+            <span className="badge superpower">100% On-Device Scrubber Active</span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6 }}>
+            {importStatus || "Parsing multi-provider records, stripping system noise, and redacting PII locally…"}
+          </p>
+        </div>
+      );
+    }
+
+    if (!lastImportReport) {
+      return importStatus ? (
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--accent-sage)",
+            fontWeight: 600,
+            width: "100%",
+            marginTop: 6,
+          }}
+          role="status"
+          aria-live="polite"
+        >
+          {importStatus}
+        </div>
+      ) : null;
+    }
+
+    const hasIssues = lastImportReport.file_reports.some(
+      (r) => r.status === "error" || r.status === "manifest_warning" || r.status === "empty"
+    );
+
+    const renderFileRows = () => (
+      <div className="import-file-list" data-testid="import-file-list">
+        {lastImportReport.file_reports.map((fr, idx) => (
+          <div key={`${fr.file_name}-${idx}`} className={`import-file-row status-${fr.status}`}>
+            <div className="import-file-top">
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <strong>{fr.file_name}</strong>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  [{fr.detected_format}]
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {fr.status === "imported" && (
+                  <span className="badge superpower">
+                    ✓ Imported (+{fr.new_prompts_added.toLocaleString()} new /{" "}
+                    {fr.clean_prompts_kept.toLocaleString()} valid)
+                  </span>
+                )}
+                {fr.status === "manifest_warning" && (
+                  <span className="badge burnout">⚠ Action Required: Export Manifest</span>
+                )}
+                {fr.status === "empty" && <span className="badge value">⚠ 0 Prompts Kept</span>}
+                {fr.status === "error" && <span className="badge burnout">✕ Parse Error</span>}
+              </div>
+            </div>
+
+            <div className="import-file-metrics">
+              Raw scanned: {fr.raw_prompts_scanned.toLocaleString()} • Clean kept:{" "}
+              {fr.clean_prompts_kept.toLocaleString()} • Net-new added: +
+              {fr.new_prompts_added.toLocaleString()} • Short/system noise filtered:{" "}
+              {fr.noise_filtered_out.toLocaleString()} • Duplicates skipped:{" "}
+              {fr.duplicates_removed.toLocaleString()} • PII redacted:{" "}
+              {fr.redactions_made.toLocaleString()}
+              {fr.sources.length > 0 ? ` • Source: ${fr.sources.join(", ")}` : ""}
+            </div>
+
+            {fr.error_message && (
+              <div className="import-warning-box" role="alert">
+                <strong>Error:</strong> {fr.error_message}
+              </div>
+            )}
+
+            {fr.warnings.map((w, wIdx) => (
+              <div key={wIdx} className="import-warning-box">
+                {w}
+              </div>
+            ))}
+
+            {fr.manifest_links.length > 0 && (
+              <div className="manifest-links-row">
+                {fr.manifest_links.map((link, lIdx) => (
+                  <a
+                    key={lIdx}
+                    href={link.export_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="manifest-download-link"
+                  >
+                    <span>
+                      ↓ Download {link.filename} ({link.category}
+                      {link.size_bytes > 0 ? `, ${link.size_bytes.toLocaleString()} B` : ""})
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+
+    return (
+      <div
+        className={`import-summary-panel ${hasIssues ? "has-issues" : ""}`}
+        role="status"
+        aria-live="polite"
+        data-testid="import-summary-panel"
+        style={compactVaultHeader ? { marginTop: 8, padding: "10px 14px", width: "100%" } : undefined}
+      >
+        <div className="import-summary-header">
+          <div className="import-summary-title">
+            {hasIssues ? (
+              <AlertTriangle size={16} color="#a9442a" />
+            ) : (
+              <CheckCircle2 size={16} color="#2b5b48" />
+            )}
+            <span>
+              Import Summary & Status Report ({lastImportReport.files_processed}{" "}
+              {lastImportReport.files_processed === 1 ? "file" : "files"} processed)
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span className={`badge ${hasIssues ? "burnout" : "superpower"}`}>
+              +{lastImportReport.total_new_added.toLocaleString()} Net-New Prompts Added
+            </span>
+            <button
+              type="button"
+              className="btn-outline"
+              style={{ padding: "3px 9px", fontSize: 11.5 }}
+              onClick={() => {
+                setLastImportReport(null);
+                setImportStatus("");
+              }}
+            >
+              Dismiss Report
+            </button>
+          </div>
+        </div>
+
+        {importStatus && (
+          <div
+            style={{
+              fontSize: 12.5,
+              color: hasIssues ? "var(--accent-terracotta)" : "var(--accent-sage)",
+              fontWeight: 600,
+              marginTop: 4,
+            }}
+          >
+            {importStatus}
+          </div>
+        )}
+
+        <div className="import-funnel-strip">
+          <span className="import-funnel-pill">
+            Raw Scanned: <strong>{lastImportReport.total_raw_scanned.toLocaleString()}</strong>
+          </span>
+          <span className="import-funnel-pill">
+            Clean Kept: <strong>{lastImportReport.total_clean_kept.toLocaleString()}</strong>
+          </span>
+          <span className="import-funnel-pill">
+            Net-New Merged: <strong>+{lastImportReport.total_new_added.toLocaleString()}</strong>
+          </span>
+          <span className="import-funnel-pill">
+            Noise Filtered: <strong>{lastImportReport.total_noise_filtered.toLocaleString()}</strong>
+          </span>
+          <span className="import-funnel-pill">
+            Duplicates Skipped:{" "}
+            <strong>{lastImportReport.total_duplicates_skipped.toLocaleString()}</strong>
+          </span>
+          <span className="import-funnel-pill">
+            PII Redacted: <strong>{lastImportReport.total_redactions.toLocaleString()}</strong>
+          </span>
+        </div>
+
+        {compactVaultHeader && !hasIssues ? (
+          <details style={{ marginTop: 8 }}>
+            <summary
+              style={{
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--accent-sage)",
+              }}
+            >
+              Inspect Per-File Status & Format Breakdown ({lastImportReport.file_reports.length}{" "}
+              {lastImportReport.file_reports.length === 1 ? "file" : "files"})
+            </summary>
+            {renderFileRows()}
+          </details>
+        ) : (
+          renderFileRows()
+        )}
+      </div>
+    );
+  };
 
   const renderOnboardingPanel = () => (
     <div className="onboarding-card">
@@ -357,12 +660,12 @@ export default function App() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="btn-primary" onClick={handleLoadSample}>
+          <button className="btn-primary" onClick={handleLoadSample} disabled={isImporting}>
             <Sparkles size={15} />
             <span>Load Sample Multi-Provider Vault</span>
           </button>
-          <button className="btn-outline" onClick={handleScanLocal}>
-            <RefreshCw size={14} />
+          <button className="btn-outline" onClick={handleScanLocal} disabled={isImporting}>
+            <RefreshCw size={14} className={isImporting ? "spin-icon" : ""} />
             <span>Opt-In: Scan Local Antigravity Prompts</span>
           </button>
         </div>
@@ -373,10 +676,10 @@ export default function App() {
       <div className="upload-dropzone" aria-live="polite">
         <label className="btn-primary" style={{ cursor: "pointer" }}>
           <Upload size={15} />
-          <span>Import Export Files (.json, .md)</span>
+          <span>Import Export Files (.json, .md, .html, .txt, .zip)</span>
           <input
             type="file"
-            accept=".json,.md,.txt,.jsonl"
+            accept=".json,.md,.txt,.jsonl,.html,.zip"
             multiple
             hidden
             onChange={handleFileUpload}
@@ -384,13 +687,9 @@ export default function App() {
           />
         </label>
         <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-          Supports multi-file additive merging into your local SQLite vault.
+          Supports multi-file & ZIP additive merging into your local SQLite vault with full per-file status reporting.
         </span>
-        {importStatus && (
-          <div style={{ fontSize: 13, color: "var(--accent-sage)", fontWeight: 600, width: "100%", marginTop: 6 }}>
-            {importStatus}
-          </div>
-        )}
+        {renderImportSummaryPanel(false)}
       </div>
     </div>
   );
@@ -567,9 +866,49 @@ export default function App() {
                 </div>
 
                 {isVaultEmpty ? (
-                  renderOnboardingPanel()
+                  <>
+                    {renderOnboardingPanel()}
+                    <ContributionGrid
+                      dailyCounts={data.summary.daily_counts}
+                      recentPrompts={data.recent_high_signal_prompts}
+                      latestDate={data.summary.latest_date}
+                    />
+                  </>
                 ) : (
                   <>
+                    <div
+                      className="upload-dropzone"
+                      style={{ marginTop: 18, padding: "12px 16px" }}
+                      aria-live="polite"
+                    >
+                      <label className="btn-primary" style={{ cursor: "pointer" }}>
+                        <Upload size={15} />
+                        <span>Import More Export Files (.json, .md, .html, .txt, .zip)</span>
+                        <input
+                          type="file"
+                          accept=".json,.md,.txt,.jsonl,.html,.zip"
+                          multiple
+                          hidden
+                          onChange={handleFileUpload}
+                          data-testid="vault-file-input"
+                        />
+                      </label>
+                      {data.summary.source_counts && data.summary.source_counts.length > 0 && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          {data.summary.source_counts.map(([src, count]) => (
+                            <span key={src} className="badge superpower">
+                              {src}: {count.toLocaleString()} prompts
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {renderImportSummaryPanel(false)}
+                    </div>
+                    <ContributionGrid
+                      dailyCounts={data.summary.daily_counts}
+                      recentPrompts={data.recent_high_signal_prompts}
+                      latestDate={data.summary.latest_date}
+                    />
                     <div
                       className="insight-card"
                       style={{ marginTop: 20, borderLeft: "4px solid var(--accent-sage)" }}
@@ -1073,25 +1412,25 @@ export default function App() {
                     >
                       <label className="btn-primary" style={{ cursor: "pointer" }}>
                         <Upload size={15} />
-                        <span>Import Export Files (.json, .md)</span>
+                        <span>Import Export Files (.json, .md, .html, .txt, .zip)</span>
                         <input
                           type="file"
-                          accept=".json,.md,.txt,.jsonl"
+                          accept=".json,.md,.txt,.jsonl,.html,.zip"
                           multiple
                           hidden
                           onChange={handleFileUpload}
                           data-testid="vault-file-input"
                         />
                       </label>
-                      <button className="btn-outline" onClick={handleLoadSample}>
+                      <button className="btn-outline" onClick={handleLoadSample} disabled={isImporting}>
                         <Sparkles size={14} />
                         <span>Load Sample Multi-Provider Vault</span>
                       </button>
-                      <button className="btn-outline" onClick={handleScanLocal}>
-                        <RefreshCw size={14} />
+                      <button className="btn-outline" onClick={handleScanLocal} disabled={isImporting}>
+                        <RefreshCw size={14} className={isImporting ? "spin-icon" : ""} />
                         <span>Opt-In: Scan Local Antigravity Prompts</span>
                       </button>
-                      <button className="btn-outline" onClick={handleResetVault}>
+                      <button className="btn-outline" onClick={handleResetVault} disabled={isImporting}>
                         <Trash2 size={14} />
                         <span>Reset / Clear Vault</span>
                       </button>
@@ -1109,6 +1448,9 @@ export default function App() {
                           {importStatus}
                         </div>
                       )}
+                      {lastImportReport &&
+                        lastImportReport.file_reports.some((r) => r.status !== "imported") &&
+                        renderImportSummaryPanel(true)}
                     </div>
                   </div>
                 )}
@@ -1239,6 +1581,14 @@ export default function App() {
                     )}
                   </div>
                 </div>
+
+                {!isVaultEmpty && renderImportSummaryPanel(false)}
+
+                <ContributionGrid
+                  dailyCounts={data.summary.daily_counts}
+                  recentPrompts={data.recent_high_signal_prompts}
+                  latestDate={data.summary.latest_date}
+                />
 
                 {!isVaultEmpty && (
                   <div className="onboarding-card" style={{ marginTop: 16 }}>
