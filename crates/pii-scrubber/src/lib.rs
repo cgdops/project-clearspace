@@ -237,8 +237,7 @@ mod tests {
 
     #[test]
     fn flags_excessively_long_paste_dumps_over_650_words() {
-        let word_list = std::iter::repeat("architecture")
-            .take(660)
+        let word_list = std::iter::repeat_n("architecture", 660)
             .collect::<Vec<_>>()
             .join(" ");
         let res = scrub_prompt(&word_list);
