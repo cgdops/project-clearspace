@@ -116,7 +116,18 @@ pub struct VaultDashboardPayload {
     pub update_status: AppUpdateStatus,
 }
 
-fn default_universal_quests() -> Vec<(&'static str, &'static str, &'static str, &'static str, &'static str, u16, i64, i64)> {
+type UniversalQuestSeed = (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    u16,
+    i64,
+    i64,
+);
+
+fn default_universal_quests() -> Vec<UniversalQuestSeed> {
     vec![
         (
             "q-reposition-architect",
@@ -259,6 +270,7 @@ fn get_app_meta(conn: &Connection, key: &str) -> Option<String> {
     .ok()
 }
 
+#[cfg(test)]
 fn init_sqlite_schema(conn: &Connection) -> rusqlite::Result<()> {
     init_sqlite_schema_with_backup(conn, None)
 }

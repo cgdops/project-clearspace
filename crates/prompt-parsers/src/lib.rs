@@ -571,18 +571,15 @@ fn count_word_syllables_and_jargon(raw_token: &str) -> (usize, bool) {
         1
     } else {
         let mut working = alpha.as_str();
-        if working.len() > 4
-            && working.ends_with("es")
-            && !working.ends_with("aes")
-            && !working.ends_with("ees")
-            && !working.ends_with("oes")
-        {
-            working = &working[..working.len() - 2];
-        } else if working.len() > 4
-            && working.ends_with("ed")
-            && !working.ends_with("ted")
-            && !working.ends_with("ded")
-        {
+        let strip_two_char_suffix = working.len() > 4
+            && ((working.ends_with("es")
+                && !working.ends_with("aes")
+                && !working.ends_with("ees")
+                && !working.ends_with("oes"))
+                || (working.ends_with("ed")
+                    && !working.ends_with("ted")
+                    && !working.ends_with("ded")));
+        if strip_two_char_suffix {
             working = &working[..working.len() - 2];
         } else if working.len() > 3 && working.ends_with('e') && !working.ends_with("le") {
             working = &working[..working.len() - 1];
@@ -621,7 +618,7 @@ pub fn compute_writing_level(prompts: &[NormalizedPrompt]) -> WritingLevelMetric
     for p in prompts {
         let sent_count = p
             .cleaned_text
-            .split(|c| matches!(c, '.' | '!' | '?' | ';' | '\n'))
+            .split(['.', '!', '?', ';', '\n'])
             .filter(|s| s.chars().any(|ch| ch.is_ascii_alphabetic()))
             .count()
             .max(1);
