@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addJournalEntry,
   backupLocalVault,
@@ -716,10 +716,36 @@ We need to ensure that every user import produces immediate visual confirmation 
     expect(status.schema_version).toBe(3);
     expect(status.last_backup_path).toContain("clearspace_vault.db.bak-v3");
 
-    const checkRes = await checkForAppUpdates("0.3.0", 3);
-    expect(checkRes.installed_version).toBe("0.3.0");
-    expect(checkRes.schema_version).toBe(3);
-    expect(checkRes.update_available).toBe(false);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        version: "0.3.0",
+        schemaVersion: 3,
+        notes: "v0.3.0 release notes",
+        pub_date: "2026-10-30T00:00:00Z",
+        platforms: {
+          "windows-x86_64": {
+            url: "/downloads/Clearspace_0.3.0_x64-setup.exe",
+            sha256: "acf69f66e81d314369b70e5ea9cfed7a4bde0cee7028e310bf4bbe647a5a0700",
+          },
+        },
+      }),
+    } as Response);
+
+    try {
+      const checkRes = await checkForAppUpdates("0.3.0", 3);
+      expect(checkRes.installed_version).toBe("0.3.0");
+      expect(checkRes.schema_version).toBe(3);
+      expect(checkRes.update_available).toBe(false);
+
+      const legacyCheckRes = await checkForAppUpdates("0.2.0", 2);
+      expect(legacyCheckRes.installed_version).toBe("0.2.0");
+      expect(legacyCheckRes.latest_version).toBe("0.3.0");
+      expect(legacyCheckRes.update_available).toBe(true);
+      expect(legacyCheckRes.schema_version).toBe(3);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("computes Everyday, Professional, and Technical writing levels and adapts cards, O*NET matches, and quests with zero jargon leakage", async () => {

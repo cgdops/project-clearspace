@@ -1333,22 +1333,93 @@ fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashbo
 fn backup_local_vault(state: State<AppState>) -> Result<AppUpdateStatus, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let schema_ver = get_schema_version(&conn);
-    let bak_name = format!(
-        "{}.bak-v{}",
-        state
-            .db_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("clearspace_vault.db"),
-        schema_ver
-    );
-    let bak_path = state.db_path.with_file_name(bak_name);
+    let file_name = state.db_path.file_name().and_then(|s| s.to_str()).unwrap_or("clearspace_vault.db");
+    let bak_path = state.db_path.with_file_name(format!("{}.bak-v{}", file_name, schema_ver));
     if state.db_path.exists() {
         fs::copy(&state.db_path, &bak_path).map_err(|e| e.to_string())?;
     }
-    let bak_str = bak_path.to_string_lossy().to_string();
-    set_app_meta(&conn, "last_backup_path", &bak_str);
+    set_app_meta(&conn, "last_backup_path", &bak_path.to_string_lossy());
     Ok(load_update_status(&conn))
+}
+
+fn parse_semver_tuple(v: &str) -> (u32, u32, u32) {
+    let core = v.trim().trim_start_matches(['v', 'V']).split('-').next().unwrap_or("");
+    let mut parts = core.split('.').map(|s| s.parse::<u32>().unwrap_or(0));
+    (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+}
+
+fn is_valid_strict_semver(v: &str) -> bool {
+    let parts: Vec<&str> = v.split('.').collect();
+    parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.len() <= 6 && p.chars().all(|c| c.is_ascii_digit()))
+}
+
+fn sanitize_github_release_url(raw_url: Option<&str>) -> String {
+    const DEFAULT_URL: &str = "https://github.com/cgdops/project-clearspace/releases/latest";
+    const ALLOWED_PREFIX: &str = "https://github.com/cgdops/project-clearspace/";
+    let Some(u) = raw_url.map(str::trim).filter(|u| u.starts_with(ALLOWED_PREFIX)) else {
+        return DEFAULT_URL.to_string();
+    };
+    let unsafe_char = |c: char| {
+        c.is_control() || c.is_whitespace() || matches!(c, '&' | '|' | ';' | '`' | '$' | '>' | '<' | '"' | '\'' | '^' | '\\')
+    };
+    if u.chars().any(unsafe_char) { DEFAULT_URL.to_string() } else { u.to_string() }
+}
+
+fn workspace_root_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
+}
+
+#[tauri::command]
+fn check_local_release_manifest() -> Option<serde_json::Value> {
+    let ws = workspace_root_dir();
+    let mut paths = vec![
+        ws.join("apps/web/public/downloads/latest.json"),
+        ws.join("apps/desktop/public/latest.json"),
+    ];
+    if let Ok(cwd) = env::current_dir() {
+        paths.push(cwd.join("apps/web/public/downloads/latest.json"));
+        paths.push(cwd.join("apps/desktop/public/latest.json"));
+    }
+    paths
+        .into_iter()
+        .filter_map(|p| fs::read_to_string(p).ok().and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()))
+        .max_by_key(|v| v.get("version").and_then(|s| s.as_str()).map(parse_semver_tuple).unwrap_or((0, 0, 0)))
+}
+
+#[tauri::command]
+fn launch_update_installer(
+    version: String,
+    download_url: Option<String>,
+    state: State<AppState>,
+) -> Result<String, String> {
+    let clean_ver = version.trim().trim_start_matches(['v', 'V']);
+    if !is_valid_strict_semver(clean_ver) {
+        return Err(format!("Invalid semantic version string: {}", version));
+    }
+    let _ = backup_local_vault(state);
+
+    let setup_filename = format!("Clearspace_{}_x64-setup.exe", clean_ver);
+    let ws = workspace_root_dir();
+    for candidate in [
+        ws.join("apps/web/public/downloads").join(&setup_filename),
+        ws.join("target/release/bundle/nsis").join(&setup_filename),
+    ] {
+        if candidate.exists() {
+            std::process::Command::new(&candidate)
+                .spawn()
+                .map_err(|e| format!("Failed to launch installer {}: {}", candidate.display(), e))?;
+            return Ok(format!("Launched local installer: {}", candidate.display()));
+        }
+    }
+
+    let target_url = sanitize_github_release_url(download_url.as_deref());
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", &target_url])
+            .spawn();
+    }
+    Ok(format!("Opened update download URL: {}", target_url))
 }
 
 #[tauri::command]
@@ -1484,7 +1555,9 @@ fn main() {
             reset_full_factory,
             toggle_quest_state,
             add_journal_entry,
-            backup_local_vault
+            backup_local_vault,
+            check_local_release_manifest,
+            launch_update_installer
         ])
         .run(tauri::generate_context!())
         .expect("error while running Clearspace desktop application");
@@ -1643,5 +1716,27 @@ mod tests {
         }
 
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn update_semver_and_url_sanitization_reject_traversal_and_shell_metacharacters() {
+        assert!(is_valid_strict_semver("0.3.0"));
+        assert!(is_valid_strict_semver("12.4.105"));
+        assert!(!is_valid_strict_semver("0.3.0\\..\\..\\evil"));
+        assert!(!is_valid_strict_semver("0.3"));
+        assert!(!is_valid_strict_semver("0.3.0-beta;calc"));
+
+        let safe = "https://github.com/cgdops/project-clearspace/releases/download/v0.3.0/Clearspace_0.3.0_x64-setup.exe";
+        assert_eq!(sanitize_github_release_url(Some(safe)), safe);
+
+        let default_url = "https://github.com/cgdops/project-clearspace/releases/latest";
+        assert_eq!(
+            sanitize_github_release_url(Some("https://github.com/cgdops/project-clearspace/releases?a=1&calc.exe")),
+            default_url
+        );
+        assert_eq!(
+            sanitize_github_release_url(Some("https://evil.example.com/Clearspace_0.3.0_x64-setup.exe")),
+            default_url
+        );
     }
 }

@@ -6,9 +6,9 @@
   "platforms": {
     "windows-x86_64": {
       "url": "/downloads/Clearspace_0.3.0_x64-setup.exe",
-      "sha256": "5de9333ae4b9306349dc8fc8ccba64217f281eb4134786046e75d08ba51ba42d",
+      "sha256": "c9c7dd85c3447b5fdf35098a999325d68c9fdf3145546f6cb760601785b80ae4",
       "filename": "Clearspace_0.3.0_x64-setup.exe",
-      "sizeFormatted": "4.96 MB"
+      "sizeFormatted": "4.98 MB"
     }
   }
 }
