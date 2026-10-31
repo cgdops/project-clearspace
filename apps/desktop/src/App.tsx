@@ -566,7 +566,7 @@ export default function App() {
   const handleCheckUpdates = async () => {
     setIsCheckingUpdates(true);
     try {
-      const installedVer = data?.update_status?.installed_version ?? "0.2.0";
+      const installedVer = data?.update_status?.installed_version ?? "0.3.0";
       const schemaVer = data?.update_status?.schema_version ?? 3;
       const result = await checkForAppUpdates(installedVer, schemaVer);
       setUpdateCheckResult(result);
@@ -1908,7 +1908,7 @@ export default function App() {
               data-testid="sidebar-version-meta"
             >
               <span>
-                v{data?.update_status?.installed_version ?? "0.2.0"} • Schema v
+                v{data?.update_status?.installed_version ?? "0.3.0"} • Schema v
                 {data?.update_status?.schema_version ?? 3}
               </span>
               <button
@@ -2852,7 +2852,7 @@ export default function App() {
                   <div>
                     <div className="stat-label">Desktop Upgrade &amp; Schema Migration Guard</div>
                     <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>
-                      Clearspace v{data.update_status?.installed_version ?? "0.2.0"} • SQLite Schema v
+                      Clearspace v{data.update_status?.installed_version ?? "0.3.0"} • SQLite Schema v
                       {data.update_status?.schema_version ?? 3} (`PRAGMA user_version`)
                     </div>
                     <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 2 }}>

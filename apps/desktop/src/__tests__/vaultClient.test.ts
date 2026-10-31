@@ -712,12 +712,12 @@ We need to ensure that every user import produces immediate visual confirmation 
     expect(compareSemver("v1.0.0", "0.9.9")).toBe(1);
 
     const status = await backupLocalVault();
-    expect(status.installed_version).toBe("0.2.0");
+    expect(status.installed_version).toBe("0.3.0");
     expect(status.schema_version).toBe(3);
     expect(status.last_backup_path).toContain("clearspace_vault.db.bak-v3");
 
-    const checkRes = await checkForAppUpdates("0.2.0", 3);
-    expect(checkRes.installed_version).toBe("0.2.0");
+    const checkRes = await checkForAppUpdates("0.3.0", 3);
+    expect(checkRes.installed_version).toBe("0.3.0");
     expect(checkRes.schema_version).toBe(3);
     expect(checkRes.update_available).toBe(false);
   });
