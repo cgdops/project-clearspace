@@ -119,11 +119,16 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
     await page.waitForTimeout(150);
 
     // 2. Verify Step 2: Zero-Knowledge Upload Card & Personalized Sidebar/Header
+    await expect(page.getByTestId("btn-settings-drawer")).toHaveAttribute("aria-haspopup", "dialog");
+    await expect(page.getByTestId("btn-settings-drawer")).toHaveAttribute("aria-expanded", "false");
     await page.getByTestId("btn-settings-drawer").click();
+    await expect(page.getByTestId("btn-settings-drawer")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("btn-close-settings")).toBeFocused();
     await expect(page.getByTestId("sidebar-profile-name")).toHaveText("Chris");
     await expect(page.getByTestId("sidebar-writing-level-pill")).toContainText("Writing Style:");
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("settings-drawer")).toHaveCount(0);
+    await expect(page.getByTestId("btn-settings-drawer")).toBeFocused();
     await expect(page.locator(".main-content h1.page-title")).toHaveText(
       "Chris’s Profile"
     );

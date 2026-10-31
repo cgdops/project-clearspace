@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Sparkles,
   Compass,
@@ -255,14 +255,24 @@ export default function App() {
     loadDashboard();
   }, []);
 
+  const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const settingsCloseBtnRef = useRef<HTMLButtonElement | null>(null);
+  const wasSettingsOpenRef = useRef<boolean>(false);
+
   useEffect(() => {
-    if (!isSettingsOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsSettingsOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isSettingsOpen]);
+    if (isSettingsOpen) {
+      wasSettingsOpenRef.current = true;
+      settingsCloseBtnRef.current?.focus();
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setIsSettingsOpen(false);
+      };
+      window.addEventListener("keydown", onKeyDown);
+      return () => window.removeEventListener("keydown", onKeyDown);
+    } else if (wasSettingsOpenRef.current) {
+      wasSettingsOpenRef.current = false;
+      if (!isEditingProfile) settingsTriggerRef.current?.focus();
+    }
+  }, [isSettingsOpen, isEditingProfile]);
 
   const appTheme: "light" | "dark" = data?.profile?.theme_mode === "dark" ? "dark" : "light";
 
@@ -695,13 +705,6 @@ export default function App() {
   const totalAvailableQuestPoints =
     data?.quests.reduce((acc, q) => acc + q.equity_points, 0) ?? 2600;
   const committedQuestPoints = acceptedQuests.reduce((acc, q) => acc + q.equity_points, 0);
-
-  const baseEquity =
-    data && data.summary.clean_prompts_kept > 0 && acceptedQuests.length > 0 ? 225 : 0;
-  const totalEquityPoints = acceptedQuests.reduce(
-    (acc, q) => acc + (q.completed ? q.equity_points : Math.round(q.equity_points * 0.35)),
-    baseEquity
-  );
 
   const equityProgressPct = Math.min(
     100,
@@ -1803,8 +1806,11 @@ export default function App() {
 
         <div className="sidebar-footer">
           <button
+            ref={settingsTriggerRef}
             type="button"
             className={`nav-btn ${isSettingsOpen ? "active" : ""}`}
+            aria-haspopup="dialog"
+            aria-expanded={isSettingsOpen}
             onClick={() => setIsSettingsOpen(true)}
             data-testid="btn-settings-drawer"
           >
@@ -1821,7 +1827,7 @@ export default function App() {
                 <Settings size={18} color="var(--accent-sage)" />
                 <span>Settings</span>
               </div>
-              <button type="button" className="btn-outline" style={{ padding: "5px 9px", fontSize: 12 }} onClick={() => setIsSettingsOpen(false)} aria-label="Close Settings" data-testid="btn-close-settings">
+              <button ref={settingsCloseBtnRef} type="button" className="btn-outline" style={{ padding: "5px 9px", fontSize: 12 }} onClick={() => setIsSettingsOpen(false)} aria-label="Close Settings" data-testid="btn-close-settings">
                 <X size={16} />
               </button>
             </div>
