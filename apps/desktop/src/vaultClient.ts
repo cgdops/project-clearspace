@@ -21,6 +21,32 @@ export interface ManifestFileLink {
   size_bytes: number;
 }
 
+export interface DailyPromptQuality {
+  date: string;
+  prompt_count: number;
+  avg_quality_score: number;
+  tier_counts: [number, number, number];
+}
+export type GrowthPeriod = "7d" | "30d" | "1y";
+export interface GrowthDataPoint {
+  dateStr: string;
+  label: string;
+  compositeScore: number;
+  promptScore: number;
+  commitmentScore: number;
+  promptCount: number;
+}
+export interface GrowthTrajectoryModel {
+  period: GrowthPeriod;
+  points: GrowthDataPoint[];
+  currentScore: number;
+  startScore: number;
+  netDelta: number;
+  promptScoreCurrent: number;
+  promptDelta: number;
+  commitmentScoreCurrent: number;
+}
+
 export interface IngestionSummary {
   total_files_scanned: number;
   total_raw_prompts: number;
@@ -37,6 +63,7 @@ export interface IngestionSummary {
   tier_counts?: [number, number, number];
   overall_positioning?: string;
   daily_counts?: [string, number][];
+  daily_prompt_quality?: DailyPromptQuality[];
   detected_format: string;
   warnings: string[];
   manifest_links: ManifestFileLink[];
@@ -141,6 +168,8 @@ export interface EquityQuest {
   equity_points: number;
   accepted: boolean;
   completed: boolean;
+  accepted_at?: string | null;
+  completed_at?: string | null;
 }
 
 export interface JournalEntry {
@@ -471,6 +500,11 @@ export function formatTierLabel(tier: SkillTier): string {
     case "advanced":
       return "Advanced → Senior / Staff";
   }
+}
+
+export function computePromptQualityScore(tier: SkillTier, isHighSignal: boolean): number {
+  const base = tier === "advanced" ? 90 : tier === "intermediate" ? 65 : 25;
+  return Math.min(100, base + (isHighSignal ? 10 : 0));
 }
 
 function tierDepthWeight(tier: SkillTier): number {
@@ -1221,6 +1255,7 @@ function summarizePromptsClient(
   const catMap = new Map<string, number>();
   const srcMap = new Map<string, number>();
   const dayMap = new Map<string, number>();
+  const dayQualMap = new Map<string, { sum: number; tiers: [number, number, number] }>();
   const convos = new Set<string>();
   let highSignal = 0;
   let redactions = 0;
@@ -1242,6 +1277,13 @@ function summarizePromptsClient(
     if (tier === "beginner") tier_counts[0] += 1;
     else if (tier === "intermediate") tier_counts[1] += 1;
     else tier_counts[2] += 1;
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmedDt)) {
+      const dayKey = trimmedDt.slice(0, 10);
+      const dq = dayQualMap.get(dayKey) ?? { sum: 0, tiers: [0, 0, 0] as [number, number, number] };
+      dq.sum += computePromptQualityScore(tier, p.is_high_signal);
+      dq.tiers[tier === "beginner" ? 0 : tier === "intermediate" ? 1 : 2] += 1;
+      dayQualMap.set(dayKey, dq);
+    }
 
     for (const c of p.signal_categories) {
       catMap.set(c, (catMap.get(c) ?? 0) + 1);
@@ -1253,6 +1295,10 @@ function summarizePromptsClient(
   const category_counts = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
   const source_counts = Array.from(srcMap.entries()).sort((a, b) => b[1] - a[1]);
   const daily_counts = Array.from(dayMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const daily_prompt_quality: DailyPromptQuality[] = daily_counts.map(([date, prompt_count]) => {
+    const dq = dayQualMap.get(date) ?? { sum: 0, tiers: [0, 0, 0] as [number, number, number] };
+    return { date, prompt_count, avg_quality_score: Math.round((dq.sum / prompt_count) * 10) / 10, tier_counts: dq.tiers };
+  });
 
   let overall_positioning = "Awaiting Evidence";
   if (sorted.length > 0) {
@@ -1280,6 +1326,7 @@ function summarizePromptsClient(
     tier_counts,
     overall_positioning,
     daily_counts,
+    daily_prompt_quality,
     detected_format: detectedFormat,
     warnings,
     manifest_links: manifestLinks,
@@ -2257,6 +2304,8 @@ export function buildPersonalizedQuestsClient(
     return {
       accepted: Boolean(found?.accepted),
       completed: Boolean(found?.completed),
+      accepted_at: found?.accepted_at ?? null,
+      completed_at: found?.completed_at ?? null,
     };
   };
 
@@ -3099,7 +3148,9 @@ export async function loadSampleMultiProviderVault(): Promise<VaultDashboardPayl
     return invoke<VaultDashboardPayload>("get_vault_dashboard");
   }
   const quests = loadBrowserQuests().map((q) =>
-    sampleQuestIds.has(q.id) ? { ...q, accepted: true } : q
+    sampleQuestIds.has(q.id)
+      ? { ...q, accepted: true, accepted_at: q.accepted_at ?? new Date().toISOString().slice(0, 16).replace("T", " ") }
+      : q
   );
   saveBrowserQuests(quests);
   return buildBrowserDashboard();
@@ -3110,7 +3161,7 @@ export async function resetLocalVault(): Promise<VaultDashboardPayload> {
     return invoke<VaultDashboardPayload>("reset_local_vault");
   }
   saveBrowserPrompts([]);
-  const resetQuests = DEFAULT_QUESTS.map((q) => ({ ...q, accepted: false, completed: false }));
+  const resetQuests = DEFAULT_QUESTS.map((q) => ({ ...q, accepted: false, completed: false, accepted_at: null, completed_at: null }));
   saveBrowserQuests(resetQuests);
   const profile = loadBrowserProfile();
   saveBrowserProfile({
@@ -3127,7 +3178,7 @@ export async function resetFullFactory(): Promise<VaultDashboardPayload> {
   }
   saveBrowserPrompts([]);
   saveBrowserJournals([]);
-  const resetQuests = DEFAULT_QUESTS.map((q) => ({ ...q, accepted: false, completed: false }));
+  const resetQuests = DEFAULT_QUESTS.map((q) => ({ ...q, accepted: false, completed: false, accepted_at: null, completed_at: null }));
   saveBrowserQuests(resetQuests);
   saveBrowserProfile({ ...DEFAULT_USER_PROFILE });
   return buildBrowserDashboard();
@@ -3141,7 +3192,9 @@ export async function toggleQuestState(
     return invoke<EquityQuest[]>("toggle_quest_state", { questId, field });
   }
   const quests = loadBrowserQuests().map((q) =>
-    q.id === questId ? { ...q, [field]: !q[field] } : q
+    q.id === questId
+      ? { ...q, [field]: !q[field], [field === "accepted" ? "accepted_at" : "completed_at"]: !q[field] ? new Date().toISOString().slice(0, 16).replace("T", " ") : null }
+      : q
   );
   saveBrowserQuests(quests);
   return quests;
@@ -3292,5 +3345,88 @@ export async function launchUpdateInstaller(version: string, downloadUrl?: strin
       : "https://github.com/cgdops/project-clearspace/releases/latest";
   if (typeof window !== "undefined") window.open(targetUrl, "_blank", "noopener,noreferrer");
   return `Opened update download: ${targetUrl}`;
+}
+
+export function buildGrowthTrajectoryModel(
+  dailyPromptQuality: DailyPromptQuality[] | undefined,
+  quests: EquityQuest[],
+  period: GrowthPeriod = "30d",
+  latestDate?: string | null
+): GrowthTrajectoryModel {
+  let anchorStr = new Date().toISOString().slice(0, 10);
+  const bump = (raw?: string | null) => {
+    const d = raw?.trim().slice(0, 10);
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d > anchorStr) anchorStr = d;
+  };
+  bump(latestDate);
+  const qualMap = new Map<string, { count: number; avg: number }>();
+  let earliestPromptStr: string | null = null;
+  for (const dq of dailyPromptQuality ?? []) {
+    const d = dq.date?.trim().slice(0, 10);
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+    bump(d);
+    if (dq.prompt_count <= 0) continue;
+    if (!earliestPromptStr || d < earliestPromptStr) earliestPromptStr = d;
+    const prev = qualMap.get(d);
+    qualMap.set(d, prev ? { count: prev.count + dq.prompt_count, avg: (prev.avg * prev.count + dq.avg_quality_score * dq.prompt_count) / (prev.count + dq.prompt_count) } : { count: dq.prompt_count, avg: dq.avg_quality_score });
+  }
+  quests.forEach((q) => { bump(q.accepted_at); bump(q.completed_at); });
+
+  const numPoints = period === "7d" ? 7 : period === "30d" ? 30 : 52;
+  const step = period === "1y" ? 7 : 1;
+  const anchorMs = Date.parse(`${anchorStr}T00:00:00Z`);
+  const dayMs = 86_400_000;
+  const rangeStartMs = anchorMs - (numPoints * step - 1) * dayMs;
+  const walkStartMs = Math.min(rangeStartMs, earliestPromptStr ? Date.parse(`${earliestPromptStr}T00:00:00Z`) : rangeStartMs);
+
+  let ewma = 0;
+  let seen = false;
+  const dailyPromptScore = new Map<string, number>();
+  for (let ms = walkStartMs; ms <= anchorMs; ms += dayMs) {
+    const dStr = new Date(ms).toISOString().slice(0, 10);
+    const entry = qualMap.get(dStr);
+    if (entry && entry.count > 0) {
+      ewma = seen ? 0.35 * entry.avg + 0.65 * ewma : entry.avg;
+      seen = true;
+    }
+    if (ms >= rangeStartMs) dailyPromptScore.set(dStr, Math.min(50, Math.max(0, Math.round(ewma * 0.5))));
+  }
+
+  const totalPts = quests.length > 0 ? Math.max(1, quests.reduce((s, q) => s + q.equity_points, 0)) : 2600;
+  const points: GrowthDataPoint[] = [];
+  for (let i = 0; i < numPoints; i++) {
+    let promptCount = 0;
+    let dateStr = anchorStr;
+    for (let s = 0; s < step; s++) {
+      dateStr = new Date(rangeStartMs + (i * step + s) * dayMs).toISOString().slice(0, 10);
+      promptCount += qualMap.get(dateStr)?.count ?? 0;
+    }
+    const promptScore = dailyPromptScore.get(dateStr) ?? 0;
+    let earnedPts = 0;
+    for (const q of quests) {
+      if (q.accepted && (q.accepted_at?.slice(0, 10) || anchorStr) <= dateStr) earnedPts += 0.5 * q.equity_points;
+      if (q.completed && (q.completed_at?.slice(0, 10) || anchorStr) <= dateStr) earnedPts += (q.accepted ? 0.5 : 1.0) * q.equity_points;
+    }
+    const commitmentScore = Math.min(50, Math.round((earnedPts / totalPts) * 50));
+    const compositeScore = Math.min(100, Math.max(0, promptScore + commitmentScore));
+    points.push({ dateStr, label: dateStr.slice(5).replace("-", "/"), compositeScore, promptScore, commitmentScore, promptCount });
+  }
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  const currentScore = last?.compositeScore ?? 0;
+  const startScore = first?.compositeScore ?? 0;
+  const promptScoreCurrent = last?.promptScore ?? 0;
+  return {
+    period,
+    points,
+    currentScore,
+    startScore,
+    netDelta: currentScore - startScore,
+    promptScoreCurrent,
+    promptDelta: promptScoreCurrent - (first?.promptScore ?? 0),
+    commitmentScoreCurrent: last?.commitmentScore ?? 0,
+  };
+
 }
 
