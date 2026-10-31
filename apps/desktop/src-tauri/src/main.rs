@@ -1521,10 +1521,10 @@ fn apply_quest_toggle(
     field: &str,
     now_iso: &str,
 ) -> Result<Vec<EquityQuest>, String> {
-    let (col, ts_col) = if field == "completed" {
-        ("completed", "completed_at")
-    } else {
-        ("accepted", "accepted_at")
+    let (col, ts_col) = match field {
+        "completed" => ("completed", "completed_at"),
+        "accepted" => ("accepted", "accepted_at"),
+        _ => return Err(format!("Invalid quest field: {field}")),
     };
     let sql = format!(
         "UPDATE quests SET {col} = CASE WHEN {col} = 1 THEN 0 ELSE 1 END, {ts_col} = CASE WHEN {col} = 1 THEN NULL ELSE ?2 END WHERE id = ?1"

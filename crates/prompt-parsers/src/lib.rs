@@ -744,9 +744,7 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
             SkillTier::Advanced => 2,
         };
         summary.tier_counts[tier_idx] += 1;
-        let trimmed_dt = r.created_at.trim();
-        if trimmed_dt.len() >= 10 {
-            let day_key = &trimmed_dt[..10];
+        if let Some(day_key) = r.created_at.trim().get(..10) {
             if day_key.as_bytes().get(4) == Some(&b'-') && day_key.as_bytes().get(7) == Some(&b'-')
             {
                 let entry = day_map.entry(day_key.to_string()).or_insert((0, 0.0, [0; 3]));
@@ -776,7 +774,7 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
     src_vec.sort_by_key(|entry| Reverse(entry.1));
     summary.source_counts = src_vec;
 
-    let mut day_vec: Vec<(String, (usize, f32, [usize; 3]))> = day_map.into_iter().collect();
+    let mut day_vec: Vec<_> = day_map.into_iter().collect();
     day_vec.sort_by(|a, b| a.0.cmp(&b.0));
     summary.daily_counts = day_vec.iter().map(|(d, (c, _, _))| (d.clone(), *c)).collect();
     summary.daily_prompt_quality = day_vec
