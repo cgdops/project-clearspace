@@ -406,16 +406,6 @@ export function ContributionGrid({
             </span>
           </div>
         </div>
-
-        <div className="contribution-controls">
-          <span
-            className="contribution-theme-toggle"
-            style={{ cursor: "default" }}
-            data-testid="contribution-theme-badge"
-          >
-            Theme: {colorTheme === "github-dark" ? "Deep Forest Dark" : "Clearspace Sage (Light)"}
-          </span>
-        </div>
       </div>
 
       <div className="contribution-layout">
