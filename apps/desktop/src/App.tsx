@@ -126,6 +126,22 @@ function formatSourceLabel(rawSource: string): string {
   }
 }
 
+function formatHour12(h: number): string {
+  const normalized = ((h % 24) + 24) % 24;
+  if (normalized === 0) return "12 AM";
+  if (normalized < 12) return `${normalized} AM`;
+  if (normalized === 12) return "12 PM";
+  return `${normalized - 12} PM`;
+}
+
+function formatHour12Compact(h: number): string {
+  const normalized = ((h % 24) + 24) % 24;
+  if (normalized === 0) return "12a";
+  if (normalized < 12) return `${normalized}a`;
+  if (normalized === 12) return "12p";
+  return `${normalized - 12}p`;
+}
+
 function computePeakWindowLabel(hourly: number[]): { windowLabel: string; shareSub: string } {
   const total = hourly.reduce((acc, v) => acc + v, 0);
   if (total === 0) {
@@ -711,9 +727,9 @@ export default function App() {
           {data.summary.hourly_distribution.map((count, hr) => {
             const heightPct = Math.round((count / maxHourCount) * 100);
             return (
-              <div key={hr} className="hour-col" title={`${hr}:00 — ${count} prompts`}>
+              <div key={hr} className="hour-col" title={`${formatHour12(hr)} — ${count} prompts`}>
                 <div className="hour-bar" style={{ height: `${Math.max(heightPct, 4)}%` }} />
-                <span className="hour-label">{hr}h</span>
+                <span className="hour-label">{formatHour12Compact(hr)}</span>
               </div>
             );
           })}
