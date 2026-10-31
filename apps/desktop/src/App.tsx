@@ -45,6 +45,7 @@ import {
   addJournalEntry,
   backupLocalVault,
   checkForAppUpdates,
+  launchUpdateInstaller,
   formatTierLabel,
   classifySkillTierClient,
   resolveEffectiveWritingLevel,
@@ -572,6 +573,19 @@ export default function App() {
       setUpdateCheckResult(result);
     } finally {
       setIsCheckingUpdates(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!updateCheckResult) return;
+    try {
+      const msg = await launchUpdateInstaller(
+        updateCheckResult.latest_version,
+        updateCheckResult.download_url
+      );
+      setBackupNotice(msg);
+    } catch (err) {
+      setBackupNotice(`Update installer error: ${String(err)}`);
     }
   };
 
@@ -1937,12 +1951,24 @@ export default function App() {
                 data-testid="update-status-banner"
               >
                 {updateCheckResult.update_available ? (
-                  <>
-                    <strong style={{ color: "var(--accent-sage)" }}>
-                      Update v{updateCheckResult.latest_version} available!
-                    </strong>{" "}
-                    Your local SQLite vault will be automatically backed up before upgrading.
-                  </>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div>
+                      <strong style={{ color: "var(--accent-sage)" }}>
+                        Update v{updateCheckResult.latest_version} available! (Schema v
+                        {updateCheckResult.schema_version})
+                      </strong>{" "}
+                      Your local SQLite vault will be automatically backed up before upgrading.
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ width: "100%", justifyContent: "center", fontSize: 11, padding: "5px 8px" }}
+                      onClick={handleInstallUpdate}
+                      data-testid="btn-install-update"
+                    >
+                      <span>Install v{updateCheckResult.latest_version} Update</span>
+                    </button>
+                  </div>
                 ) : (
                   <>
                     <strong style={{ color: "var(--accent-sage)" }}>
@@ -2871,6 +2897,25 @@ export default function App() {
                         data-testid="vault-backup-notice"
                       >
                         {backupNotice}
+                      </div>
+                    )}
+                    {updateCheckResult && (
+                      <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 6 }} data-testid="vault-update-status">
+                        {updateCheckResult.update_available ? (
+                          <span>
+                            <strong style={{ color: "var(--accent-sage)" }}>
+                              Update v{updateCheckResult.latest_version} available
+                            </strong>{" "}
+                            (Schema v{updateCheckResult.schema_version}) —{" "}
+                            <button type="button" className="btn-primary" style={{ padding: "3px 8px", fontSize: 11.5 }} onClick={handleInstallUpdate}>
+                              Install v{updateCheckResult.latest_version} Update
+                            </button>
+                          </span>
+                        ) : (
+                          <span>
+                            <strong style={{ color: "var(--accent-sage)" }}>Up to date (v{updateCheckResult.installed_version})</strong> • Checked {updateCheckResult.checked_at}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>

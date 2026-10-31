@@ -3208,46 +3208,89 @@ export async function backupLocalVault(): Promise<AppUpdateStatus> {
   return loadBrowserUpdateStatus();
 }
 
+const REMOTE_RELEASE_MANIFEST_URLS = [
+  "https://raw.githubusercontent.com/cgdops/project-clearspace/master/apps/desktop/public/latest.json",
+  "https://raw.githubusercontent.com/cgdops/project-clearspace/master/apps/web/public/downloads/latest.json",
+  "/latest.json",
+];
+
+interface RawReleaseManifest {
+  version?: string;
+  schemaVersion?: number;
+  notes?: string;
+  pub_date?: string;
+  platforms?: { "windows-x86_64"?: { url?: string; sha256?: string } };
+}
+
+async function fetchManifestWithTimeout(url: string, timeoutMs = 4000): Promise<RawReleaseManifest | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+    if (res.ok) {
+      const m = (await res.json()) as RawReleaseManifest;
+      if (m && typeof m.version === "string") return m;
+    }
+  } catch {
+    // Offline or unreachable endpoint
+  } finally {
+    clearTimeout(timer);
+  }
+  return null;
+}
+
 export async function checkForAppUpdates(
   installedVersion = "0.3.0",
   schemaVersion = 3
 ): Promise<UpdateCheckResult> {
   const nowIso = new Date().toISOString().slice(0, 16).replace("T", " ");
-  try {
-    const res = await fetch("/latest.json", { cache: "no-store" });
-    if (res.ok) {
-      const manifest = await res.json();
-      const latestVersion: string = manifest.version ?? installedVersion;
-      const winPlatform = manifest.platforms?.["windows-x86_64"] ?? null;
-      return {
-        installed_version: installedVersion,
-        latest_version: latestVersion,
-        schema_version: manifest.schemaVersion ?? schemaVersion,
-        update_available: compareSemver(latestVersion, installedVersion) > 0,
-        release_notes:
-          manifest.notes ??
-          "Zero-Knowledge local SQLite vault with v2 schema migration guard and pre-upgrade DB backup.",
-        pub_date: (manifest.pub_date ?? "2026-10-30").slice(0, 10),
-        download_url: winPlatform?.url ?? "/downloads/Clearspace_0.3.0_x64-setup.exe",
-        sha256: winPlatform?.sha256 ?? null,
-        checked_at: nowIso,
-      };
+  const candidateManifests: RawReleaseManifest[] = [];
+
+  if (isTauriRuntime()) {
+    try {
+      const local = await invoke<RawReleaseManifest | null>("check_local_release_manifest");
+      if (local && typeof local.version === "string") candidateManifests.push(local);
+    } catch {
+      // Ignore if command unavailable
     }
-  } catch {
-    // Offline or non-HTTP environment fallback
   }
+
+  const settled = await Promise.allSettled(REMOTE_RELEASE_MANIFEST_URLS.map((u) => fetchManifestWithTimeout(u)));
+  for (const r of settled) {
+    if (r.status === "fulfilled" && r.value) candidateManifests.push(r.value);
+  }
+
+  candidateManifests.sort((a, b) => compareSemver(b.version ?? installedVersion, a.version ?? installedVersion));
+  const best = candidateManifests[0];
+  const latestVersion = best?.version ?? installedVersion;
+  const winPlatform = best?.platforms?.["windows-x86_64"] ?? null;
 
   return {
     installed_version: installedVersion,
-    latest_version: installedVersion,
-    schema_version: schemaVersion,
-    update_available: false,
+    latest_version: latestVersion,
+    schema_version: best?.schemaVersion ?? schemaVersion,
+    update_available: compareSemver(latestVersion, installedVersion) > 0,
     release_notes:
-      "Zero-Knowledge local SQLite vault with v2 schema migration guard and automatic pre-upgrade DB backup.",
-    pub_date: "2026-10-30",
-    download_url: "/downloads/Clearspace_0.3.0_x64-setup.exe",
-    sha256: null,
+      best?.notes ??
+      "Zero-Knowledge local SQLite vault with v3 schema migration guard and automatic pre-upgrade DB backup.",
+    pub_date: (best?.pub_date ?? "2026-10-30").slice(0, 10),
+    download_url: winPlatform?.url ?? "/downloads/Clearspace_0.3.0_x64-setup.exe",
+    sha256: winPlatform?.sha256 ?? null,
     checked_at: nowIso,
   };
+}
+
+export async function launchUpdateInstaller(version: string, downloadUrl?: string | null): Promise<string> {
+  if (isTauriRuntime()) {
+    return invoke<string>("launch_update_installer", { version, downloadUrl: downloadUrl ?? null });
+  }
+  await backupLocalVault();
+  const allowedPrefix = "https://github.com/cgdops/project-clearspace/";
+  const targetUrl =
+    downloadUrl && downloadUrl.startsWith(allowedPrefix)
+      ? downloadUrl
+      : "https://github.com/cgdops/project-clearspace/releases/latest";
+  if (typeof window !== "undefined") window.open(targetUrl, "_blank", "noopener,noreferrer");
+  return `Opened update download: ${targetUrl}`;
 }
 
