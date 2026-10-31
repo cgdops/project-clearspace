@@ -1326,3 +1326,7 @@ label:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+.growth-graph-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.growth-period-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.growth-svg-wrap { margin-top: 12px; padding: 10px 12px 4px; background: var(--bg-warm); border: 1px solid var(--border-warm); border-radius: 12px; }
