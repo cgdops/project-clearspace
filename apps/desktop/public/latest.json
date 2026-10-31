@@ -1,7 +1,7 @@
 {
   "version": "0.2.0",
-  "schemaVersion": 2,
-  "notes": "Zero-Knowledge local SQLite vault with v2 schema migration guard, pre-upgrade DB backup, and O*NET seniority calibration.",
+  "schemaVersion": 3,
+  "notes": "Zero-Knowledge local SQLite vault with v3 schema migration guard, adaptive writing levels, and personalized growth plan.",
   "pub_date": "2026-10-30T00:00:00Z",
   "platforms": {
     "windows-x86_64": {

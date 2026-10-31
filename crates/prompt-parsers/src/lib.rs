@@ -63,6 +63,89 @@ pub enum SkillTier {
     Advanced,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum WritingLevel {
+    #[default]
+    Everyday,
+    Professional,
+    Technical,
+}
+
+impl WritingLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WritingLevel::Everyday => "everyday",
+            WritingLevel::Professional => "professional",
+            WritingLevel::Technical => "technical",
+        }
+    }
+
+    pub fn display_label(&self) -> &'static str {
+        match self {
+            WritingLevel::Everyday => "Everyday / Plain English",
+            WritingLevel::Professional => "Professional / Clear",
+            WritingLevel::Technical => "Technical / Deep",
+        }
+    }
+
+    pub fn short_label(&self) -> &'static str {
+        match self {
+            WritingLevel::Everyday => "Everyday",
+            WritingLevel::Professional => "Professional",
+            WritingLevel::Technical => "Technical",
+        }
+    }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            WritingLevel::Everyday => {
+                "Conversational, warm, and direct—insights and next steps are written in plain everyday English without industry buzzwords."
+            }
+            WritingLevel::Professional => {
+                "Clear workplace English—insights and career steps use direct, practical project language without dense academic or venture jargon."
+            }
+            WritingLevel::Technical => {
+                "Deep systems & architectural language—insights and recommendations use full engineering and strategic terminology."
+            }
+        }
+    }
+
+    pub fn resolve(mode: &str, measured: WritingLevel) -> Self {
+        match mode.trim().to_lowercase().as_str() {
+            "everyday" => WritingLevel::Everyday,
+            "professional" => WritingLevel::Professional,
+            "technical" => WritingLevel::Technical,
+            _ => measured,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WritingLevelMetrics {
+    pub avg_words_per_sentence: f32,
+    pub avg_syllables_per_word: f32,
+    pub flesch_kincaid_grade: f32,
+    pub jargon_density_pct: f32,
+    pub measured_level: WritingLevel,
+    pub level_label: String,
+    pub level_description: String,
+}
+
+impl Default for WritingLevelMetrics {
+    fn default() -> Self {
+        Self {
+            avg_words_per_sentence: 0.0,
+            avg_syllables_per_word: 0.0,
+            flesch_kincaid_grade: 8.0,
+            jargon_density_pct: 0.0,
+            measured_level: WritingLevel::Everyday,
+            level_label: WritingLevel::Everyday.display_label().to_string(),
+            level_description: WritingLevel::Everyday.description().to_string(),
+        }
+    }
+}
+
 impl SkillTier {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -139,6 +222,8 @@ pub struct IngestionSummary {
     pub manifest_links: Vec<ManifestFileLink>,
     #[serde(default)]
     pub daily_counts: Vec<(String, usize)>,
+    #[serde(default)]
+    pub writing_level: WritingLevelMetrics,
 }
 
 struct SignalPatterns {
@@ -326,6 +411,264 @@ pub fn classify_skill_tier(
     SkillTier::Beginner
 }
 
+const TECHNICAL_ACRONYMS: &[&str] = &[
+    "mcp", "sdk", "api", "apis", "icp", "seo", "pseo", "crm", "gtm", "arr", "llm", "llms", "n8n",
+    "sqlite", "graphql", "oauth", "jwt", "rbac", "cidr", "grpc",
+];
+
+const TECHNICAL_JARGON_TERMS: &[&str] = &[
+    "architect",
+    "architecture",
+    "architectural",
+    "pipeline",
+    "pipelines",
+    "telemetry",
+    "idempotent",
+    "idempotency",
+    "concurrency",
+    "distributed",
+    "schema",
+    "schemas",
+    "compiler",
+    "compilers",
+    "deterministic",
+    "deterministically",
+    "economics",
+    "throughput",
+    "latency",
+    "scalability",
+    "programmatic",
+    "programmatically",
+    "dialectical",
+    "adversarial",
+    "orchestration",
+    "asynchronous",
+    "microservices",
+    "vector",
+    "rust",
+    "typescript",
+    "agentic",
+    "autonomy",
+    "heuristics",
+    "regression",
+    "benchmarks",
+    "benchmark",
+    "tradeoff",
+    "tradeoffs",
+    "bottleneck",
+    "bottlenecks",
+    "homeostatic",
+    "cybernetic",
+    "topology",
+    "ingestion",
+    "deduplication",
+    "redaction",
+    "scrubber",
+];
+
+const EVERYDAY_POLYSYLLABIC_ALLOWLIST: &[&str] = &[
+    "everything",
+    "something",
+    "anything",
+    "everyone",
+    "someone",
+    "anyone",
+    "another",
+    "together",
+    "family",
+    "families",
+    "different",
+    "important",
+    "understand",
+    "interesting",
+    "afternoon",
+    "yesterday",
+    "tomorrow",
+    "remember",
+    "usually",
+    "actually",
+    "probably",
+    "already",
+    "beautiful",
+    "favorite",
+    "holiday",
+    "saturday",
+    "wednesday",
+    "january",
+    "february",
+    "september",
+    "october",
+    "november",
+    "december",
+    "bakery",
+    "confused",
+    "customer",
+    "customers",
+    "company",
+    "companies",
+    "business",
+    "businesses",
+    "however",
+    "whenever",
+    "wherever",
+    "whatever",
+    "continue",
+    "continued",
+    "possible",
+    "possibly",
+    "personal",
+    "personally",
+    "general",
+    "generally",
+    "natural",
+    "naturally",
+    "simple",
+    "simply",
+    "example",
+    "examples",
+    "question",
+    "questions",
+    "idea",
+    "ideas",
+    "area",
+    "areas",
+    "video",
+    "videos",
+    "computer",
+    "computers",
+    "internet",
+    "website",
+    "websites",
+    "morning",
+    "evening",
+];
+
+fn count_word_syllables_and_jargon(raw_token: &str) -> (usize, bool) {
+    // Ignore bracketed redaction tokens like [REDACTED_EMAIL] or [CODE_BLOCK_OMITTED]
+    if raw_token.starts_with('[') && raw_token.ends_with(']') {
+        return (0, false);
+    }
+
+    let alnum: String = raw_token
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    if alnum.is_empty() {
+        return (0, false);
+    }
+
+    if TECHNICAL_ACRONYMS.contains(&alnum.as_str()) {
+        return (3, true);
+    }
+
+    let alpha: String = alnum.chars().filter(|c| c.is_ascii_alphabetic()).collect();
+    if alpha.is_empty() {
+        return (0, false);
+    }
+
+    let syllables = if alpha.len() <= 3 {
+        1
+    } else {
+        let mut working = alpha.as_str();
+        let strip_two_char_suffix = working.len() > 4
+            && ((working.ends_with("es")
+                && !working.ends_with("aes")
+                && !working.ends_with("ees")
+                && !working.ends_with("oes"))
+                || (working.ends_with("ed")
+                    && !working.ends_with("ted")
+                    && !working.ends_with("ded")));
+        if strip_two_char_suffix {
+            working = &working[..working.len() - 2];
+        } else if working.len() > 3 && working.ends_with('e') && !working.ends_with("le") {
+            working = &working[..working.len() - 1];
+        }
+
+        let mut vowel_runs = 0usize;
+        let mut prev_vowel = false;
+        for ch in working.chars() {
+            let is_vowel = matches!(ch, 'a' | 'e' | 'i' | 'o' | 'u' | 'y');
+            if is_vowel && !prev_vowel {
+                vowel_runs += 1;
+            }
+            prev_vowel = is_vowel;
+        }
+        vowel_runs.max(1)
+    };
+
+    let is_jargon = TECHNICAL_JARGON_TERMS.contains(&alpha.as_str())
+        || (syllables >= 3 && !EVERYDAY_POLYSYLLABIC_ALLOWLIST.contains(&alpha.as_str()));
+
+    (syllables, is_jargon)
+}
+
+/// Computes deterministic Flesch-Kincaid Grade Level (`clamp(0.39 * ASL + 11.8 * ASW - 15.59, 4.0, 16.0)`)
+/// and complex/jargon word density across ingested user prompts, classifying into `Everyday`, `Professional`, or `Technical`.
+pub fn compute_writing_level(prompts: &[NormalizedPrompt]) -> WritingLevelMetrics {
+    if prompts.is_empty() {
+        return WritingLevelMetrics::default();
+    }
+
+    let mut total_sentences = 0usize;
+    let mut total_words = 0usize;
+    let mut total_syllables = 0usize;
+    let mut jargon_words = 0usize;
+
+    for p in prompts {
+        let sent_count = p
+            .cleaned_text
+            .split(['.', '!', '?', ';', '\n'])
+            .filter(|s| s.chars().any(|ch| ch.is_ascii_alphabetic()))
+            .count()
+            .max(1);
+        total_sentences += sent_count;
+
+        for token in p.cleaned_text.split(|c: char| c.is_whitespace() || c == '—' || c == '-') {
+            let (syl, is_jargon) = count_word_syllables_and_jargon(token);
+            if syl > 0 {
+                total_words += 1;
+                total_syllables += syl;
+                if is_jargon {
+                    jargon_words += 1;
+                }
+            }
+        }
+    }
+
+    if total_words == 0 {
+        return WritingLevelMetrics::default();
+    }
+
+    let asl = (total_words as f32) / (total_sentences.max(1) as f32);
+    let asw = (total_syllables as f32) / (total_words as f32);
+    let raw_fkgl = (0.39 * asl + 11.8 * asw - 15.59).clamp(4.0, 16.0);
+    let raw_jargon_pct = ((jargon_words as f32) / (total_words as f32)) * 100.0;
+
+    let avg_words_per_sentence = (asl * 10.0).round() / 10.0;
+    let avg_syllables_per_word = (asw * 100.0).round() / 100.0;
+    let flesch_kincaid_grade = (raw_fkgl * 10.0).round() / 10.0;
+    let jargon_density_pct = (raw_jargon_pct * 10.0).round() / 10.0;
+
+    let measured_level = if flesch_kincaid_grade >= 12.5 && jargon_density_pct >= 20.0 {
+        WritingLevel::Technical
+    } else if flesch_kincaid_grade < 9.5 && jargon_density_pct < 12.0 {
+        WritingLevel::Everyday
+    } else {
+        WritingLevel::Professional
+    };
+
+    WritingLevelMetrics {
+        avg_words_per_sentence,
+        avg_syllables_per_word,
+        flesch_kincaid_grade,
+        jargon_density_pct,
+        measured_level,
+        level_label: measured_level.display_label().to_string(),
+        level_description: measured_level.description().to_string(),
+    }
+}
+
 fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSummary) {
     results.sort_by(|a, b| a.created_at.cmp(&b.created_at));
     summary.earliest_date = results
@@ -405,6 +748,7 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
             SkillTier::Advanced.positioning_label().to_string()
         }
     };
+    summary.writing_level = compute_writing_level(results);
 }
 
 /// Rebuilds an `IngestionSummary` from a slice of persisted `NormalizedPrompt` items.
@@ -1827,5 +2171,41 @@ mod tests {
         assert!(empty_p.is_empty());
         assert_eq!(empty_s.detected_format, "Empty HTML Export");
         assert!(!empty_s.warnings.is_empty());
+    }
+
+    #[test]
+    fn computes_everyday_professional_and_technical_writing_levels_from_prompt_complexity() {
+        let empty_metrics = compute_writing_level(&[]);
+        assert_eq!(empty_metrics.measured_level, WritingLevel::Everyday);
+        assert_eq!(empty_metrics.level_label, "Everyday / Plain English");
+
+        let everyday_md = "# 2026-03-01 10:00\nHow do I make a simple website for my small bakery shop? I want people to see our menu and order bread online without getting confused.";
+        let (ev_prompts, ev_sum) =
+            parse_exported_conversations_json(everyday_md).expect("valid everyday md");
+        assert_eq!(ev_prompts.len(), 1);
+        assert_eq!(ev_sum.writing_level.measured_level, WritingLevel::Everyday);
+        assert!(ev_sum.writing_level.flesch_kincaid_grade < 9.5);
+        assert!(ev_sum.writing_level.jargon_density_pct < 12.0);
+
+        let prof_md = "# 2026-03-02 11:00\nCan you help me organize our quarterly project roadmap and prepare a clear status update for our client stakeholders? We need to review delivery milestones and resource allocation.";
+        let (prof_prompts, prof_sum) =
+            parse_exported_conversations_json(prof_md).expect("valid prof md");
+        assert_eq!(prof_prompts.len(), 1);
+        assert_eq!(
+            prof_sum.writing_level.measured_level,
+            WritingLevel::Professional
+        );
+        assert!(
+            prof_sum.writing_level.flesch_kincaid_grade >= 9.5
+                || prof_sum.writing_level.jargon_density_pct >= 12.0
+        );
+
+        let tech_md = "# 2026-03-03 21:00\nI want to architect an automated pipeline and MCP agent workflow using Rust and SQLite so our team can eliminate manual maintenance and scale system throughput with clear unit economics.";
+        let (tech_prompts, tech_sum) =
+            parse_exported_conversations_json(tech_md).expect("valid tech md");
+        assert_eq!(tech_prompts.len(), 1);
+        assert_eq!(tech_sum.writing_level.measured_level, WritingLevel::Technical);
+        assert!(tech_sum.writing_level.flesch_kincaid_grade >= 12.5);
+        assert!(tech_sum.writing_level.jargon_density_pct >= 20.0);
     }
 }

@@ -1,4 +1,6 @@
-use clearspace_prompt_parsers::{ classify_skill_tier, NormalizedPrompt, SkillTier };
+use clearspace_prompt_parsers::{
+    classify_skill_tier, compute_writing_level, NormalizedPrompt, SkillTier, WritingLevel,
+};
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 
@@ -6,6 +8,7 @@ use std::cmp::Reverse;
 pub struct OnetRoleArchetype {
     pub onet_code: String,
     pub title: String,
+    pub plain_english_description: String,
     pub modern_titles: Vec<String>,
     pub junior_title: String,
     pub junior_salary_usd: String,
@@ -15,19 +18,25 @@ pub struct OnetRoleArchetype {
     pub senior_salary_usd: String,
     pub bucket: String, // "Immediate High-Leverage Upgrade", "Hidden Natural Fit", "5-Year North Star"
     pub salary_range_usd: String,
+    pub why_it_fits_everyday: String,
+    pub why_it_fits_professional: String,
     pub why_it_fits_template: String,
+    pub burnout_guardrail_everyday: String,
+    pub burnout_guardrail_professional: String,
     pub burnout_guardrail: String,
     pub skill_keywords: Vec<&'static str>,
     pub energy_keywords: Vec<&'static str>,
     pub value_keywords: Vec<&'static str>,
     pub burnout_conflict_keywords: Vec<&'static str>,
-    pub competency_pillars: Vec<(&'static str, &'static [&'static str])>,
+    pub competency_pillars: Vec<(&'static str, &'static str, &'static [&'static str])>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoleMatchResult {
     pub onet_code: String,
     pub title: String,
+    #[serde(default)]
+    pub plain_english_description: String,
     pub modern_titles: Vec<String>,
     pub bucket: String,
     pub salary_range_usd: String,
@@ -59,6 +68,7 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
         OnetRoleArchetype {
             onet_code: "15-1299.08".to_string(),
             title: "Computer Systems Engineers / Architects".to_string(),
+            plain_english_description: "Designing and connecting software tools and automations so teams can get work done faster with less repetitive manual effort.".to_string(),
             modern_titles: vec![
                 "Staff Growth Systems Architect".to_string(),
                 "AI Automation & Revenue Architect".to_string(),
@@ -72,7 +82,11 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             senior_salary_usd: "$145,000 – $185,000".to_string(),
             bucket: "Immediate High-Leverage Upgrade".to_string(),
             salary_range_usd: "$145,000 – $185,000".to_string(),
+            why_it_fits_everyday: "Your questions show that you love finding ways to save time, organize workflows, and set up tools so work happens automatically instead of by hand.".to_string(),
+            why_it_fits_professional: "Your prompt history shows a strong focus on streamlining operations, connecting software tools, and automating repetitive workflows to save time and budget.".to_string(),
             why_it_fits_template: "Your prompt history shows a focus on replacing manual operational bottlenecks with programmatic 1-to-Many pipelines, automated data workflows, and measurable unit economics.".to_string(),
+            burnout_guardrail_everyday: "Look for roles where you are trusted to improve how the work gets done, rather than just copying and pasting tasks from a checklist all day.".to_string(),
+            burnout_guardrail_professional: "Avoid roles where you are limited to manual task coordination; look for teams that give you ownership to improve and automate workflows.".to_string(),
             burnout_guardrail: "Avoid roles where you are treated as a ticket-taking execution coordinator; require architectural ownership over the automation stack.".to_string(),
             skill_keywords: vec![
                 "seo", "pseo", "n8n", "automation", "cloudflare", "astro", "api", "scraper", "crm",
@@ -87,15 +101,16 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             ],
             burnout_conflict_keywords: vec!["manual maintenance", "repetitive", "hand-editing", "tedious"],
             competency_pillars: vec![
-                ("Programmatic Pipeline & Workflow Automation", &["pipeline", "automation", "n8n", "workflow"]),
-                ("Cloud & Edge Systems Architecture", &["cloudflare", "astro", "architecture", "system", "scale"]),
-                ("Search, Telemetry & Ranking Analytics", &["seo", "pseo", "ranking", "search console", "telemetry"]),
-                ("API Integration & Unit-Economics Modeling", &["api", "crm", "scraper", "costs", "efficiency"]),
+                ("Workflow & Process Automation", "Programmatic Pipeline & Workflow Automation", &["pipeline", "automation", "n8n", "workflow"]),
+                ("Cloud & Web Systems Setup", "Cloud & Edge Systems Architecture", &["cloudflare", "astro", "architecture", "system", "scale"]),
+                ("Search & Performance Analytics", "Search, Telemetry & Ranking Analytics", &["seo", "pseo", "ranking", "search console", "telemetry"]),
+                ("Connected Tools & Cost Efficiency", "API Integration & Unit-Economics Modeling", &["api", "crm", "scraper", "costs", "efficiency"]),
             ],
         },
         OnetRoleArchetype {
             onet_code: "15-1252.00".to_string(),
             title: "Software Developers, Tools & Platforms".to_string(),
+            plain_english_description: "Building helpful software, internal tools, and AI assistants that make everyday work easier and clearer for other people.".to_string(),
             modern_titles: vec![
                 "Developer Experience (DX) & AI Tooling Engineer".to_string(),
                 "Forward-Deployed AI Solutions Engineer".to_string(),
@@ -109,7 +124,11 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             senior_salary_usd: "$150,000 – $195,000".to_string(),
             bucket: "Immediate High-Leverage Upgrade".to_string(),
             salary_range_usd: "$150,000 – $195,000".to_string(),
+            why_it_fits_everyday: "Whenever you run into a frustrating or slow step, your natural instinct is to build a helpful tool or checklist that makes the job easier for everyone.".to_string(),
+            why_it_fits_professional: "Whenever you hit a workflow bottleneck, your instinct is to design a reusable tool or AI workflow while keeping the experience clear and practical for users.".to_string(),
             why_it_fits_template: "Whenever you encounter a workflow bottleneck, your reflex is to design a custom developer tool, schema, or agentic workflow while translating complex architecture into clear human value.".to_string(),
+            burnout_guardrail_everyday: "Focus on roles where you get to build reusable helpers and tools, rather than doing the same manual fixes over and over.".to_string(),
+            burnout_guardrail_professional: "Stay focused on building reusable tools and shared platforms rather than repetitive ticket-by-ticket manual production.".to_string(),
             burnout_guardrail: "Stay focused on the reusable tooling and platform layer rather than repetitive manual asset or ticket production.".to_string(),
             skill_keywords: vec![
                 "agent", "mcp", "editor", "tool", "token", "model", "database", "sqlite", "graph",
@@ -123,15 +142,16 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             ],
             burnout_conflict_keywords: vec!["burnout", "so much work", "boilerplate", "manual"],
             competency_pillars: vec![
-                ("Agentic & MCP Workflow Orchestration", &["agent", "mcp", "workflow", "token", "model", "skill"]),
-                ("Systems Languages & SDK Compilation", &["rust", "typescript", "compiler", "sdk", "editor", "tool"]),
-                ("Local-First Storage & Graph/Vector Schemas", &["database", "sqlite", "graph", "vector"]),
-                ("First-Principles Verification & Stress-Testing", &["skeptic", "worth solving", "first principles", "clarity"]),
+                ("AI Assistants & Workflow Tools", "Agentic & MCP Workflow Orchestration", &["agent", "mcp", "workflow", "token", "model", "skill"]),
+                ("Software & Tool Development", "Systems Languages & SDK Compilation", &["rust", "typescript", "compiler", "sdk", "editor", "tool"]),
+                ("Local Data & Organized Storage", "Local-First Storage & Graph/Vector Schemas", &["database", "sqlite", "graph", "vector"]),
+                ("Clear Problem-Solving & Quality Checks", "First-Principles Verification & Stress-Testing", &["skeptic", "worth solving", "first principles", "clarity"]),
             ],
         },
         OnetRoleArchetype {
             onet_code: "15-1255.01".to_string(),
             title: "Interactive Systems & Companion Platform Architects".to_string(),
+            plain_english_description: "Creating interactive apps, game systems, or companion guides that help communities learn, plan, and enjoy complex experiences.".to_string(),
             modern_titles: vec![
                 "Interactive Ecosystem & Companion Platform Lead".to_string(),
                 "Technical Growth PM — Interactive Media & Simulation".to_string(),
@@ -145,7 +165,11 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             senior_salary_usd: "$135,000 – $175,000".to_string(),
             bucket: "Hidden Natural Fit (Unexplored Path)".to_string(),
             salary_range_usd: "$135,000 – $175,000".to_string(),
+            why_it_fits_everyday: "Your prompts show how much energy you get from games, interactive worlds, and building helpful guides or tools that make complex rules fun and easy to follow.".to_string(),
+            why_it_fits_professional: "Your prompts explore interactive systems, game balance, and companion tools—combining structured problem-solving with engaging user experiences.".to_string(),
             why_it_fits_template: "Your deep-flow prompts explore interactive state machines, simulation economies, routing algorithms, and telemetry-driven companion tools—blending systems engineering with user engagement.".to_string(),
+            burnout_guardrail_everyday: "Avoid roles that ask you to do endless repetitive content updates by hand; aim for roles where you design the systems, guides, or companion tools.".to_string(),
+            burnout_guardrail_professional: "Avoid roles focused on manual content grinding; lead through companion apps, player data insights, or interactive systems design.".to_string(),
             burnout_guardrail: "Do not enter through manual content or asset grinding; lead through Companion Platforms, Data Telemetry, or Systems Design.".to_string(),
             skill_keywords: vec![
                 "game", "godot", "addon", "quest", "route", "hero", "character", "rpg",
@@ -157,15 +181,16 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             value_keywords: vec!["fun", "immersive", "player", "community", "guide", "craft", "creative"],
             burnout_conflict_keywords: vec!["manual maintenance", "asset grind", "repetitive"],
             competency_pillars: vec![
-                ("Simulation Economy & Balance Modeling", &["economy", "balance", "simulation", "telemetry"]),
-                ("Interactive State Machines & Routing", &["quest", "route", "state", "interactive", "rpg"]),
-                ("Engine & Addon Tooling (Godot / Lua)", &["game", "godot", "addon", "lua", "hero", "character"]),
-                ("Player Community & Companion Craft", &["player", "community", "guide", "craft", "immersive"]),
+                ("Game Balance & Interactive Rules", "Simulation Economy & Balance Modeling", &["economy", "balance", "simulation", "telemetry"]),
+                ("Interactive Progress & Routing", "Interactive State Machines & Routing", &["quest", "route", "state", "interactive", "rpg"]),
+                ("Game Engine & Addon Scripting", "Engine & Addon Tooling (Godot / Lua)", &["game", "godot", "addon", "lua", "hero", "character"]),
+                ("Player Community & Helpful Guides", "Player Community & Companion Craft", &["player", "community", "guide", "craft", "immersive"]),
             ],
         },
         OnetRoleArchetype {
             onet_code: "11-2021.00".to_string(),
             title: "Technical Product & Growth Strategy Directors".to_string(),
+            plain_english_description: "Planning what products to build, how to price them fairly, and how to help the right customers discover and love them.".to_string(),
             modern_titles: vec![
                 "Head of AI Growth & Product-Led Acquisition".to_string(),
                 "VP / Director of Technical Growth & GTM Engineering".to_string(),
@@ -179,7 +204,11 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             senior_salary_usd: "$180,000 – $250,000+ (or Equity / ARR)".to_string(),
             bucket: "5-Year North Star Track".to_string(),
             salary_range_usd: "$180,000 – $250,000+ (or Equity / ARR)".to_string(),
+            why_it_fits_everyday: "You care about the big picture: making sure what you build actually helps real people, makes financial sense, and supports a stable, independent life.".to_string(),
+            why_it_fits_professional: "You combine product planning, customer psychology, and practical business strategy so that what you build grows steadily and sustainably.".to_string(),
             why_it_fits_template: "You synthesize systems engineering, unit economics, buyer psychology, and adversarial truth-seeking. Over a 5-year horizon, owning both product architecture and organic distribution compounds your personal equity fastest.".to_string(),
+            burnout_guardrail_everyday: "Protect your focus by working on one main project and one clear way to reach customers at a time, instead of juggling too many scattered tasks.".to_string(),
+            burnout_guardrail_professional: "Protect your focus by prioritizing one core product and one repeatable growth channel at a time, avoiding fragmented ad-hoc client requests.".to_string(),
             burnout_guardrail: "Protect your cognitive bandwidth by focusing on 1 flagship product and 1 automated distribution engine at a time, eliminating fragmented ad-hoc client work.".to_string(),
             skill_keywords: vec![
                 "product", "pricing", "icp", "competitor", "value prop", "market", "business",
@@ -193,49 +222,78 @@ pub fn get_curated_onet_catalog() -> Vec<OnetRoleArchetype> {
             ],
             burnout_conflict_keywords: vec!["adhoc", "fragmented", "conflicting", "context switching"],
             competency_pillars: vec![
-                ("ICP Positioning & Competitive Differentiation", &["icp", "positioning", "competitor", "value prop", "market"]),
-                ("Pricing Architecture & Revenue Unit Economics", &["pricing", "revenue", "retainer", "business", "equity"]),
-                ("Product-Led Growth & Acquisition Strategy", &["product", "growth", "strategy", "outreach", "client"]),
-                ("Long-Term Portfolio & Autonomy Governance", &["autonomy", "stability", "compound", "unfair advantage"]),
+                ("Customer Fit & Clear Messaging", "ICP Positioning & Competitive Differentiation", &["icp", "positioning", "competitor", "value prop", "market"]),
+                ("Pricing & Business Sustainability", "Pricing Architecture & Revenue Unit Economics", &["pricing", "revenue", "retainer", "business", "equity"]),
+                ("Product Growth & Customer Outreach", "Product-Led Growth & Acquisition Strategy", &["product", "growth", "strategy", "outreach", "client"]),
+                ("Long-Term Career & Work-Life Balance", "Long-Term Portfolio & Autonomy Governance", &["autonomy", "stability", "compound", "unfair advantage"]),
             ],
         },
     ]
 }
 
 /// Evaluates a user's normalized local prompts against the O*NET + Modern Role Catalog
-/// using depth-weighted scoring (Beginner -> Junior, Intermediate -> Mid-Level, Advanced -> Senior/Staff)
-/// without artificial ego-inflation floors, plus explicit gap identification and assumption checks.
+/// using their measured writing level.
 pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
+    let level = compute_writing_level(prompts).measured_level;
+    match_onet_paths_for_level(prompts, level)
+}
+
+/// Evaluates a user's normalized local prompts against the O*NET + Modern Role Catalog
+/// using depth-weighted scoring (Beginner -> Junior, Intermediate -> Mid-Level, Advanced -> Senior/Staff)
+/// and adapts all explanations, gaps, and guardrails to the active `WritingLevel`.
+pub fn match_onet_paths_for_level(
+    prompts: &[NormalizedPrompt],
+    level: WritingLevel,
+) -> Vec<RoleMatchResult> {
     let catalog = get_curated_onet_catalog();
     if prompts.is_empty() {
         return catalog
             .into_iter()
-            .map(|role| RoleMatchResult {
-                onet_code: role.onet_code,
-                title: role.title,
-                modern_titles: role.modern_titles,
-                bucket: role.bucket,
-                salary_range_usd: role.salary_range_usd,
-                assessed_tier: "Awaiting Evidence".to_string(),
-                positioned_title: role.junior_title,
-                positioned_salary_usd: "Import vault to calibrate".to_string(),
-                honest_positioning_rationale: "No prompts analyzed yet. Clearspace never guesses or inflates seniority without behavioral evidence.".to_string(),
-                identified_gaps: role
-                    .competency_pillars
-                    .iter()
-                    .map(|(name, _)| format!("Unverified competency: {name}"))
-                    .collect(),
-                tested_assumptions: vec![
-                    "Upload your prompt history to test how your actual daily inquiries compare against your target career track.".to_string(),
-                ],
-                overall_fit_pct: 0,
-                skill_overlap_pct: 0,
-                energy_alignment_pct: 0,
-                values_match_pct: 0,
-                burnout_risk_pct: 0,
-                why_it_fits: "Import or scan your prompt history to compute personalized O*NET behavioral alignment and evidence citations.".to_string(),
-                burnout_guardrail: role.burnout_guardrail,
-                supporting_quotes: Vec::new(),
+            .map(|role| {
+                let guardrail = match level {
+                    WritingLevel::Everyday => role.burnout_guardrail_everyday.clone(),
+                    WritingLevel::Professional => role.burnout_guardrail_professional.clone(),
+                    WritingLevel::Technical => role.burnout_guardrail.clone(),
+                };
+                RoleMatchResult {
+                    onet_code: role.onet_code,
+                    title: role.title,
+                    plain_english_description: role.plain_english_description,
+                    modern_titles: role.modern_titles,
+                    bucket: role.bucket,
+                    salary_range_usd: role.salary_range_usd,
+                    assessed_tier: "Awaiting Evidence".to_string(),
+                    positioned_title: role.junior_title,
+                    positioned_salary_usd: "Import vault to calibrate".to_string(),
+                    honest_positioning_rationale: match level {
+                        WritingLevel::Everyday => "No prompts analyzed yet. Add your prompt history so we can match your experience level honestly.".to_string(),
+                        WritingLevel::Professional => "No prompts analyzed yet. Clearspace calibrates your role level from your actual project and workflow questions.".to_string(),
+                        WritingLevel::Technical => "No prompts analyzed yet. Clearspace never guesses or inflates seniority without behavioral evidence.".to_string(),
+                    },
+                    identified_gaps: role
+                        .competency_pillars
+                        .iter()
+                        .map(|(plain_name, tech_name, _)| {
+                            let label = if level == WritingLevel::Technical {
+                                tech_name
+                            } else {
+                                plain_name
+                            };
+                            format!("Unverified area: {label}")
+                        })
+                        .collect(),
+                    tested_assumptions: vec![
+                        "Upload your prompt history to see how your everyday questions compare against this career path.".to_string(),
+                    ],
+                    overall_fit_pct: 0,
+                    skill_overlap_pct: 0,
+                    energy_alignment_pct: 0,
+                    values_match_pct: 0,
+                    burnout_risk_pct: 0,
+                    why_it_fits: "Import or scan your prompt history to compute personalized career path matches and quote citations.".to_string(),
+                    burnout_guardrail: guardrail,
+                    supporting_quotes: Vec::new(),
+                }
             })
             .collect();
     }
@@ -301,7 +359,9 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
                 }
             }
 
-            for (idx, (_pillar_name, pillar_kws)) in role.competency_pillars.iter().enumerate() {
+            for (idx, (_plain_name, _tech_name, pillar_kws)) in
+                role.competency_pillars.iter().enumerate()
+            {
                 if pillar_kws.iter().any(|k| lower.contains(k)) {
                     pillar_hits[idx] += 1;
                 }
@@ -392,34 +452,68 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
                     "No Demonstrated Evidence".to_string(),
                     role.junior_title.clone(),
                     role.junior_salary_usd.clone(),
-                    "0 domain signals detected in your vault for this track. Positioned at baseline until concrete work samples are present.".to_string(),
+                    match level {
+                        WritingLevel::Everyday => "We haven't seen any prompts related to this career path yet, so we're starting at the entry level until you add more examples.".to_string(),
+                        WritingLevel::Professional => "0 domain signals detected in your vault for this track. Positioned at baseline until concrete project samples are present.".to_string(),
+                        WritingLevel::Technical => "0 domain signals detected in your vault for this track. Positioned at baseline until concrete work samples are present.".to_string(),
+                    },
                 ),
                 Some(SkillTier::Beginner) => (
                     SkillTier::Beginner.positioning_label().to_string(),
                     role.junior_title.clone(),
                     role.junior_salary_usd.clone(),
-                    format!(
-                        "Objectively scored at Junior ({} Beginner / {} Intermediate / {} Advanced prompts). You touch domain keywords, but your prompts currently focus on foundational lookup or syntax rather than independent component or systems ownership.",
-                        matched_tier_counts[0], matched_tier_counts[1], matched_tier_counts[2]
-                    ),
+                    match level {
+                        WritingLevel::Everyday => format!(
+                            "Matched at an Entry / Junior level ({} starter / {} hands-on / {} advanced prompts). You're asking great learning questions in this area, and building a couple of small hands-on projects will help you grow to the next level.",
+                            matched_tier_counts[0], matched_tier_counts[1], matched_tier_counts[2]
+                        ),
+                        WritingLevel::Professional => format!(
+                            "Scored at Junior level ({} Beginner / {} Intermediate / {} Advanced prompts). You touch key topics in this field, and adding end-to-end project examples will strengthen your readiness for Mid-Level roles.",
+                            matched_tier_counts[0], matched_tier_counts[1], matched_tier_counts[2]
+                        ),
+                        WritingLevel::Technical => format!(
+                            "Objectively scored at Junior ({} Beginner / {} Intermediate / {} Advanced prompts). You touch domain keywords, but your prompts currently focus on foundational lookup or syntax rather than independent component or systems ownership.",
+                            matched_tier_counts[0], matched_tier_counts[1], matched_tier_counts[2]
+                        ),
+                    },
                 ),
                 Some(SkillTier::Intermediate) => (
                     SkillTier::Intermediate.positioning_label().to_string(),
                     role.mid_title.clone(),
                     role.mid_salary_usd.clone(),
-                    format!(
-                        "Objectively scored at Mid-Level ({} Intermediate / {} Advanced / {} Beginner prompts). You demonstrate solid component implementation and workflow wiring, but need more architectural tradeoff, scale, and unit-economics evidence for Senior/Staff.",
-                        matched_tier_counts[1], matched_tier_counts[2], matched_tier_counts[0]
-                    ),
+                    match level {
+                        WritingLevel::Everyday => format!(
+                            "Matched at a Mid-Level ({} hands-on / {} advanced / {} starter prompts). You already know how to build and connect practical features—practicing bigger-picture planning will help you reach Senior roles.",
+                            matched_tier_counts[1], matched_tier_counts[2], matched_tier_counts[0]
+                        ),
+                        WritingLevel::Professional => format!(
+                            "Scored at Mid-Level ({} Intermediate / {} Advanced / {} Beginner prompts). You show solid feature implementation and workflow building; documenting system design tradeoffs and business impact will prepare you for Senior roles.",
+                            matched_tier_counts[1], matched_tier_counts[2], matched_tier_counts[0]
+                        ),
+                        WritingLevel::Technical => format!(
+                            "Objectively scored at Mid-Level ({} Intermediate / {} Advanced / {} Beginner prompts). You demonstrate solid component implementation and workflow wiring, but need more architectural tradeoff, scale, and unit-economics evidence for Senior/Staff.",
+                            matched_tier_counts[1], matched_tier_counts[2], matched_tier_counts[0]
+                        ),
+                    },
                 ),
                 Some(SkillTier::Advanced) => (
                     SkillTier::Advanced.positioning_label().to_string(),
                     role.senior_title.clone(),
                     role.senior_salary_usd.clone(),
-                    format!(
-                        "Objectively scored at Senior / Staff ({} Advanced / {} Intermediate / {} Beginner prompts). Your prompts consistently frame problems around systems architecture, first-principles tradeoffs, and measurable leverage.",
-                        matched_tier_counts[2], matched_tier_counts[1], matched_tier_counts[0]
-                    ),
+                    match level {
+                        WritingLevel::Everyday => format!(
+                            "Matched at a Senior / Lead level ({} advanced / {} hands-on / {} starter prompts). Your prompts show that you think ahead, weigh pros and cons carefully, and design solutions that help whole teams.",
+                            matched_tier_counts[2], matched_tier_counts[1], matched_tier_counts[0]
+                        ),
+                        WritingLevel::Professional => format!(
+                            "Scored at Senior / Staff ({} Advanced / {} Intermediate / {} Beginner prompts). Your prompts consistently tackle complex system design, practical tradeoffs, and measurable team impact.",
+                            matched_tier_counts[2], matched_tier_counts[1], matched_tier_counts[0]
+                        ),
+                        WritingLevel::Technical => format!(
+                            "Objectively scored at Senior / Staff ({} Advanced / {} Intermediate / {} Beginner prompts). Your prompts consistently frame problems around systems architecture, first-principles tradeoffs, and measurable leverage.",
+                            matched_tier_counts[2], matched_tier_counts[1], matched_tier_counts[0]
+                        ),
+                    },
                 ),
             };
 
@@ -427,12 +521,20 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
             .competency_pillars
             .iter()
             .enumerate()
-            .filter_map(|(idx, (pillar_name, kws))| {
+            .filter_map(|(idx, (plain_name, tech_name, kws))| {
                 if pillar_hits[idx] == 0 {
                     let sample_kws = kws.iter().take(3).copied().collect::<Vec<_>>().join(", ");
-                    Some(format!(
-                        "Missing evidence in {pillar_name} (0 prompts covering {sample_kws})"
-                    ))
+                    match level {
+                        WritingLevel::Everyday => Some(format!(
+                            "Next area to explore: {plain_name} (try a small project using {sample_kws})"
+                        )),
+                        WritingLevel::Professional => Some(format!(
+                            "Skill area to build: {plain_name} (0 prompts covering {sample_kws} so far)"
+                        )),
+                        WritingLevel::Technical => Some(format!(
+                            "Missing evidence in {tech_name} (0 prompts covering {sample_kws})"
+                        )),
+                    }
                 } else {
                     None
                 }
@@ -440,54 +542,121 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
             .collect();
 
         if matched_tier_counts[2] == 0 && total_matched_prompts > 0 {
-            identified_gaps.push(
-                "Seniority Gap: 0 prompts in this track demonstrate multi-constraint tradeoff analysis, failure-mode bounding, or unit-economics modeling required for Senior/Staff.".to_string(),
-            );
+            let gap_msg = match level {
+                WritingLevel::Everyday => "Growth step for Senior roles: Practice comparing pros, cons, and costs before building so you can lead bigger projects confidently.".to_string(),
+                WritingLevel::Professional => "Next-Level Growth Gap: Practice documenting system tradeoffs, edge cases, and business ROI to step up from hands-on builder to Senior lead.".to_string(),
+                WritingLevel::Technical => "Seniority Gap: 0 prompts in this track demonstrate multi-constraint tradeoff analysis, failure-mode bounding, or unit-economics modeling required for Senior/Staff.".to_string(),
+            };
+            identified_gaps.push(gap_msg);
         }
         if identified_gaps.is_empty() {
-            identified_gaps.push(format!(
-                "Longitudinal Depth Gap: All 4 core pillars touched across {} prompt(s); sustain adversarial stress-testing and production post-mortems across 20+ sessions to harden Principal-level proof.",
-                prompts.len()
-            ));
+            let depth_msg = match level {
+                WritingLevel::Everyday => format!(
+                    "Keep going! You've touched all 4 core areas across {} prompt(s)—keep practicing across more projects to build a strong portfolio.",
+                    prompts.len()
+                ),
+                WritingLevel::Professional => format!(
+                    "Consistent Depth Goal: All 4 core areas covered across {} prompt(s); continue documenting real project outcomes across 20+ sessions.",
+                    prompts.len()
+                ),
+                WritingLevel::Technical => format!(
+                    "Longitudinal Depth Gap: All 4 core pillars touched across {} prompt(s); sustain adversarial stress-testing and production post-mortems across 20+ sessions to harden Principal-level proof.",
+                    prompts.len()
+                ),
+            };
+            identified_gaps.push(depth_msg);
         }
 
         let mut tested_assumptions = Vec::new();
         if matched_tier_counts[2] == 0 && total_matched_prompts > 0 {
-            tested_assumptions.push(
-                "Assumption Tested: Mentioning domain tools in prompts does not equate to Senior architectural readiness—scores are capped at Junior/Mid-Level until tradeoff & system-design prompts appear.".to_string(),
-            );
+            let msg = match level {
+                WritingLevel::Everyday => "Reality Check: Asking about a tool is a great start, but employers look for a small finished project or example you can walk them through.".to_string(),
+                WritingLevel::Professional => "Reality Check: Mentioning tools in prompts is a starting point—build a complete, shareable project example to prove Mid/Senior readiness.".to_string(),
+                WritingLevel::Technical => "Assumption Tested: Mentioning domain tools in prompts does not equate to Senior architectural readiness—scores are capped at Junior/Mid-Level until tradeoff & system-design prompts appear.".to_string(),
+            };
+            tested_assumptions.push(msg);
         }
         if burnout_hits > 0 {
-            tested_assumptions.push(format!(
-                "Assumption Tested: You logged {} maintenance/burnout friction signal(s); taking this role in an execution-only culture without automation authority will replicate past burnout.",
-                burnout_hits
-            ));
+            let msg = match level {
+                WritingLevel::Everyday => format!(
+                    "Energy Check: You mentioned feeling bogged down by repetitive work {} time(s)—make sure any job you take lets you improve the process instead of doing manual busywork.",
+                    burnout_hits
+                ),
+                WritingLevel::Professional => format!(
+                    "Energy Check: You logged {} repetitive-work friction signal(s); look for teams that value workflow improvements over manual ticket volume.",
+                    burnout_hits
+                ),
+                WritingLevel::Technical => format!(
+                    "Assumption Tested: You logged {} maintenance/burnout friction signal(s); taking this role in an execution-only culture without automation authority will replicate past burnout.",
+                    burnout_hits
+                ),
+            };
+            tested_assumptions.push(msg);
         }
         if values_pct < skill_pct {
-            tested_assumptions.push(format!(
-                "Assumption Tested: Technical skill overlap ({skill_pct}%) exceeds explicit value alignment ({values_pct}%)—verify you want the day-to-day operational accountability of this role, not just the title."
-            ));
+            let msg = match level {
+                WritingLevel::Everyday => format!(
+                    "Goal Check: Your technical skills match this role ({skill_pct}%), so double-check that the day-to-day schedule and responsibilities fit the lifestyle you want ({values_pct}%)."
+                ),
+                WritingLevel::Professional => format!(
+                    "Alignment Check: Your skill overlap ({skill_pct}%) is higher than your values match ({values_pct}%)—verify you enjoy the day-to-day responsibilities of this role, not just the title."
+                ),
+                WritingLevel::Technical => format!(
+                    "Assumption Tested: Technical skill overlap ({skill_pct}%) exceeds explicit value alignment ({values_pct}%)—verify you want the day-to-day operational accountability of this role, not just the title."
+                ),
+            };
+            tested_assumptions.push(msg);
         }
         if tested_assumptions.is_empty() {
-            tested_assumptions.push(
-                "Assumption Tested: High architectural alignment verified, but confirm whether you want hands-on Staff IC systems ownership vs. people-management overhead before targeting Director titles.".to_string(),
-            );
+            let msg = match level {
+                WritingLevel::Everyday => "Career Tip: You have a strong match here—decide whether you enjoy building things directly yourself or managing and guiding a team.".to_string(),
+                WritingLevel::Professional => "Career Tip: Strong alignment verified—confirm whether you prefer hands-on individual contributor ownership or people management before targeting Director titles.".to_string(),
+                WritingLevel::Technical => "Assumption Tested: High architectural alignment verified, but confirm whether you want hands-on Staff IC systems ownership vs. people-management overhead before targeting Director titles.".to_string(),
+            };
+            tested_assumptions.push(msg);
         }
 
+        let base_why = match level {
+            WritingLevel::Everyday => &role.why_it_fits_everyday,
+            WritingLevel::Professional => &role.why_it_fits_professional,
+            WritingLevel::Technical => &role.why_it_fits_template,
+        };
+
         let why_it_fits = if matched_terms.is_empty() {
-            role.why_it_fits_template.clone()
+            base_why.clone()
         } else {
-            format!(
-                "{} Detected {} recurring behavioral signals across your vault ({}).",
-                role.why_it_fits_template,
-                skill_hits + energy_hits + value_hits,
-                matched_terms.join(", ")
-            )
+            match level {
+                WritingLevel::Everyday => format!(
+                    "{} We spotted {} matching topic signals in your questions ({}).",
+                    base_why,
+                    skill_hits + energy_hits + value_hits,
+                    matched_terms.join(", ")
+                ),
+                WritingLevel::Professional => format!(
+                    "{} Matched {} recurring topic signals across your prompts ({}).",
+                    base_why,
+                    skill_hits + energy_hits + value_hits,
+                    matched_terms.join(", ")
+                ),
+                WritingLevel::Technical => format!(
+                    "{} Detected {} recurring behavioral signals across your vault ({}).",
+                    base_why,
+                    skill_hits + energy_hits + value_hits,
+                    matched_terms.join(", ")
+                ),
+            }
+        };
+
+        let burnout_guardrail = match level {
+            WritingLevel::Everyday => role.burnout_guardrail_everyday,
+            WritingLevel::Professional => role.burnout_guardrail_professional,
+            WritingLevel::Technical => role.burnout_guardrail,
         };
 
         results.push(RoleMatchResult {
             onet_code: role.onet_code,
             title: role.title,
+            plain_english_description: role.plain_english_description,
             modern_titles: role.modern_titles,
             bucket: role.bucket,
             salary_range_usd: role.salary_range_usd,
@@ -503,7 +672,7 @@ pub fn match_onet_paths(prompts: &[NormalizedPrompt]) -> Vec<RoleMatchResult> {
             values_match_pct: values_pct,
             burnout_risk_pct: burnout_pct,
             why_it_fits,
-            burnout_guardrail: role.burnout_guardrail,
+            burnout_guardrail,
             supporting_quotes: quotes,
         });
     }
@@ -789,5 +958,47 @@ mod tests {
         let adv_top = &adv_matches[0];
         assert_eq!(adv_top.assessed_tier, "Advanced → Senior / Staff");
         assert!(adv_top.overall_fit_pct >= 80);
+    }
+
+    #[test]
+    fn adapts_role_matches_across_writing_levels_with_zero_jargon_in_everyday_and_professional() {
+        let prompts = vec![make_prompt(
+            "p1",
+            "I want to build a tool and workflow in rust and sqlite to avoid repetitive manual tasks.",
+            true,
+        )];
+        let forbidden = [
+            "unit economics",
+            "unit-economics",
+            "telemetry contracts",
+            "automated regression",
+            "load-testing benchmarks",
+            "1-to-many",
+            "dialectical verification",
+        ];
+
+        for level in [WritingLevel::Everyday, WritingLevel::Professional] {
+            let matches = match_onet_paths_for_level(&prompts, level);
+            assert_eq!(matches.len(), 4);
+            for m in matches {
+                assert!(!m.plain_english_description.is_empty());
+                let combined = format!(
+                    "{} {} {} {} {}",
+                    m.plain_english_description,
+                    m.why_it_fits,
+                    m.honest_positioning_rationale,
+                    m.identified_gaps.join(" "),
+                    m.tested_assumptions.join(" ")
+                )
+                .to_lowercase();
+                for term in &forbidden {
+                    assert!(
+                        !combined.contains(term),
+                        "Leaked forbidden jargon '{term}' in {:?} mode: {combined}",
+                        level
+                    );
+                }
+            }
+        }
     }
 }

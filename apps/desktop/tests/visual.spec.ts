@@ -121,8 +121,9 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
 
     // 2. Verify Step 2: Zero-Knowledge Upload Card & Personalized Sidebar/Header
     await expect(page.getByTestId("sidebar-profile-name")).toHaveText("Chris");
+    await expect(page.getByTestId("sidebar-writing-level-pill")).toContainText("Writing Style:");
     await expect(page.locator(".main-content h1.page-title")).toHaveText(
-      "Chris’s Unmasked Cognitive Mirror"
+      "Chris’s Strengths & Habits"
     );
     const step2Card = page.getByTestId("step2-upload-card");
     await expect(step2Card).toBeVisible();
@@ -254,21 +255,21 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
     );
     await expect(page.getByTestId("mirror-story-card")).toHaveCount(1);
 
-    // Completing all 3 chapters unlocks O*NET Path Finder
+    // Completing all 3 chapters unlocks Career Path Matches
     await expect(page.locator("#tab-onet")).toHaveAttribute("aria-disabled", "false");
     await page.getByTestId("btn-unlock-onet").click();
     await expect(page.locator(".main-content h1.page-title")).toContainText(
-      "Chris’s O*NET Natural Path Finder"
+      "Chris’s Career Path Matches"
     );
 
-    // Shortlist an O*NET role to unlock 5-Year Equity & Quests
+    // Shortlist an O*NET role to unlock Next Steps & Growth Plan
     await page.getByTestId("btn-unlock-equity").click();
     await expect(page.locator("#tab-equity")).toHaveAttribute("aria-disabled", "false");
     await expect(page.locator(".main-content h1.page-title")).toContainText(
-      "Chris’s 5-Year Personal Equity Map"
+      "Chris’s Next Steps & Growth Plan"
     );
 
-    // Accept quests via Load Sample or button click to unlock Reflective Journal
+    // Accept quests via Load Sample or button click to unlock Personal Reflection Journal
     await page.getByRole("tab", { name: /Local Vault & Scrubber/i }).click();
     await page.getByRole("button", { name: /Load Sample Multi-Provider Vault/i }).click();
     await page.waitForTimeout(200);
@@ -331,7 +332,7 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
       };
 
       // Add a journal entry on Journal tab
-      await page.getByRole("tab", { name: /Reflective Journal/i }).click();
+      await page.getByRole("tab", { name: /Personal Reflection Journal/i }).click();
       await page.waitForTimeout(100);
       await page
         .locator(".textarea-journal")
@@ -340,14 +341,62 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
         );
       await page.getByRole("button", { name: /Save to Local Vault/i }).click();
       await page.waitForTimeout(150);
+
+      // Verify Adaptive Writing Level Switcher across Everyday, Professional, Technical, and Auto
+      await page.getByRole("tab", { name: /Your Strengths & Habits/i }).click();
+      await page.waitForTimeout(100);
+      const writingCard = page.getByTestId("writing-level-card");
+      await expect(writingCard).toBeVisible();
+
+      // Switch to Everyday mode and verify zero jargon + In Plain English subtitle on Career Path Matches
+      await page.getByTestId("writing-mode-everyday").click();
+      await page.waitForTimeout(100);
+      await expect(page.getByTestId("sidebar-writing-level-pill")).toContainText(
+        "Writing Style: Everyday (Custom)"
+      );
+      const mirrorSynthesizedTextEveryday = (
+        await page
+          .locator('[data-testid="mirror-story-card"] h3, [data-testid="mirror-story-card"] .card-summary, [data-testid="mirror-story-card"] .rubric-callout')
+          .allTextContents()
+      )
+        .join(" ")
+        .toLowerCase();
+      expect(mirrorSynthesizedTextEveryday).not.toContain("unit economics");
+      expect(mirrorSynthesizedTextEveryday).not.toContain("telemetry contracts");
+
+      await page.getByRole("tab", { name: /Career Path Matches/i }).click();
+      await page.waitForTimeout(100);
+      await expect(page.getByTestId("onet-plain-english-desc").first()).toBeVisible();
+      await expect(page.getByTestId("onet-plain-english-desc").first()).toContainText(
+        "In Plain English:"
+      );
+
+      // Switch to Technical mode and verify In Plain English subtitle hides and technical language renders
+      await page.getByRole("tab", { name: /Your Strengths & Habits/i }).click();
+      await page.waitForTimeout(100);
+      await page.getByTestId("writing-mode-technical").click();
+      await page.waitForTimeout(100);
+      await expect(page.getByTestId("sidebar-writing-level-pill")).toContainText(
+        "Writing Style: Technical (Custom)"
+      );
+      await page.getByRole("tab", { name: /Career Path Matches/i }).click();
+      await page.waitForTimeout(100);
+      await expect(page.getByTestId("onet-plain-english-desc")).toHaveCount(0);
+
+      // Switch back to Auto mode
+      await page.getByRole("tab", { name: /Your Strengths & Habits/i }).click();
+      await page.waitForTimeout(100);
+      await page.getByTestId("writing-mode-auto").click();
+      await page.waitForTimeout(100);
+      await expect(page.getByTestId("sidebar-writing-level-pill")).toContainText("(Auto)");
     }
 
     // 4. Inspect all 5 populated tabs & capture screenshots at 1280x800
     const tabs: Array<{ key: string; tabLabel: RegExp; screenshotName: string }> = [
-      { key: "mirror", tabLabel: /Cognitive Mirror/i, screenshotName: "iter4-tab-mirror.png" },
-      { key: "onet", tabLabel: /O\*NET Path Finder/i, screenshotName: "iter4-tab-onet.png" },
-      { key: "equity", tabLabel: /5-Year Equity & Quests/i, screenshotName: "iter4-tab-equity.png" },
-      { key: "journal", tabLabel: /Reflective Journal/i, screenshotName: "iter4-tab-journal.png" },
+      { key: "mirror", tabLabel: /Your Strengths & Habits/i, screenshotName: "iter4-tab-mirror.png" },
+      { key: "onet", tabLabel: /Career Path Matches/i, screenshotName: "iter4-tab-onet.png" },
+      { key: "equity", tabLabel: /Next Steps & Growth Plan/i, screenshotName: "iter4-tab-equity.png" },
+      { key: "journal", tabLabel: /Personal Reflection Journal/i, screenshotName: "iter4-tab-journal.png" },
       { key: "vault", tabLabel: /Local Vault & Scrubber/i, screenshotName: "iter4-tab-vault.png" },
     ];
 
@@ -422,7 +471,7 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
 
     // 5. Collect computed contrast & ARIA telemetry on 1280x800
     if (vp.name === "1280x800") {
-      await page.getByRole("tab", { name: /Cognitive Mirror/i }).click();
+      await page.getByRole("tab", { name: /Your Strengths & Habits/i }).click();
       await page.waitForTimeout(100);
 
       const auditDetails = await page.evaluate(() => {
@@ -527,9 +576,9 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
     await context.close();
   }
 
-  expect(keyboardNavVerification.activeAfterArrowDown).toBe("O*NET Path Finder");
+  expect(keyboardNavVerification.activeAfterArrowDown).toBe("Career Path Matches");
   expect(keyboardNavVerification.activeAfterEnd).toBe("Local Vault & Scrubber");
-  expect(keyboardNavVerification.activeAfterHome).toBe("Cognitive Mirror");
+  expect(keyboardNavVerification.activeAfterHome).toBe("Your Strengths & Habits");
   expect(ariaTelemetry.totalProgressbarRoleCountAcrossOnetAndEquity).toBeGreaterThanOrEqual(17);
   expect(onetMeterVerification.allHaveAriaAttrs).toBe(true);
   expect(equitySummaryVerification.trackHasAriaValueNow).toBe(true);

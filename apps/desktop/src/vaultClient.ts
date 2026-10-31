@@ -1,6 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type SkillTier = "beginner" | "intermediate" | "advanced";
+export type WritingLevel = "everyday" | "professional" | "technical";
+export type WritingLevelMode = "auto" | WritingLevel;
+
+export interface WritingLevelMetrics {
+  avg_words_per_sentence: number;
+  avg_syllables_per_word: number;
+  flesch_kincaid_grade: number;
+  jargon_density_pct: number;
+  measured_level: WritingLevel;
+  level_label: string;
+  level_description: string;
+}
 
 export interface ManifestFileLink {
   filename: string;
@@ -28,6 +40,7 @@ export interface IngestionSummary {
   detected_format: string;
   warnings: string[];
   manifest_links: ManifestFileLink[];
+  writing_level: WritingLevelMetrics;
 }
 
 export interface FileImportReport {
@@ -87,6 +100,7 @@ export interface UserProfile {
   theme_mode: "light" | "dark";
   mirror_story_completed: boolean;
   shortlisted_onet_codes: string[];
+  writing_level_mode: WritingLevelMode;
 }
 
 export interface EvidenceQuote {
@@ -98,6 +112,7 @@ export interface EvidenceQuote {
 export interface RoleMatchResult {
   onet_code: string;
   title: string;
+  plain_english_description: string;
   modern_titles: string[];
   bucket: string;
   salary_range_usd: string;
@@ -193,6 +208,7 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
   theme_mode: "light",
   mirror_story_completed: false,
   shortlisted_onet_codes: [],
+  writing_level_mode: "auto",
 };
 
 function isTauriRuntime(): boolean {
@@ -202,66 +218,66 @@ function isTauriRuntime(): boolean {
 const DEFAULT_QUESTS: EquityQuest[] = [
   {
     id: "q-reposition-architect",
-    horizon: "Now (30 Days)",
-    title: "Anchor Positioning in Systems Architecture & Unit-Economics Impact",
+    horizon: "Next 7 Days (Quick Win)",
+    title: "Write Down 3 Real Examples of Problems You Enjoyed Solving",
     rationale:
-      "Lead your portfolio and interviews with measurable system throughput, automation leverage, and cost-efficiency outcomes synthesized from your high-signal engineering and strategy prompts.",
-    equity_category: "Positioning Clarity",
+      "Start your growth plan by capturing three recent moments where you organized a messy process, solved a tricky problem, or explained a complex idea simply.",
+    equity_category: "Career Clarity",
     equity_points: 250,
     accepted: false,
     completed: false,
   },
   {
     id: "q-focus-guardrail",
-    horizon: "Now (30 Days)",
-    title: "Enforce a 3-Pillar Cognitive Focus Rule (1 Core Role, 1 Compounding Engine, 1 Deep-Flow Lab)",
+    horizon: "Next 7 Days (Quick Win)",
+    title: "Pick Your Top 3 Priorities for the Week",
     rationale:
-      "Eliminates context-switching fatigue across fragmented side projects and protects your highest-leverage deep work hours.",
-    equity_category: "Pitfall Immunity",
+      "Avoid burnout from juggling too many tasks at once by choosing one main project, one skill to practice, and one curiosity topic to explore.",
+    equity_category: "Energy & Focus",
     equity_points: 200,
     accepted: false,
     completed: false,
   },
   {
     id: "q-drop-linear-work",
-    horizon: "Year 1 Milestone",
-    title: "Replace Repetitive Manual Maintenance with 1-to-Many Programmatic Workflows",
+    horizon: "Next 30 Days (Skill Builder)",
+    title: "Turn One Repetitive Weekly Chore into a Simple Checklist or Template",
     rationale:
-      "Burnout signals in your prompt archive correlate with repetitive hand-maintenance. Standardize on reusable tools, schemas, and automated pipelines.",
-    equity_category: "Pitfall Immunity",
+      "Notice which recurring task drains your energy most and build a reusable template, checklist, or helper script so you never start from scratch again.",
+    equity_category: "Energy & Focus",
     equity_points: 300,
     accepted: false,
     completed: false,
   },
   {
     id: "q-domain-bridge",
-    horizon: "Year 1 Milestone",
-    title: "Bridge Deep Technical Tooling with Interactive & Companion Ecosystems",
+    horizon: "Next 30 Days (Skill Builder)",
+    title: "Practice Closing One Skill Gap from Your Top Career Match",
     rationale:
-      "Combine your systems architecture, data telemetry, and workflow automation strengths into high-leverage platform engineering roles without resetting your seniority.",
-    equity_category: "Mastered Proof-of-Work",
+      "Spend two focused sessions practicing the primary growth area highlighted in your top Career Path Match using real examples from your work.",
+    equity_category: "Practical Proof",
     equity_points: 350,
     accepted: false,
     completed: false,
   },
   {
     id: "q-open-core-equity",
-    horizon: "Year 3 Milestone",
-    title: "Compound Open-Core Software & Reusable Intellectual Property",
+    horizon: "3-Month Milestone (Practical Project)",
+    title: "Package a Useful Guide, Tool, or Case Study You Can Share",
     rationale:
-      "Convert your 'bottleneck -> build the tool' reflex into durable open-core software assets and automated distribution channels that compound independent of linear hours.",
-    equity_category: "Compounding Distribution",
+      "Turn the workflows and problem-solving habits from your prompt history into a tangible portfolio piece or shared guide that demonstrates your capabilities.",
+    equity_category: "Long-Term Growth",
     equity_points: 500,
     accepted: false,
     completed: false,
   },
   {
     id: "q-year5-autonomy",
-    horizon: "Year 5 Horizon",
-    title: "Full Creative & Financial Autonomy (Principal Architect / Founder Track)",
+    horizon: "1-Year Goal (Career Growth)",
+    title: "Shape Your Role Around Sustainable Work & Creative Ownership",
     rationale:
-      "Align your 5-year trajectory toward long-term household stability, creative ownership, and high-margin technical leadership.",
-    equity_category: "Compounding Distribution",
+      "Align your next career step toward roles that reward clear thinking, reliable execution, and healthy boundaries.",
+    equity_category: "Long-Term Growth",
     equity_points: 1000,
     accepted: false,
     completed: false,
@@ -1018,6 +1034,177 @@ export function parseMultiProviderClient(rawInput: string): {
   return { prompts, summary };
 }
 
+function countSyllablesInWordClient(word: string): number {
+  const letters = word
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+  if (!letters) return 0;
+  if (letters.length <= 3) return 1;
+
+  let groups = 0;
+  let prevVowel = false;
+  for (let i = 0; i < letters.length; i++) {
+    const ch = letters[i];
+    const isVowel = ch === "a" || ch === "e" || ch === "i" || ch === "o" || ch === "u" || ch === "y";
+    if (isVowel && !prevVowel) {
+      groups += 1;
+    }
+    prevVowel = isVowel;
+  }
+  if (letters.endsWith("e") && !letters.endsWith("le") && groups > 1) {
+    groups -= 1;
+  }
+  if ((letters.endsWith("es") || letters.endsWith("ed")) && groups > 1) {
+    groups -= 1;
+  }
+  return Math.max(1, groups);
+}
+
+const DOMAIN_JARGON_TERMS_CLIENT = [
+  "architect",
+  "architecture",
+  "telemetry",
+  "idempotent",
+  "idempotency",
+  "concurrency",
+  "distributed",
+  "schema",
+  "compiler",
+  "pipeline",
+  "deterministic",
+  "autonomy",
+  "positioning",
+  "latency",
+  "throughput",
+  "orchestration",
+  "dialectical",
+  "heuristic",
+  "vector",
+  "sqlite",
+  "regression",
+  "icp",
+  "pseo",
+  "mcp",
+];
+
+function isJargonOrComplexWordClient(word: string, syllables: number): boolean {
+  if (syllables >= 3) return true;
+  const clean = word.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "");
+  return DOMAIN_JARGON_TERMS_CLIENT.includes(clean);
+}
+
+export function writingLevelLabel(level: WritingLevel): string {
+  switch (level) {
+    case "everyday":
+      return "Everyday / Plain English";
+    case "professional":
+      return "Professional / Clear";
+    case "technical":
+      return "Technical / Deep";
+  }
+}
+
+export function writingLevelDescription(level: WritingLevel): string {
+  switch (level) {
+    case "everyday":
+      return "Warm, conversational language with zero unexplained industry jargon.";
+    case "professional":
+      return "Clear, practical workplace language focused on outcomes and collaboration.";
+    case "technical":
+      return "Full systems-architecture, engineering, and strategic depth.";
+  }
+}
+
+export function resolveEffectiveWritingLevel(
+  mode: WritingLevelMode | string | undefined,
+  measured: WritingLevel
+): WritingLevel {
+  const norm = (mode ?? "auto").trim().toLowerCase();
+  if (norm === "everyday") return "everyday";
+  if (norm === "professional") return "professional";
+  if (norm === "technical") return "technical";
+  return measured;
+}
+
+export function computeWritingLevelClient(prompts: NormalizedPrompt[]): WritingLevelMetrics {
+  if (prompts.length === 0) {
+    return {
+      avg_words_per_sentence: 0,
+      avg_syllables_per_word: 0,
+      flesch_kincaid_grade: 7.5,
+      jargon_density_pct: 0,
+      measured_level: "everyday",
+      level_label: writingLevelLabel("everyday"),
+      level_description: writingLevelDescription("everyday"),
+    };
+  }
+
+  let totalWords = 0;
+  let totalSentences = 0;
+  let totalSyllables = 0;
+  let complexOrJargonWords = 0;
+
+  for (const p of prompts) {
+    const words = p.cleaned_text.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) continue;
+    totalWords += words.length;
+
+    const sentenceCount = Math.max(
+      1,
+      p.cleaned_text
+        .split(/[.!?;\n]+/)
+        .map((s) => s.trim())
+        .filter(Boolean).length
+    );
+    totalSentences += sentenceCount;
+
+    for (const w of words) {
+      const syl = countSyllablesInWordClient(w);
+      totalSyllables += syl;
+      if (isJargonOrComplexWordClient(w, syl)) {
+        complexOrJargonWords += 1;
+      }
+    }
+  }
+
+  if (totalWords === 0) {
+    return {
+      avg_words_per_sentence: 0,
+      avg_syllables_per_word: 0,
+      flesch_kincaid_grade: 7.5,
+      jargon_density_pct: 0,
+      measured_level: "everyday",
+      level_label: writingLevelLabel("everyday"),
+      level_description: writingLevelDescription("everyday"),
+    };
+  }
+
+  const asl = totalWords / Math.max(1, totalSentences);
+  const asw = totalSyllables / totalWords;
+  const rawFkgl = 0.39 * asl + 11.8 * asw - 15.59;
+  const fkgl = Math.min(16.0, Math.max(4.0, rawFkgl));
+  const jargonDensityPct = (complexOrJargonWords / totalWords) * 100.0;
+
+  let measured: WritingLevel;
+  if (fkgl >= 12.5 && jargonDensityPct >= 20.0) {
+    measured = "technical";
+  } else if (fkgl < 9.5 && jargonDensityPct < 12.0) {
+    measured = "everyday";
+  } else {
+    measured = "professional";
+  }
+
+  return {
+    avg_words_per_sentence: Math.round(asl * 10) / 10,
+    avg_syllables_per_word: Math.round(asw * 100) / 100,
+    flesch_kincaid_grade: Math.round(fkgl * 10) / 10,
+    jargon_density_pct: Math.round(jargonDensityPct * 10) / 10,
+    measured_level: measured,
+    level_label: writingLevelLabel(measured),
+    level_description: writingLevelDescription(measured),
+  };
+}
+
 function summarizePromptsClient(
   prompts: NormalizedPrompt[],
   filesScanned?: number,
@@ -1075,6 +1262,8 @@ function summarizePromptsClient(
     else overall_positioning = "Advanced → Senior / Staff";
   }
 
+  const writing_level = computeWritingLevelClient(sorted);
+
   return {
     total_files_scanned: filesScanned ?? convos.size,
     total_raw_prompts: totalRaw ?? sorted.length,
@@ -1094,10 +1283,50 @@ function summarizePromptsClient(
     detected_format: detectedFormat,
     warnings,
     manifest_links: manifestLinks,
+    writing_level,
   };
 }
 
-function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[] {
+function computePeakWindowClient(prompts: NormalizedPrompt[]): { windowLabel: string; sharePct: number } {
+  const hours = new Array<number>(24).fill(0);
+  let totalWithHour = 0;
+  for (const p of prompts) {
+    if (typeof p.local_hour === "number" && p.local_hour >= 0 && p.local_hour < 24) {
+      hours[p.local_hour] += 1;
+      totalWithHour += 1;
+    }
+  }
+  if (totalWithHour === 0) {
+    return { windowLabel: "Flexible Schedule", sharePct: 0 };
+  }
+  let bestStart = 9;
+  let bestSum = 0;
+  for (let start = 0; start < 24; start++) {
+    const sum =
+      hours[start] +
+      hours[(start + 1) % 24] +
+      hours[(start + 2) % 24] +
+      hours[(start + 3) % 24];
+    if (sum > bestSum) {
+      bestSum = sum;
+      bestStart = start;
+    }
+  }
+  const endHr = (bestStart + 4) % 24;
+  const fmtHr = (h: number) => {
+    if (h === 0) return "12 AM";
+    if (h < 12) return `${h} AM`;
+    if (h === 12) return "12 PM";
+    return `${h - 12} PM`;
+  };
+  const sharePct = Math.round((bestSum / totalWithHour) * 100);
+  return { windowLabel: `${fmtHr(bestStart)} – ${fmtHr(endHr)}`, sharePct };
+}
+
+export function buildMirrorCardsClient(
+  prompts: NormalizedPrompt[],
+  level: WritingLevel = "technical"
+): MirrorInsightCard[] {
   if (prompts.length === 0) return [];
 
   const tierCounts: [number, number, number] = [0, 0, 0];
@@ -1163,113 +1392,455 @@ function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[
     3
   );
 
+  const { windowLabel: peakWindow, sharePct: peakShare } = computePeakWindowClient(prompts);
+
+  const c1 =
+    level === "everyday"
+      ? {
+          title: "Turning Frustrations into Reusable Checklists & Tools",
+          summary: `Spotted in ${tool.hits} of ${prompts.length} prompts: when a task feels slow or messy, you naturally look for ways to organize it once so it is easier next time.`,
+          assumption_challenged:
+            tool.hits === 0
+              ? "Reality Check: We haven't spotted examples of you organizing workflows or building helper tools yet—try saving a few examples first."
+              : "Reality Check: Creating a brand-new checklist or tool for every small obstacle can delay finishing the actual project.",
+          identified_gap:
+            tool.hits === 0
+              ? "Next Step to Grow: Try documenting one repeatable process or template in your prompts this week."
+              : `Next Step to Grow: ${tierCounts[0] + tierCounts[1]} of your prompts focus on quick fixes—try turning your most common task into a simple reusable template.`,
+        }
+      : level === "professional"
+      ? {
+          title: "Workflow Improvement & Repeatable Systems",
+          summary: `Observed in ${tool.hits} of ${prompts.length} prompts (${tierCounts[0]} foundational / ${tierCounts[1]} mid-level / ${tierCounts[2]} advanced): when you hit manual bottlenecks, you look for repeatable processes and practical tools.`,
+          assumption_challenged:
+            tool.hits === 0
+              ? "Assumption Tested: 0 workflow or systems prompts found—avoid positioning yourself around process design until you document concrete examples."
+              : tierCounts[2] === 0
+              ? "Assumption Tested: You reference tools and workflows, but your prompts rarely specify edge cases, team handoffs, or long-term maintenance."
+              : "Assumption Tested: Designing a custom workflow for every bottleneck can slow down delivery if it delays testing with real users.",
+          identified_gap:
+            tool.hits === 0
+              ? "Gap Identified: No workflow automation or process design prompts recorded in your vault yet."
+              : `Gap Identified: ${tierCounts[0]} Beginner / ${tierCounts[1]} Intermediate prompt(s) still rely on one-off fixes rather than shared templates and clear quality checks.`,
+        }
+      : {
+          title: "The 'Bottleneck → Build the System' Reflex",
+          summary: `Detected in ${tool.hits} of ${prompts.length} prompts (${tierCounts[0]} Beginner / ${tierCounts[1]} Intermediate / ${tierCounts[2]} Advanced across vault): when you encounter manual overhead, evaluate whether you are designing durable systems or just scripting one-off patches.`,
+          assumption_challenged:
+            tool.hits === 0
+              ? "Assumption Tested: 0 systems/tooling prompts found—do not position yourself as a platform architect without concrete build evidence."
+              : tierCounts[2] === 0
+              ? "Assumption Tested: You reference tools/workflows, but your prompts lack Senior-level tradeoff, failure-mode, or scale constraints."
+              : "Assumption Tested: Building a new tool for every bottleneck can become procrastination if it avoids shipping and validating with real users.",
+          identified_gap:
+            tool.hits === 0
+              ? "Gap Identified: No architectural or workflow automation prompts recorded in your vault yet."
+              : `Gap Identified: ${tierCounts[0]} Beginner / ${tierCounts[1]} Intermediate prompt(s) still rely on tactical execution rather than reusable schema or telemetry contracts.`,
+        };
+
+  const c2 =
+    level === "everyday"
+      ? {
+          title: "Explaining Complicated Ideas in Plain, Helpful Language",
+          summary: `Spotted in ${empathy.hits} of ${prompts.length} prompts: you care about making your work easy for real people, customers, and teammates to understand and use.`,
+          assumption_challenged:
+            empathy.hits === 0
+              ? "Reality Check: Your prompts focus mostly on the task itself—remember to explain why the work matters to the person using it."
+              : "Reality Check: Friendly explanations work best when you also share concrete before-and-after results (like time saved or fewer mistakes).",
+          identified_gap:
+            empathy.hits < 2
+              ? "Next Step to Grow: When working on a project, write one sentence about who it helps and what problem it solves for them."
+              : "Next Step to Grow: Pair your clear explanations with a simple number—like hours saved per week—when sharing your work.",
+        }
+      : level === "professional"
+      ? {
+          title: "Bridging Technical Detail & Clear Customer Value",
+          summary: `Identified across ${empathy.hits} of ${prompts.length} prompts: tracks how consistently you connect detailed project decisions to user clarity, team alignment, and business results.`,
+          assumption_challenged:
+            empathy.hits === 0
+              ? "Assumption Tested: 0 user-value signals detected—strong execution rarely speaks for itself without clear stakeholder communication."
+              : "Assumption Tested: Clear positioning language in prompts must be backed by measurable customer outcomes (time saved, adoption, retention), not just polished wording.",
+          identified_gap:
+            empathy.hits < 2
+              ? "Gap Identified: Sparse customer-value framing—add explicit audience, goal, and outcome constraints when planning projects."
+              : "Gap Identified: Pair qualitative user empathy with concrete business outcomes and adoption metrics to demonstrate senior impact.",
+        }
+      : {
+          title: "Bilingual Translation: Systems Depth → Clear Human Value",
+          summary: `Identified across ${empathy.hits} of ${prompts.length} prompts: measures how consistently you connect backend engineering decisions to user clarity, positioning, and measurable unit economics.`,
+          assumption_challenged:
+            empathy.hits === 0
+              ? "Assumption Tested: 0 user/positioning signals detected—technical code alone rarely speaks for itself without explicit value translation."
+              : "Assumption Tested: Clear positioning language in prompts must be backed by quantified customer outcomes (latency, revenue, retention), not just clean copy.",
+          identified_gap:
+            empathy.hits < 2
+              ? "Gap Identified: Sparse commercial/user-value framing—add explicit ICP, pricing, and outcome constraints when designing technical systems."
+              : "Gap Identified: Pair qualitative user empathy with hard unit-economics and conversion metrics to prove Staff/Principal business impact.",
+        };
+
+  const c3 =
+    level === "everyday"
+      ? {
+          title: "Building Steady Independence & Meaningful Work",
+          summary: `Found in ${values.hits} prompt(s): shows how much you value steady income, healthy work-life balance, and having room to do work you are proud of.`,
+          assumption_challenged:
+            "Reality Check: Wanting more flexibility only works if you protect your time—if most of your week goes to last-minute emergencies, it is hard to get ahead.",
+          identified_gap:
+            values.hits === 0
+              ? "Next Step to Grow: Use the Personal Reflection Journal to write down what a healthy, rewarding workday looks like for you."
+              : "Next Step to Grow: Block out two hours this week for a project or skill that builds your long-term security.",
+        }
+      : level === "professional"
+      ? {
+          title: "Career Independence, Stability & Meaningful Ownership",
+          summary: `Synthesized from ${values.hits} value-signal prompt(s): tracks whether your weekly work builds long-term career stability and role ownership.`,
+          assumption_challenged:
+            "Assumption Tested: Wanting more autonomy requires intentional calendar boundaries—if 80% of your week is reactive firefighting, your career growth slows down.",
+          identified_gap:
+            values.hits === 0
+              ? "Gap Identified: 0 explicit career priorities logged—define your core requirements (compensation, scope, work pace) in the Personal Reflection Journal."
+              : "Gap Identified: Review how many hours per week go toward reusable skills and portfolio assets versus one-off reactive requests.",
+        }
+      : {
+          title: "Autonomy, Sustainable Stability & High-Leverage Ownership",
+          summary: `Synthesized from ${values.hits} value-signal prompt(s): tracks whether your daily technical work actually compounds toward household stability and autonomy.`,
+          assumption_challenged:
+            "Assumption Tested: Wanting autonomy or founder-level equity does not create it—if your daily prompts are 80% reactive maintenance, your trajectory will stay linear.",
+          identified_gap:
+            values.hits === 0
+              ? "Gap Identified: 0 explicit career/value constraints logged—define your non-negotiables (comp floor, ownership scope, work rhythm) in the Personal Reflection Journal."
+              : "Gap Identified: Audit how many hours per week go toward compounding assets vs. unleveraged ad-hoc requests.",
+        };
+
+  const c4 =
+    level === "everyday"
+      ? {
+          title: "Draining Repetition & Too Much Juggling",
+          summary: `Spotted ${burnout.hits} friction signal(s): highlights where doing the same tedious chores over and over—or jumping between too many tasks—wears you out.`,
+          assumption_challenged:
+            "Reality Check: Pushing through exhaustion during busy weeks isn't a permanent fix—ignoring repetitive chores eventually leads to burnout.",
+          identified_gap:
+            burnout.hits === 0
+              ? "Next Step to Grow: Note which weekly chores drain your energy most so you can simplify or delegate them."
+              : `Next Step to Grow: ${burnout.hits} prompt(s) show frustration with repetitive work—pick the most annoying weekly chore and simplify it first.`,
+        }
+      : level === "professional"
+      ? {
+          title: "Repetitive Maintenance & Context-Switching Drain",
+          summary: `Detected ${burnout.hits} friction signal(s): tracks where repetitive upkeep, manual busywork, or frequent context-switching drains your focus.`,
+          assumption_challenged:
+            "Assumption Tested: High output during busy weeks is not sustainable—ignoring repetitive maintenance work quietly stalls your skill growth.",
+          identified_gap:
+            burnout.hits === 0
+              ? "Gap Identified: 0 explicit friction markers detected yet—document which weekly tasks drain your energy so Clearspace can flag poor-fit roles."
+              : `Gap Identified: ${burnout.hits} prompt(s) show maintenance friction; turn your top recurring manual task into a standardized checklist or automated workflow.`,
+        }
+      : {
+          title: "The Repetitive Manual Maintenance Trap",
+          summary: `Detected ${burnout.hits} friction signal(s): tracks where repetitive hand-maintenance, boilerplate, or fragmented context-switching drains your cognitive output.`,
+          assumption_challenged:
+            "Assumption Tested: High output during crunch periods is not sustainable leverage—ignoring repetitive maintenance drag leads to silent skill stagnation.",
+          identified_gap:
+            burnout.hits === 0
+              ? "Gap Identified: 0 explicit burnout markers detected yet—proactively document which weekly tasks drain your energy so Clearspace can flag role mismatches."
+              : `Gap Identified: ${burnout.hits} prompt(s) show maintenance friction; convert the top recurring manual chore into a deterministic script or test suite.`,
+        };
+
+  const c5 =
+    level === "everyday"
+      ? {
+          title: `Asking Good Questions & Your ${peakWindow} Focus Window`,
+          summary: `With ${peakShare}% of your timed prompts happening around ${peakWindow} and ${skeptic.hits} thoughtful question signal(s), this shows when you do your clearest thinking and double-check your ideas.`,
+          assumption_challenged:
+            skeptic.hits === 0
+              ? "Reality Check: Using AI only for quick answers can hide blind spots—asking 'what could go wrong with this plan?' saves time later."
+              : "Reality Check: Asking tough questions in chat is a great start—just make sure you test those ideas in real life too.",
+          identified_gap:
+            skeptic.hits === 0
+              ? "Next Step to Grow: Before starting your next big task, ask AI to point out two things you might have overlooked."
+              : "Next Step to Grow: Turn the best feedback from your chats into a simple checklist you use before finishing a project.",
+        }
+      : level === "professional"
+      ? {
+          title: `Critical Thinking & ${peakWindow} Peak Focus Window`,
+          summary: `With ${peakShare}% of timestamped prompts in ${peakWindow} and ${skeptic.hits} critical-inquiry signal(s), tracks how actively you pressure-test your assumptions before execution.`,
+          assumption_challenged:
+            skeptic.hits === 0
+              ? "Assumption Tested: 0 critical-review prompts found—using AI only to draft content or code without asking for critique creates blind spots."
+              : "Assumption Tested: Stress-testing ideas in chat is only half the loop—make sure those critiques turn into clear quality checks and real-world validation.",
+          identified_gap:
+            skeptic.hits === 0
+              ? "Gap Identified: Start asking AI to highlight risks, edge cases, and blind spots in your plans before you begin execution."
+              : "Gap Identified: Translate the risks you uncover during planning into repeatable quality checks and measurable project milestones.",
+        }
+      : {
+          title: `First-Principles Truth-Seeking & ${peakWindow} Deep Flow`,
+          summary: `With ${peakShare}% of timestamped prompts in ${peakWindow} and ${skeptic.hits} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions before building.`,
+          assumption_challenged:
+            skeptic.hits === 0
+              ? "Assumption Tested: 0 skeptical/adversarial prompts found—using AI only for confirmation or code generation creates blind spots and inflates confidence."
+              : "Assumption Tested: Stress-testing ideas in chat is only half the loop—verify that critiques translate into shipped tests and falsifiable benchmarks.",
+          identified_gap:
+            skeptic.hits === 0
+              ? "Gap Identified: Start asking AI to expose flaws, edge cases, and failure modes in your designs before writing implementation code."
+              : "Gap Identified: Expand adversarial verification from product strategy into automated regression and load-testing benchmarks.",
+        };
+
   return [
     {
       id: "card-tool-builder",
       category: "Superpower",
       story_chapter: "excel",
       story_chapter_title: "1. Where You Currently Excel",
-      title: "The 'Bottleneck → Build the System' Reflex",
-      summary: `Detected in ${tool.hits} of ${prompts.length} prompts (${tierCounts[0]} Beginner / ${tierCounts[1]} Intermediate / ${tierCounts[2]} Advanced across vault): when you encounter manual overhead, evaluate whether you are designing durable systems or just scripting one-off patches.`,
+      title: c1.title,
+      summary: c1.summary,
       confidence_pct: calcConf(tool.hits),
       pinned: true,
       quotes: tool.quotes,
       assessed_tier: overallTierLabel,
-      assumption_challenged:
-        tool.hits === 0
-          ? "Assumption Tested: 0 systems/tooling prompts found—do not position yourself as a platform architect without concrete build evidence."
-          : tierCounts[2] === 0
-          ? "Assumption Tested: You reference tools/workflows, but your prompts lack Senior-level tradeoff, failure-mode, or scale constraints."
-          : "Assumption Tested: Building a new tool for every bottleneck can become procrastination if it avoids shipping and validating with real users.",
-      identified_gap:
-        tool.hits === 0
-          ? "Gap Identified: No architectural or workflow automation prompts recorded in your vault yet."
-          : `Gap Identified: ${tierCounts[0]} Beginner / ${tierCounts[1]} Intermediate prompt(s) still rely on tactical execution rather than reusable schema or telemetry contracts.`,
+      assumption_challenged: c1.assumption_challenged,
+      identified_gap: c1.identified_gap,
     },
     {
       id: "card-bilingual-empathy",
       category: "Superpower",
       story_chapter: "excel",
       story_chapter_title: "1. Where You Currently Excel",
-      title: "Bilingual Translation: Systems Depth → Clear Human Value",
-      summary: `Identified across ${empathy.hits} of ${prompts.length} prompts: measures how consistently you connect backend engineering decisions to user clarity, positioning, and measurable unit economics.`,
+      title: c2.title,
+      summary: c2.summary,
       confidence_pct: calcConf(empathy.hits),
       pinned: true,
       quotes: empathy.quotes,
       assessed_tier: overallTierLabel,
-      assumption_challenged:
-        empathy.hits === 0
-          ? "Assumption Tested: 0 user/positioning signals detected—technical code alone rarely speaks for itself without explicit value translation."
-          : "Assumption Tested: Clear positioning language in prompts must be backed by quantified customer outcomes (latency, revenue, retention), not just clean copy.",
-      identified_gap:
-        empathy.hits < 2
-          ? "Gap Identified: Sparse commercial/user-value framing—add explicit ICP, pricing, and outcome constraints when designing technical systems."
-          : "Gap Identified: Pair qualitative user empathy with hard unit-economics and conversion metrics to prove Staff/Principal business impact.",
+      assumption_challenged: c2.assumption_challenged,
+      identified_gap: c2.identified_gap,
     },
     {
       id: "card-values-anchor",
       category: "Core Value",
       story_chapter: "grow",
       story_chapter_title: "2. Where We Think You Could Grow",
-      title: "Autonomy, Sustainable Stability & High-Leverage Ownership",
-      summary: `Synthesized from ${values.hits} value-signal prompt(s): tracks whether your daily technical work actually compounds toward household stability and autonomy.`,
+      title: c3.title,
+      summary: c3.summary,
       confidence_pct: calcConf(values.hits),
       pinned: true,
       quotes: values.quotes,
       assessed_tier: overallTierLabel,
-      assumption_challenged:
-        "Assumption Tested: Wanting autonomy or founder-level equity does not create it—if your daily prompts are 80% reactive maintenance, your trajectory will stay linear.",
-      identified_gap:
-        values.hits === 0
-          ? "Gap Identified: 0 explicit career/value constraints logged—define your non-negotiables (comp floor, ownership scope, work rhythm) in the Reflective Journal."
-          : "Gap Identified: Audit how many hours per week go toward compounding assets vs. unleveraged ad-hoc requests.",
+      assumption_challenged: c3.assumption_challenged,
+      identified_gap: c3.identified_gap,
     },
     {
       id: "card-burnout-trigger",
       category: "Burnout Trigger",
       story_chapter: "friction",
       story_chapter_title: "3. What Is Causing You Friction",
-      title: "The Repetitive Manual Maintenance Trap",
-      summary: `Detected ${burnout.hits} friction signal(s): tracks where repetitive hand-maintenance, boilerplate, or fragmented context-switching drains your cognitive output.`,
+      title: c4.title,
+      summary: c4.summary,
       confidence_pct: calcConf(burnout.hits),
       pinned: true,
       quotes: burnout.quotes,
       assessed_tier: overallTierLabel,
-      assumption_challenged:
-        "Assumption Tested: High output during crunch periods is not sustainable leverage—ignoring repetitive maintenance drag leads to silent skill stagnation.",
-      identified_gap:
-        burnout.hits === 0
-          ? "Gap Identified: 0 explicit burnout markers detected yet—proactively document which weekly tasks drain your energy so Clearspace can flag role mismatches."
-          : `Gap Identified: ${burnout.hits} prompt(s) show maintenance friction; convert the top recurring manual chore into a deterministic script or test suite.`,
+      assumption_challenged: c4.assumption_challenged,
+      identified_gap: c4.identified_gap,
     },
     {
       id: "card-grill-me",
       category: "Cognitive Rhythm",
       story_chapter: "grow",
       story_chapter_title: "2. Where We Think You Could Grow",
-      title: "First-Principles Truth-Seeking & Dialectical Verification",
-      summary: `With ${skeptic.hits} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions from first principles before committing engineering effort.`,
+      title: c5.title,
+      summary: c5.summary,
       confidence_pct: calcConf(skeptic.hits),
       pinned: true,
       quotes: skeptic.quotes,
       assessed_tier: overallTierLabel,
-      assumption_challenged:
-        skeptic.hits === 0
-          ? "Assumption Tested: 0 skeptical/adversarial prompts found—using AI only for confirmation or code generation creates blind spots and inflates confidence."
-          : "Assumption Tested: Stress-testing ideas in chat is only half the loop—verify that critiques translate into shipped tests and falsifiable benchmarks.",
-      identified_gap:
-        skeptic.hits === 0
-          ? "Gap Identified: Start asking AI to expose flaws, edge cases, and failure modes in your designs before writing implementation code."
-          : "Gap Identified: Expand adversarial verification from product strategy into automated regression and load-testing benchmarks.",
+      assumption_challenged: c5.assumption_challenged,
+      identified_gap: c5.identified_gap,
     },
   ];
 }
 
-function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
+function adaptRoleNarrativeClient(
+  onetCode: string,
+  level: WritingLevel,
+  matchedTerms: string[],
+  totalSignalHits: number
+): { whyItFits: string; burnoutGuardrail: string } {
+  const signalSuffix =
+    matchedTerms.length === 0
+      ? ""
+      : level === "everyday"
+      ? ` Spotted ${totalSignalHits} matching clues in your chats (${matchedTerms.join(", ")}).`
+      : level === "professional"
+      ? ` Supported by ${totalSignalHits} matching signals across your prompt history (${matchedTerms.join(", ")}).`
+      : ` Detected ${totalSignalHits} recurring behavioral signals across your vault (${matchedTerms.join(", ")}).`;
+
+  switch (onetCode) {
+    case "15-1299.08":
+      if (level === "everyday") {
+        return {
+          whyItFits: `You naturally look for ways to replace slow, repetitive chores with organized systems and automatic workflows that save time and money.${signalSuffix}`,
+          burnoutGuardrail:
+            "Watch out for jobs where you only check off other people's routine tasks; look for roles where you get to improve how the system works.",
+        };
+      }
+      if (level === "professional") {
+        return {
+          whyItFits: `Your prompt history shows a clear habit of replacing manual operational bottlenecks with repeatable workflows, connected data tools, and measurable business savings.${signalSuffix}`,
+          burnoutGuardrail:
+            "Avoid roles limited to routine ticket execution; look for positions where you own workflow design and process automation.",
+        };
+      }
+      return {
+        whyItFits: `Your prompt history shows a focus on replacing manual operational bottlenecks with programmatic 1-to-Many pipelines, automated data workflows, and measurable unit economics.${signalSuffix}`,
+        burnoutGuardrail:
+          "Avoid roles where you are treated as a ticket-taking execution coordinator; require architectural ownership over the automation stack.",
+      };
+    case "15-1252.00":
+      if (level === "everyday") {
+        return {
+          whyItFits: `When a workflow feels clunky, your first instinct is to build a helpful tool, checklist, or assistant that makes complicated steps simple for everyone.${signalSuffix}`,
+          burnoutGuardrail:
+            "Focus on roles where you build reusable tools that help the whole team, rather than doing repetitive manual updates all day.",
+        };
+      }
+      if (level === "professional") {
+        return {
+          whyItFits: `Whenever you hit a workflow bottleneck, you design practical tools, structured data templates, or AI-assisted workflows while keeping the experience clear for end users.${signalSuffix}`,
+          burnoutGuardrail:
+            "Stay focused on building reusable tools and shared platforms rather than repetitive manual ticket production.",
+        };
+      }
+      return {
+        whyItFits: `Whenever you encounter a workflow bottleneck, your reflex is to design a custom developer tool, schema, or agentic workflow while translating complex architecture into clear human value.${signalSuffix}`,
+        burnoutGuardrail:
+          "Stay focused on the reusable tooling and platform layer rather than repetitive manual asset or ticket production.",
+      };
+    case "15-1255.01":
+      if (level === "everyday") {
+        return {
+          whyItFits: `Your chats show that you enjoy figuring out how games, simulations, and interactive guides work behind the scenes—and making them fun and rewarding for people.${signalSuffix}`,
+          burnoutGuardrail:
+            "Avoid roles focused on endless repetitive content updates; aim for roles where you design the rules, tools, or community guides.",
+        };
+      }
+      if (level === "professional") {
+        return {
+          whyItFits: `Your focused prompts explore interactive systems, game or simulation balance, and data-informed companion tools—combining structured logic with user engagement.${signalSuffix}`,
+          burnoutGuardrail:
+            "Avoid roles centered on manual content grinding; lead through companion tools, analytics, or interactive system design.",
+        };
+      }
+      return {
+        whyItFits: `Your deep-flow prompts explore interactive state machines, simulation economies, routing algorithms, and telemetry-driven companion tools—blending systems engineering with user engagement.${signalSuffix}`,
+        burnoutGuardrail:
+          "Do not enter through manual content or asset grinding; lead through Companion Platforms, Data Telemetry, or Systems Design.",
+      };
+    default:
+      if (level === "everyday") {
+        return {
+          whyItFits: `You connect big-picture goals, customer needs, and practical tools. Over time, guiding what a product should build and how it reaches people fits your strengths well.${signalSuffix}`,
+          burnoutGuardrail:
+            "Protect your focus by concentrating on one main product and one clear growth channel at a time instead of juggling too many separate requests.",
+        };
+      }
+      if (level === "professional") {
+        return {
+          whyItFits: `You combine systems thinking, customer value, pricing strategy, and careful risk checking. Owning both product direction and customer growth builds long-term career momentum.${signalSuffix}`,
+          burnoutGuardrail:
+            "Protect your focus by centering on one core product and one repeatable growth channel at a time, avoiding fragmented one-off requests.",
+        };
+      }
+      return {
+        whyItFits: `You synthesize systems engineering, unit economics, buyer psychology, and adversarial truth-seeking. Over a 5-year horizon, owning both product architecture and organic distribution compounds your personal equity fastest.${signalSuffix}`,
+        burnoutGuardrail:
+          "Protect your cognitive bandwidth by focusing on 1 flagship product and 1 automated distribution engine at a time, eliminating fragmented ad-hoc client work.",
+      };
+  }
+}
+
+function adaptPillarNameClient(pillarName: string, level: WritingLevel): string {
+  if (level === "technical") return pillarName;
+  switch (pillarName) {
+    case "Programmatic Pipeline & Workflow Automation":
+      return level === "everyday"
+        ? "Automating multi-step workflows"
+        : "Workflow & Process Automation";
+    case "Cloud & Edge Systems Architecture":
+      return level === "everyday"
+        ? "Setting up reliable web & cloud services"
+        : "Cloud & Web Systems Design";
+    case "Search, Telemetry & Ranking Analytics":
+      return level === "everyday"
+        ? "Tracking search traffic & usage trends"
+        : "Search & Usage Analytics";
+    case "API Integration & Unit-Economics Modeling":
+      return level === "everyday"
+        ? "Connecting apps & tracking project costs"
+        : "App Integrations & Cost Efficiency";
+    case "Agentic & MCP Workflow Orchestration":
+      return level === "everyday"
+        ? "Building helpful AI workflows"
+        : "AI Assistant & Workflow Design";
+    case "Systems Languages & SDK Compilation":
+      return level === "everyday"
+        ? "Building reliable software tools"
+        : "Software Tooling & Development";
+    case "Local-First Storage & Graph/Vector Schemas":
+      return level === "everyday"
+        ? "Organizing and saving data cleanly"
+        : "Database & Data Modeling";
+    case "First-Principles Verification & Stress-Testing":
+      return level === "everyday"
+        ? "Double-checking ideas for hidden problems"
+        : "Quality Checks & Assumption Testing";
+    case "Simulation Economy & Balance Modeling":
+      return level === "everyday"
+        ? "Balancing game or app rules and rewards"
+        : "System Balance & Rules Modeling";
+    case "Interactive State Machines & Routing":
+      return level === "everyday"
+        ? "Mapping out user choices and step-by-step paths"
+        : "Interactive Flows & Path Design";
+    case "Engine & Addon Tooling (Godot / Lua)":
+      return level === "everyday"
+        ? "Building game or app add-ons and helpers"
+        : "Interactive Engine & Add-on Tools";
+    case "Player Community & Companion Craft":
+      return level === "everyday"
+        ? "Creating helpful guides and tools for players or users"
+        : "User Guides & Community Tools";
+    case "ICP Positioning & Competitive Differentiation":
+      return level === "everyday"
+        ? "Clarifying who your product helps and why it stands out"
+        : "Customer Positioning & Market Fit";
+    case "Pricing Architecture & Revenue Unit Economics":
+      return level === "everyday"
+        ? "Setting fair prices and sustainable business goals"
+        : "Pricing Strategy & Business Sustainability";
+    case "Product-Led Growth & Acquisition Strategy":
+      return level === "everyday"
+        ? "Helping new people discover and try your product"
+        : "Product Growth & Customer Adoption";
+    case "Long-Term Portfolio & Autonomy Governance":
+      return level === "everyday"
+        ? "Planning for steady, independent long-term work"
+        : "Long-Term Career & Portfolio Planning";
+    default:
+      return pillarName;
+  }
+}
+
+export function matchOnetPathsClient(
+  prompts: NormalizedPrompt[],
+  level: WritingLevel = "technical"
+): RoleMatchResult[] {
   const catalog = [
     {
       onet_code: "15-1299.08",
       title: "Computer Systems Engineers / Architects",
+      plain_english_description:
+        "Designs how different software tools, databases, and automated workflows fit together so teams don't have to do repetitive work by hand.",
       modern_titles: [
         "Staff Growth Systems Architect",
         "AI Automation & Revenue Architect",
@@ -1283,10 +1854,6 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       senior_salary_usd: "$145,000 – $185,000",
       bucket: "Immediate High-Leverage Upgrade",
       salary_range_usd: "$145,000 – $185,000",
-      why_it_fits_template:
-        "Your prompt history shows a focus on replacing manual operational bottlenecks with programmatic 1-to-Many pipelines, automated data workflows, and measurable unit economics.",
-      burnout_guardrail:
-        "Avoid roles where you are treated as a ticket-taking execution coordinator; require architectural ownership over the automation stack.",
       skill_keywords: ["seo", "pseo", "n8n", "automation", "api", "pipeline", "architecture", "system", "scale", "telemetry"],
       energy_keywords: ["unfair advantage", "specialize", "compound", "velocity", "automat", "scale", "system", "optimize"],
       value_keywords: ["efficiency", "costs", "stability", "benefits", "clear", "simple", "impact", "autonomy"],
@@ -1301,6 +1868,8 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
     {
       onet_code: "15-1252.00",
       title: "Software Developers, Tools & Platforms",
+      plain_english_description:
+        "Builds helpful software tools, templates, and AI assistants that make everyday work faster and easier for other people.",
       modern_titles: [
         "Developer Experience (DX) & AI Tooling Engineer",
         "Forward-Deployed AI Solutions Engineer",
@@ -1314,10 +1883,6 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       senior_salary_usd: "$150,000 – $195,000",
       bucket: "Immediate High-Leverage Upgrade",
       salary_range_usd: "$150,000 – $195,000",
-      why_it_fits_template:
-        "Whenever you encounter a workflow bottleneck, your reflex is to design a custom developer tool, schema, or agentic workflow while translating complex architecture into clear human value.",
-      burnout_guardrail:
-        "Stay focused on the reusable tooling and platform layer rather than repetitive manual asset or ticket production.",
       skill_keywords: ["agent", "mcp", "editor", "tool", "token", "model", "database", "sqlite", "graph", "workflow", "rust", "schema"],
       energy_keywords: ["build a tool", "fast", "spin up", "prototype", "architect", "design", "solve"],
       value_keywords: ["skeptic", "worth solving", "honestly", "first principles", "clarity"],
@@ -1332,6 +1897,8 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
     {
       onet_code: "15-1255.01",
       title: "Interactive Systems & Companion Platform Architects",
+      plain_english_description:
+        "Creates interactive apps, game or simulation systems, and companion guides that help users explore complex worlds or data.",
       modern_titles: [
         "Interactive Ecosystem & Companion Platform Lead",
         "Technical Growth PM — Interactive Media & Simulation",
@@ -1345,10 +1912,6 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       senior_salary_usd: "$135,000 – $175,000",
       bucket: "Hidden Natural Fit (Unexplored Path)",
       salary_range_usd: "$135,000 – $175,000",
-      why_it_fits_template:
-        "Your deep-flow prompts explore interactive state machines, simulation economies, routing algorithms, and telemetry-driven companion tools—blending systems engineering with user engagement.",
-      burnout_guardrail:
-        "Do not enter through manual content or asset grinding; lead through Companion Platforms, Data Telemetry, or Systems Design.",
       skill_keywords: ["game", "quest", "route", "economy", "balance", "simulation", "interactive", "state", "telemetry"],
       energy_keywords: ["designing", "building", "playing", "optimizing", "flow", "deep"],
       value_keywords: ["fun", "immersive", "player", "community", "guide", "craft", "creative"],
@@ -1363,6 +1926,8 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
     {
       onet_code: "11-2021.00",
       title: "Technical Product & Growth Strategy Directors",
+      plain_english_description:
+        "Connects product building with customer strategy—figuring out what to build, how to price it, and how to help the right people find it.",
       modern_titles: [
         "Head of AI Growth & Product-Led Acquisition",
         "VP / Director of Technical Growth & GTM Engineering",
@@ -1376,10 +1941,6 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       senior_salary_usd: "$180,000 – $250,000+ (or Equity / ARR)",
       bucket: "5-Year North Star Track",
       salary_range_usd: "$180,000 – $250,000+ (or Equity / ARR)",
-      why_it_fits_template:
-        "You synthesize systems engineering, unit economics, buyer psychology, and adversarial truth-seeking. Over a 5-year horizon, owning both product architecture and organic distribution compounds your personal equity fastest.",
-      burnout_guardrail:
-        "Protect your cognitive bandwidth by focusing on 1 flagship product and 1 automated distribution engine at a time, eliminating fragmented ad-hoc client work.",
       skill_keywords: ["product", "pricing", "icp", "competitor", "market", "business", "client", "strategy", "positioning", "growth"],
       energy_keywords: ["niche", "unfair advantage", "vision", "big picture", "compound", "strategy", "leader"],
       value_keywords: ["authentic", "stability", "home", "equity", "journey", "clarity", "autonomy"],
@@ -1394,31 +1955,39 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
   ];
 
   if (prompts.length === 0) {
-    return catalog.map((r) => ({
-      onet_code: r.onet_code,
-      title: r.title,
-      modern_titles: r.modern_titles,
-      bucket: r.bucket,
-      salary_range_usd: r.salary_range_usd,
-      assessed_tier: "Awaiting Evidence",
-      positioned_title: r.junior_title,
-      positioned_salary_usd: "Import vault to calibrate",
-      honest_positioning_rationale:
-        "No prompts analyzed yet. Clearspace never guesses or inflates seniority without behavioral evidence.",
-      identified_gaps: r.competency_pillars.map((p) => `Unverified competency: ${p.name}`),
-      tested_assumptions: [
-        "Upload your prompt history to test how your actual daily inquiries compare against your target career track.",
-      ],
-      overall_fit_pct: 0,
-      skill_overlap_pct: 0,
-      energy_alignment_pct: 0,
-      values_match_pct: 0,
-      burnout_risk_pct: 0,
-      why_it_fits:
-        "Import or scan your prompt history to compute personalized O*NET behavioral alignment and evidence citations.",
-      burnout_guardrail: r.burnout_guardrail,
-      supporting_quotes: [],
-    }));
+    return catalog.map((r) => {
+      const { burnoutGuardrail } = adaptRoleNarrativeClient(r.onet_code, level, [], 0);
+      return {
+        onet_code: r.onet_code,
+        title: r.title,
+        plain_english_description: r.plain_english_description,
+        modern_titles: r.modern_titles,
+        bucket: r.bucket,
+        salary_range_usd: r.salary_range_usd,
+        assessed_tier: "Awaiting Evidence",
+        positioned_title: r.junior_title,
+        positioned_salary_usd: "Import vault to calibrate",
+        honest_positioning_rationale:
+          level === "everyday"
+            ? "No prompts imported yet. Add your chat history so Clearspace can match your real strengths without guessing."
+            : "No prompts analyzed yet. Clearspace never guesses or inflates seniority without behavioral evidence.",
+        identified_gaps: r.competency_pillars.map(
+          (p) => `Unverified skill area: ${adaptPillarNameClient(p.name, level)}`
+        ),
+        tested_assumptions: [
+          "Upload your prompt history to see how your everyday questions and projects line up with this career path.",
+        ],
+        overall_fit_pct: 0,
+        skill_overlap_pct: 0,
+        energy_alignment_pct: 0,
+        values_match_pct: 0,
+        burnout_risk_pct: 0,
+        why_it_fits:
+          "Import or scan your prompt history to compute personalized career path matches and supporting examples.",
+        burnout_guardrail: burnoutGuardrail,
+        supporting_quotes: [],
+      };
+    });
   }
 
   const corpusScale = Math.min(16, Math.max(1.2, Math.sqrt(prompts.length)));
@@ -1543,75 +2112,116 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
     let positioned_title = role.junior_title;
     let positioned_salary_usd = role.junior_salary_usd;
     let honest_positioning_rationale =
-      "0 domain signals detected in your vault for this track. Positioned at baseline until concrete work samples are present.";
+      level === "everyday"
+        ? "We haven't spotted examples of this career path in your prompts yet, so we're starting at an entry-level baseline until you share related projects."
+        : "0 domain signals detected in your vault for this track. Positioned at baseline until concrete work samples are present.";
 
     if (assessedSkillTier === "beginner") {
       assessed_tier = "Beginner → Junior";
       positioned_title = role.junior_title;
       positioned_salary_usd = role.junior_salary_usd;
-      honest_positioning_rationale = `Objectively scored at Junior (${matchedTierCounts[0]} Beginner / ${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[2]} Advanced prompts). You touch domain keywords, but your prompts currently focus on foundational lookup or syntax rather than independent component or systems ownership.`;
+      honest_positioning_rationale =
+        level === "everyday"
+          ? `Matched at an entry/junior level (${matchedTierCounts[0]} foundational, ${matchedTierCounts[1]} mid-level, and ${matchedTierCounts[2]} advanced prompts). You are exploring the right topics, and building a few complete projects from start to finish will help you move up.`
+          : level === "professional"
+          ? `Positioned at Junior level (${matchedTierCounts[0]} Beginner / ${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[2]} Advanced prompts). You touch relevant topics, but your prompts currently focus on learning the basics rather than owning complete projects.`
+          : `Objectively scored at Junior (${matchedTierCounts[0]} Beginner / ${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[2]} Advanced prompts). You touch domain keywords, but your prompts currently focus on foundational lookup or syntax rather than independent component or systems ownership.`;
     } else if (assessedSkillTier === "intermediate") {
       assessed_tier = "Intermediate → Mid-Level";
       positioned_title = role.mid_title;
       positioned_salary_usd = role.mid_salary_usd;
-      honest_positioning_rationale = `Objectively scored at Mid-Level (${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[2]} Advanced / ${matchedTierCounts[0]} Beginner prompts). You demonstrate solid component implementation and workflow wiring, but need more architectural tradeoff, scale, and unit-economics evidence for Senior/Staff.`;
+      honest_positioning_rationale =
+        level === "everyday"
+          ? `Matched at a solid mid-level (${matchedTierCounts[1]} mid-level, ${matchedTierCounts[2]} advanced, and ${matchedTierCounts[0]} foundational prompts). You already know how to build and connect working pieces—practicing bigger-picture planning and cost savings will unlock senior roles.`
+          : level === "professional"
+          ? `Positioned at Mid-Level (${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[2]} Advanced / ${matchedTierCounts[0]} Beginner prompts). You show reliable hands-on execution and workflow design, and adding more system-wide planning and business-outcome evidence will prepare you for Senior roles.`
+          : `Objectively scored at Mid-Level (${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[2]} Advanced / ${matchedTierCounts[0]} Beginner prompts). You demonstrate solid component implementation and workflow wiring, but need more architectural tradeoff, scale, and unit-economics evidence for Senior/Staff.`;
     } else if (assessedSkillTier === "advanced") {
       assessed_tier = "Advanced → Senior / Staff";
       positioned_title = role.senior_title;
       positioned_salary_usd = role.senior_salary_usd;
-      honest_positioning_rationale = `Objectively scored at Senior / Staff (${matchedTierCounts[2]} Advanced / ${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[0]} Beginner prompts). Your prompts consistently frame problems around systems architecture, first-principles tradeoffs, and measurable leverage.`;
+      honest_positioning_rationale =
+        level === "everyday"
+          ? `Matched at a senior level (${matchedTierCounts[2]} advanced, ${matchedTierCounts[1]} mid-level, and ${matchedTierCounts[0]} foundational prompts). Your chats show that you regularly design complete systems, weigh pros and cons carefully, and focus on real-world results.`
+          : level === "professional"
+          ? `Positioned at Senior / Staff (${matchedTierCounts[2]} Advanced / ${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[0]} Beginner prompts). Your prompts consistently tackle end-to-end system design, practical tradeoffs, and measurable team impact.`
+          : `Objectively scored at Senior / Staff (${matchedTierCounts[2]} Advanced / ${matchedTierCounts[1]} Intermediate / ${matchedTierCounts[0]} Beginner prompts). Your prompts consistently frame problems around systems architecture, first-principles tradeoffs, and measurable leverage.`;
     }
 
     const identified_gaps: string[] = [];
     role.competency_pillars.forEach((pillar, idx) => {
       if (pillarHits[idx] === 0) {
         const sampleKws = pillar.kws.slice(0, 3).join(", ");
+        const friendlyName = adaptPillarNameClient(pillar.name, level);
         identified_gaps.push(
-          `Missing evidence in ${pillar.name} (0 prompts covering ${sampleKws})`
+          level === "everyday"
+            ? `Room to grow in ${friendlyName} (no examples yet mentioning ${sampleKws})`
+            : `Missing evidence in ${friendlyName} (0 prompts covering ${sampleKws})`
         );
       }
     });
     if (matchedTierCounts[2] === 0 && totalMatchedPrompts > 0) {
       identified_gaps.push(
-        "Seniority Gap: 0 prompts in this track demonstrate multi-constraint tradeoff analysis, failure-mode bounding, or unit-economics modeling required for Senior/Staff."
+        level === "everyday"
+          ? "Next Step for Senior Roles: Try practicing how you weigh pros and cons, handle unexpected problems, and measure time or money saved."
+          : level === "professional"
+          ? "Seniority Gap: Add examples showing how you evaluate project tradeoffs, handle edge cases, and measure business results."
+          : "Seniority Gap: 0 prompts in this track demonstrate multi-constraint tradeoff analysis, failure-mode bounding, or unit-economics modeling required for Senior/Staff."
       );
     }
     if (identified_gaps.length === 0) {
       identified_gaps.push(
-        `Longitudinal Depth Gap: All 4 core pillars touched across ${prompts.length} prompt(s); sustain adversarial stress-testing and production post-mortems across 20+ sessions to harden Principal-level proof.`
+        level === "everyday"
+          ? `Consistency Goal: You've touched all 4 core areas across ${prompts.length} prompt(s)—keep building real-world examples across 20+ sessions to lock in top-tier readiness.`
+          : level === "professional"
+          ? `Consistency Gap: All 4 core areas covered across ${prompts.length} prompt(s); continue documenting project reviews and quality checks across 20+ sessions.`
+          : `Longitudinal Depth Gap: All 4 core pillars touched across ${prompts.length} prompt(s); sustain adversarial stress-testing and production post-mortems across 20+ sessions to harden Principal-level proof.`
       );
     }
 
     const tested_assumptions: string[] = [];
     if (matchedTierCounts[2] === 0 && totalMatchedPrompts > 0) {
       tested_assumptions.push(
-        "Assumption Tested: Mentioning domain tools in prompts does not equate to Senior architectural readiness—scores are capped at Junior/Mid-Level until tradeoff & system-design prompts appear."
+        level === "everyday"
+          ? "Reality Check: Mentioning tools in chat is a great start, but reaching senior pay takes hands-on practice designing complete projects and weighing tradeoffs."
+          : level === "professional"
+          ? "Assumption Tested: Mentioning domain tools in prompts does not automatically prove Senior readiness—scores stay at Junior/Mid-Level until system-design and tradeoff examples appear."
+          : "Assumption Tested: Mentioning domain tools in prompts does not equate to Senior architectural readiness—scores are capped at Junior/Mid-Level until tradeoff & system-design prompts appear."
       );
     }
     if (burnoutHits > 0) {
       tested_assumptions.push(
-        `Assumption Tested: You logged ${burnoutHits} maintenance/burnout friction signal(s); taking this role in an execution-only culture without automation authority will replicate past burnout.`
+        level === "everyday"
+          ? `Reality Check: You mentioned feeling drained by repetitive work ${burnoutHits} time(s)—make sure any job you take lets you improve or automate boring chores.`
+          : `Assumption Tested: You logged ${burnoutHits} maintenance/burnout friction signal(s); taking this role in a rigid environment without room to improve workflows will repeat past burnout.`
       );
     }
     if (valuesPct < skillPct) {
       tested_assumptions.push(
-        `Assumption Tested: Technical skill overlap (${skillPct}%) exceeds explicit value alignment (${valuesPct}%)—verify you want the day-to-day operational accountability of this role, not just the title.`
+        level === "everyday"
+          ? `Reality Check: Your skills fit this role (${skillPct}%) more than your stated personal goals (${valuesPct}%)—make sure you actually enjoy the day-to-day work, not just the job title.`
+          : `Assumption Tested: Skill overlap (${skillPct}%) exceeds personal value alignment (${valuesPct}%)—verify you want the day-to-day responsibilities of this role, not just the title.`
       );
     }
     if (tested_assumptions.length === 0) {
       tested_assumptions.push(
-        "Assumption Tested: High architectural alignment verified, but confirm whether you want hands-on Staff IC systems ownership vs. people-management overhead before targeting Director titles."
+        level === "everyday"
+          ? "Reality Check: You're a strong match for this path—just decide whether you prefer building things hands-on or managing people before aiming for director titles."
+          : "Assumption Tested: Strong alignment verified, but confirm whether you prefer hands-on individual contributor ownership versus people-management responsibilities before targeting Director titles."
       );
     }
 
-    const whyItFits =
-      matchedTerms.length === 0
-        ? role.why_it_fits_template
-        : `${role.why_it_fits_template} Detected ${skillHits + energyHits + valueHits} recurring behavioral signals across your vault (${matchedTerms.join(", ")}).`;
+    const { whyItFits, burnoutGuardrail } = adaptRoleNarrativeClient(
+      role.onet_code,
+      level,
+      matchedTerms,
+      skillHits + energyHits + valueHits
+    );
 
     return {
       onet_code: role.onet_code,
       title: role.title,
+      plain_english_description: role.plain_english_description,
       modern_titles: role.modern_titles,
       bucket: role.bucket,
       salary_range_usd: role.salary_range_usd,
@@ -1627,12 +2237,207 @@ function matchOnetPathsClient(prompts: NormalizedPrompt[]): RoleMatchResult[] {
       values_match_pct: valuesPct,
       burnout_risk_pct: burnoutPct,
       why_it_fits: whyItFits,
-      burnout_guardrail: role.burnout_guardrail,
+      burnout_guardrail: burnoutGuardrail,
       supporting_quotes: quotes,
     };
   });
 
   return results.sort((a, b) => b.overall_fit_pct - a.overall_fit_pct);
+}
+
+export function buildPersonalizedQuestsClient(
+  prompts: NormalizedPrompt[],
+  onetMatches: RoleMatchResult[],
+  profile: UserProfile,
+  level: WritingLevel,
+  savedQuests: EquityQuest[]
+): EquityQuest[] {
+  const getState = (id: string) => {
+    const found = savedQuests.find((q) => q.id === id);
+    return {
+      accepted: Boolean(found?.accepted),
+      completed: Boolean(found?.completed),
+    };
+  };
+
+  const targetMatch =
+    onetMatches.find((m) => profile.shortlisted_onet_codes.includes(m.onet_code)) ??
+    onetMatches[0];
+  const roleTitle = targetMatch?.title ?? "Your Next Role";
+  const topGap =
+    targetMatch?.identified_gaps[0] ?? "building repeatable examples of your best work";
+  const { windowLabel: peakWindow } = computePeakWindowClient(prompts);
+
+  const q1 =
+    level === "everyday"
+      ? {
+          title: `Write Down 3 Real Examples That Fit '${roleTitle}'`,
+          rationale: `Based on your ${prompts.length} prompt(s), jot down three short stories showing how you solve problems so you can talk about your strengths with confidence.`,
+          equity_category: "Career Clarity",
+        }
+      : level === "professional"
+      ? {
+          title: `Document 3 Concrete Case Studies for ${roleTitle}`,
+          rationale: `Synthesize the strongest examples from your ${prompts.length} prompt(s) into concise before-and-after stories highlighting problem scope, actions taken, and practical results.`,
+          equity_category: "Positioning Clarity",
+        }
+      : {
+          title: `Anchor Positioning for ${roleTitle} in Systems Architecture & Unit-Economics Impact`,
+          rationale:
+            "Lead your portfolio and interviews with measurable system throughput, automation leverage, and cost-efficiency outcomes synthesized from your high-signal engineering and strategy prompts.",
+          equity_category: "Positioning Clarity",
+        };
+
+  const q2 =
+    level === "everyday"
+      ? {
+          title: `Protect Your ${peakWindow} Focus Time & Pick 3 Weekly Priorities`,
+          rationale:
+            "Avoid burnout from juggling too many tasks at once by choosing one main project, one skill to practice, and one curiosity topic for the week.",
+          equity_category: "Energy & Focus",
+        }
+      : level === "professional"
+      ? {
+          title: `Protect Your ${peakWindow} Deep-Work Window & Set a 3-Priority Cap`,
+          rationale:
+            "Reduce context-switching fatigue across side projects by committing to one core deliverable, one skill-building goal, and one exploratory topic per week.",
+          equity_category: "Pitfall Immunity",
+        }
+      : {
+          title: `Enforce a 3-Pillar Cognitive Focus Rule Around Your ${peakWindow} Deep Flow`,
+          rationale:
+            "Eliminates context-switching fatigue across fragmented side projects and protects your highest-leverage deep work hours.",
+          equity_category: "Pitfall Immunity",
+        };
+
+  const q3 =
+    level === "everyday"
+      ? {
+          title: "Turn One Annoying Weekly Chore into a Simple Checklist or Template",
+          rationale:
+            "Notice which repetitive chore drains your energy most and create a reusable checklist, template, or helper tool so you never have to start from scratch.",
+          equity_category: "Energy & Focus",
+        }
+      : level === "professional"
+      ? {
+          title: "Standardize One Recurring Manual Workflow into a Reusable Template",
+          rationale:
+            "Friction signals in your prompt history point to repetitive upkeep. Convert your most frequent manual task into a documented workflow or automated script.",
+          equity_category: "Pitfall Immunity",
+        }
+      : {
+          title: "Replace Repetitive Manual Maintenance with 1-to-Many Programmatic Workflows",
+          rationale:
+            "Burnout signals in your prompt archive correlate with repetitive hand-maintenance. Standardize on reusable tools, schemas, and automated pipelines.",
+          equity_category: "Pitfall Immunity",
+        };
+
+  const q4 =
+    level === "everyday"
+      ? {
+          title: `Practice Your Top Growth Step for ${roleTitle}`,
+          rationale: `Spend two focused sessions working on a small, low-pressure exercise around your top growth area: ${topGap}`,
+          equity_category: "Practical Proof",
+        }
+      : level === "professional"
+      ? {
+          title: `Close a Key Skill Gap for ${roleTitle}`,
+          rationale: `Build a concrete work sample that directly addresses the primary gap identified for ${roleTitle}: ${topGap}`,
+          equity_category: "Mastered Proof-of-Work",
+        }
+      : {
+          title: `Bridge Deep Technical Tooling & Close Gaps for ${roleTitle}`,
+          rationale: `Combine your systems architecture and workflow automation strengths while addressing the primary gap for ${roleTitle}: ${topGap}`,
+          equity_category: "Mastered Proof-of-Work",
+        };
+
+  const q5 =
+    level === "everyday"
+      ? {
+          title: "Build and Share One Helpful Guide, Template, or Project",
+          rationale:
+            "Package something useful you have learned or built into a clear guide or sample project that you can proudly show to teammates or future employers.",
+          equity_category: "Long-Term Growth",
+        }
+      : level === "professional"
+      ? {
+          title: "Publish a Reusable Playbook, Tool, or Portfolio Case Study",
+          rationale:
+            "Turn your problem-solving patterns into a durable portfolio project, internal playbook, or shared tool that demonstrates your expertise.",
+          equity_category: "Compounding Distribution",
+        }
+      : {
+          title: "Compound Open-Core Software & Reusable Intellectual Property",
+          rationale:
+            "Convert your 'bottleneck -> build the tool' reflex into durable open-core software assets and automated distribution channels that compound independent of linear hours.",
+          equity_category: "Compounding Distribution",
+        };
+
+  const q6 =
+    level === "everyday"
+      ? {
+          title: `Grow Toward Sustainable Independence in ${roleTitle}`,
+          rationale:
+            "Shape your next year around steady income, healthy boundaries, and work that uses your natural strengths without burning you out.",
+          equity_category: "Long-Term Growth",
+        }
+      : level === "professional"
+      ? {
+          title: `Advance Toward Senior Ownership & Autonomy in ${roleTitle}`,
+          rationale:
+            "Align your 1-year career plan toward roles that reward clear systems thinking, cross-functional leadership, and sustainable work pace.",
+          equity_category: "Compounding Distribution",
+        }
+      : {
+          title: `Full Creative & Financial Autonomy (${roleTitle} / Principal Track)`,
+          rationale:
+            "Align your trajectory toward long-term household stability, creative ownership, and high-margin technical leadership.",
+          equity_category: "Compounding Distribution",
+        };
+
+  const specs = [
+    {
+      id: "q-reposition-architect",
+      horizon: "Next 7 Days (Quick Win)",
+      ...q1,
+      equity_points: 250,
+    },
+    {
+      id: "q-focus-guardrail",
+      horizon: "Next 7 Days (Quick Win)",
+      ...q2,
+      equity_points: 200,
+    },
+    {
+      id: "q-drop-linear-work",
+      horizon: "Next 30 Days (Skill Builder)",
+      ...q3,
+      equity_points: 300,
+    },
+    {
+      id: "q-domain-bridge",
+      horizon: "Next 30 Days (Skill Builder)",
+      ...q4,
+      equity_points: 350,
+    },
+    {
+      id: "q-open-core-equity",
+      horizon: "3-Month Milestone (Practical Project)",
+      ...q5,
+      equity_points: 500,
+    },
+    {
+      id: "q-year5-autonomy",
+      horizon: "1-Year Goal (Career Growth)",
+      ...q6,
+      equity_points: 1000,
+    },
+  ];
+
+  return specs.map((s) => ({
+    ...s,
+    ...getState(s.id),
+  }));
 }
 
 function loadBrowserPrompts(): NormalizedPrompt[] {
@@ -1686,6 +2491,13 @@ function saveBrowserJournals(journals: JournalEntry[]): void {
   }
 }
 
+function normalizeWritingLevelModeClient(raw: unknown): WritingLevelMode {
+  if (raw === "everyday" || raw === "professional" || raw === "technical") {
+    return raw;
+  }
+  return "auto";
+}
+
 function loadBrowserProfile(): UserProfile {
   try {
     const raw = localStorage.getItem(STORAGE_PROFILE_KEY);
@@ -1699,6 +2511,7 @@ function loadBrowserProfile(): UserProfile {
       shortlisted_onet_codes: Array.isArray(parsed.shortlisted_onet_codes)
         ? parsed.shortlisted_onet_codes
         : [],
+      writing_level_mode: normalizeWritingLevelModeClient(parsed.writing_level_mode),
     };
   } catch {
     return { ...DEFAULT_USER_PROFILE };
@@ -1721,6 +2534,9 @@ export async function updateUserProfile(
     const next: UserProfile = {
       ...current,
       ...partial,
+      writing_level_mode: normalizeWritingLevelModeClient(
+        partial.writing_level_mode ?? current.writing_level_mode
+      ),
     };
     return invoke<UserProfile>("update_user_profile", { profile: next });
   }
@@ -1728,6 +2544,9 @@ export async function updateUserProfile(
   const next: UserProfile = {
     ...current,
     ...partial,
+    writing_level_mode: normalizeWritingLevelModeClient(
+      partial.writing_level_mode ?? current.writing_level_mode
+    ),
   };
   saveBrowserProfile(next);
   return next;
@@ -1739,14 +2558,14 @@ function loadBrowserUpdateStatus(): AppUpdateStatus {
     const parsed = raw ? JSON.parse(raw) : null;
     return {
       installed_version: "0.2.0",
-      schema_version: 2,
+      schema_version: 3,
       last_backup_path: parsed?.last_backup_path ?? null,
       last_migrated_at: parsed?.last_migrated_at ?? "2026-10-30 00:00",
     };
   } catch {
     return {
       installed_version: "0.2.0",
-      schema_version: 2,
+      schema_version: 3,
       last_backup_path: null,
       last_migrated_at: "2026-10-30 00:00",
     };
@@ -1756,11 +2575,23 @@ function loadBrowserUpdateStatus(): AppUpdateStatus {
 function buildBrowserDashboard(): VaultDashboardPayload {
   const profile = loadBrowserProfile();
   const prompts = loadBrowserPrompts();
-  const quests = loadBrowserQuests();
+  const savedQuests = loadBrowserQuests();
   const journals = loadBrowserJournals();
   const summary = summarizePromptsClient(prompts);
-  const mirror_cards = buildMirrorCardsClient(prompts);
-  const onet_matches = matchOnetPathsClient(prompts);
+  const effectiveLevel = resolveEffectiveWritingLevel(
+    profile.writing_level_mode,
+    summary.writing_level.measured_level
+  );
+  const mirror_cards = buildMirrorCardsClient(prompts, effectiveLevel);
+  const onet_matches = matchOnetPathsClient(prompts, effectiveLevel);
+  const quests = buildPersonalizedQuestsClient(
+    prompts,
+    onet_matches,
+    profile,
+    effectiveLevel,
+    savedQuests
+  );
+  saveBrowserQuests(quests);
 
   return {
     db_path: "localStorage://clearspace_vault.db (Zero-Cloud Local Vault)",
@@ -2362,7 +3193,7 @@ export async function backupLocalVault(): Promise<AppUpdateStatus> {
     return invoke<AppUpdateStatus>("backup_local_vault");
   }
   const now = new Date().toISOString().slice(0, 16).replace("T", " ");
-  const bakPath = "localStorage://clearspace_vault.db.bak-v2";
+  const bakPath = "localStorage://clearspace_vault.db.bak-v3";
   try {
     localStorage.setItem(
       STORAGE_BACKUP_META_KEY,
@@ -2379,7 +3210,7 @@ export async function backupLocalVault(): Promise<AppUpdateStatus> {
 
 export async function checkForAppUpdates(
   installedVersion = "0.2.0",
-  schemaVersion = 2
+  schemaVersion = 3
 ): Promise<UpdateCheckResult> {
   const nowIso = new Date().toISOString().slice(0, 16).replace("T", " ");
   try {

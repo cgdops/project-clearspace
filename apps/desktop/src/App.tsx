@@ -32,6 +32,8 @@ import {
   BatchImportReport,
   StoryChapterKey,
   UpdateCheckResult,
+  WritingLevel,
+  WritingLevelMode,
   getVaultDashboard,
   updateUserProfile,
   scanLocalVault,
@@ -45,6 +47,9 @@ import {
   checkForAppUpdates,
   formatTierLabel,
   classifySkillTierClient,
+  resolveEffectiveWritingLevel,
+  writingLevelLabel,
+  writingLevelDescription,
   SAMPLE_MULTI_PROVIDER_EXPORT,
   parseMultiProviderClient,
 } from "./vaultClient";
@@ -57,10 +62,10 @@ type StoryFilterMode = StoryChapterKey | "all";
 const TAB_ORDER: TabKey[] = ["mirror", "onet", "equity", "journal", "vault"];
 
 const SOCRATIC_PROMPTS = [
-  "Which task this week gave you effortless 'deep flow' energy, and which task felt like repetitive maintenance drag?",
-  "If you focused your next 30 days on 1 core anchor, 1 compounding engine, and 1 deep-flow lab, what would you stop doing immediately?",
-  "Where are you currently underselling your systems architecture as 'just execution' instead of strategic unit-economics leverage?",
-  "What is one reusable tool, workflow, or asset you built this month that compounds your 5-year career & financial autonomy?",
+  "Which task this week gave you energy and focus, and which task felt like draining busywork?",
+  "If you picked just 3 main priorities for the next 30 days—one core project, one skill to practice, and one curiosity topic—what would you pause?",
+  "Where are you giving yourself too little credit for organizing messy problems or making work easier for others?",
+  "What is one helpful checklist, template, or project you could build this month to make your work easier next month?",
 ];
 
 const PROVIDER_FILTER_OPTIONS = [
@@ -102,7 +107,7 @@ const STORY_CHAPTERS: Array<{
     label: "2. Where We Think You Could Grow",
     headline: "Chapter 2 — Where We Think You Could Grow (Calibrated Next-Level Edge)",
     description:
-      "Honest, zero-flattery seniority calibration: where testing your assumptions, tightening unit-economics proof, and protecting your core values will unlock your next tier.",
+      "Honest, zero-flattery seniority calibration: where testing your assumptions, showing measurable real-world results, and protecting your core values will unlock your next tier.",
   },
   {
     key: "friction",
@@ -562,7 +567,7 @@ export default function App() {
     setIsCheckingUpdates(true);
     try {
       const installedVer = data?.update_status?.installed_version ?? "0.2.0";
-      const schemaVer = data?.update_status?.schema_version ?? 2;
+      const schemaVer = data?.update_status?.schema_version ?? 3;
       const result = await checkForAppUpdates(installedVer, schemaVer);
       setUpdateCheckResult(result);
     } finally {
@@ -576,8 +581,15 @@ export default function App() {
       setData({ ...data, update_status: status });
     }
     setBackupNotice(
-      `Vault backup verified at ${status.last_backup_path ?? "clearspace_vault.db.bak-v2"} (Schema v${status.schema_version}).`
+      `Vault backup verified at ${status.last_backup_path ?? "clearspace_vault.db.bak-v3"} (Schema v${status.schema_version}).`
     );
+  };
+
+  const handleSelectWritingLevelMode = async (mode: WritingLevelMode) => {
+    if (!data) return;
+    await updateUserProfile({ writing_level_mode: mode });
+    const refreshed = await getVaultDashboard();
+    setData(refreshed);
   };
 
   const handleToggleQuest = async (questId: string, field: "accepted" | "completed") => {
@@ -718,6 +730,116 @@ export default function App() {
     }
     return { text, redactions };
   }, [zkDemoInput]);
+
+  const measuredWritingLevel: WritingLevel =
+    data?.summary?.writing_level?.measured_level ?? "everyday";
+  const activeWritingLevelMode: WritingLevelMode =
+    data?.profile?.writing_level_mode ?? "auto";
+  const effectiveWritingLevel: WritingLevel = resolveEffectiveWritingLevel(
+    activeWritingLevelMode,
+    measuredWritingLevel
+  );
+  const writingStyleShortBand =
+    effectiveWritingLevel === "everyday"
+      ? "Everyday"
+      : effectiveWritingLevel === "professional"
+      ? "Professional"
+      : "Technical";
+
+  const renderWritingLevelSwitcherCard = () => {
+    if (!data) return null;
+    const wl = data.summary.writing_level;
+    return (
+      <div
+        className="insight-card"
+        style={{ marginTop: 18, padding: "16px 20px" }}
+        data-testid="writing-level-card"
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <div style={{ flex: "1 1 300px" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span className="badge superpower" data-testid="writing-level-active-badge">
+                Active Writing Style: {writingLevelLabel(effectiveWritingLevel)} (
+                {activeWritingLevelMode === "auto" ? "Auto-Matched" : "Custom Override"})
+              </span>
+              {wl && (
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11.5,
+                    color: "var(--text-muted)",
+                  }}
+                  data-testid="writing-level-metrics-summary"
+                >
+                  Measured: {wl.level_label} • Grade {wl.flesch_kincaid_grade.toFixed(1)} •{" "}
+                  {wl.avg_words_per_sentence.toFixed(1)} words/sentence •{" "}
+                  {wl.jargon_density_pct.toFixed(1)}% complex terms
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 6 }}>
+              {writingLevelDescription(effectiveWritingLevel)} Switch modes anytime to adjust how Clearspace explains your strengths, career matches, and next steps.
+            </p>
+          </div>
+
+          <div
+            role="group"
+            aria-label="Writing level and explanation style"
+            style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}
+          >
+            <button
+              type="button"
+              className={`btn-outline ${activeWritingLevelMode === "auto" ? "active" : ""}`}
+              style={{ padding: "6px 11px", fontSize: 12 }}
+              aria-pressed={activeWritingLevelMode === "auto"}
+              onClick={() => handleSelectWritingLevelMode("auto")}
+              data-testid="writing-mode-auto"
+            >
+              Auto (Matched to You)
+            </button>
+            <button
+              type="button"
+              className={`btn-outline ${activeWritingLevelMode === "everyday" ? "active" : ""}`}
+              style={{ padding: "6px 11px", fontSize: 12 }}
+              aria-pressed={activeWritingLevelMode === "everyday"}
+              onClick={() => handleSelectWritingLevelMode("everyday")}
+              data-testid="writing-mode-everyday"
+            >
+              Everyday
+            </button>
+            <button
+              type="button"
+              className={`btn-outline ${activeWritingLevelMode === "professional" ? "active" : ""}`}
+              style={{ padding: "6px 11px", fontSize: 12 }}
+              aria-pressed={activeWritingLevelMode === "professional"}
+              onClick={() => handleSelectWritingLevelMode("professional")}
+              data-testid="writing-mode-professional"
+            >
+              Professional
+            </button>
+            <button
+              type="button"
+              className={`btn-outline ${activeWritingLevelMode === "technical" ? "active" : ""}`}
+              style={{ padding: "6px 11px", fontSize: 12 }}
+              aria-pressed={activeWritingLevelMode === "technical"}
+              onClick={() => handleSelectWritingLevelMode("technical")}
+              data-testid="writing-mode-technical"
+            >
+              Technical
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderPeakFlowRhythmCard = () => {
     if (!data) return null;
@@ -1258,7 +1380,7 @@ export default function App() {
             <strong>4. 100% Citation-Backed Insights</strong>
           </div>
           <p>
-            Clearspace never hallucinates traits. Every card in your Cognitive Mirror and O*NET Path Finder cites exact dates, conversation IDs, and verbatim scrubbed quotes from your own archive.
+            Clearspace never hallucinates traits. Every card in Your Strengths &amp; Habits and Career Path Matches cites exact dates, conversation IDs, and verbatim scrubbed quotes from your own archive.
           </p>
         </div>
       </div>
@@ -1573,6 +1695,18 @@ export default function App() {
                         : "1-Step Onboarding"
                       : `${unlockedTabOrder.length} of 5 Modules Unlocked`}
                   </div>
+                  <div
+                    style={{
+                      fontSize: 10.5,
+                      color: "var(--accent-sage)",
+                      fontWeight: 600,
+                      marginTop: 2,
+                    }}
+                    data-testid="sidebar-writing-level-pill"
+                  >
+                    Writing Style: {writingStyleShortBand} (
+                    {activeWritingLevelMode === "auto" ? "Auto" : "Custom"})
+                  </div>
                 </div>
               </div>
               <button
@@ -1614,7 +1748,7 @@ export default function App() {
               }}
             >
               <Sparkles size={17} />
-              <span>Cognitive Mirror</span>
+              <span>Your Strengths &amp; Habits</span>
             </button>
 
             <button
@@ -1634,12 +1768,12 @@ export default function App() {
               }}
               title={
                 isOnetUnlocked
-                  ? "O*NET Natural Path Finder"
-                  : "Unlocks after reviewing your 3-Chapter Story in Cognitive Mirror"
+                  ? "Career Path Matches"
+                  : "Unlocks after reviewing your 3-Chapter Story in Your Strengths & Habits"
               }
             >
               {isOnetUnlocked ? <Compass size={17} /> : <Lock size={15} />}
-              <span>O*NET Path Finder</span>
+              <span>Career Path Matches</span>
             </button>
 
             <button
@@ -1659,12 +1793,12 @@ export default function App() {
               }}
               title={
                 isEquityUnlocked
-                  ? "5-Year Equity & Quests"
-                  : "Unlocks after exploring or shortlisting a role in O*NET Path Finder"
+                  ? "Next Steps & Growth Plan"
+                  : "Unlocks after exploring or shortlisting a role in Career Path Matches"
               }
             >
               {isEquityUnlocked ? <TrendingUp size={17} /> : <Lock size={15} />}
-              <span>5-Year Equity & Quests</span>
+              <span>Next Steps &amp; Growth Plan</span>
             </button>
 
             <button
@@ -1684,12 +1818,12 @@ export default function App() {
               }}
               title={
                 isJournalUnlocked
-                  ? "Reflective Journal"
-                  : "Unlocks after accepting at least 1 milestone in 5-Year Equity & Quests"
+                  ? "Personal Reflection Journal"
+                  : "Unlocks after accepting at least 1 milestone in Next Steps & Growth Plan"
               }
             >
               {isJournalUnlocked ? <BookOpen size={17} /> : <Lock size={15} />}
-              <span>Reflective Journal</span>
+              <span>Personal Reflection Journal</span>
             </button>
 
             <button
@@ -1714,14 +1848,14 @@ export default function App() {
               }
             >
               {isVaultUnlocked ? <Database size={17} /> : <Lock size={15} />}
-              <span>Local Vault & Scrubber</span>
+              <span>Local Vault &amp; Scrubber</span>
             </button>
           </nav>
 
           {/* Standalone Trust & AI Links in Sidebar */}
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-warm)", display: "flex", flexDirection: "column", gap: 4 }}>
             <div className="stat-label" style={{ paddingLeft: 8, fontSize: 10.5 }}>
-              Privacy & AI Architecture
+              Privacy &amp; AI Architecture
             </div>
             <button
               type="button"
@@ -1747,10 +1881,10 @@ export default function App() {
         </div>
 
         <div className="equity-widget" aria-live="polite">
-          <div className="stat-label">5-Year Personal Equity Index</div>
+          <div className="stat-label">Growth Plan Progress</div>
           <div className="equity-score-num">{totalEquityPoints.toLocaleString()} pts</div>
           <p className="stat-sub">
-            Compounding across {acceptedQuests.length} active career commitments.
+            Building momentum across {acceptedQuests.length} active career steps.
           </p>
           <div
             style={{
@@ -1775,7 +1909,7 @@ export default function App() {
             >
               <span>
                 v{data?.update_status?.installed_version ?? "0.2.0"} • Schema v
-                {data?.update_status?.schema_version ?? 2}
+                {data?.update_status?.schema_version ?? 3}
               </span>
               <button
                 type="button"
@@ -1867,7 +2001,7 @@ export default function App() {
           <>
             {activeTab === "mirror" && (
               <div>
-                <h1 className="page-title">{ownerPossessive} Unmasked Cognitive Mirror</h1>
+                <h1 className="page-title">{ownerPossessive} Strengths &amp; Habits</h1>
                 <p className="page-lead">
                   {isVaultEmpty ? (
                     <>
@@ -1895,14 +2029,14 @@ export default function App() {
                     </div>
                   </div>
                   <div className="stat-card">
-                    <div className="stat-label">High-Signal Reflections</div>
+                    <div className="stat-label">Meaningful Prompts</div>
                     <div className="stat-value">{data.summary.high_signal_prompts.toLocaleString()}</div>
-                    <div className="stat-sub">Deep architecture, values & career intent</div>
+                    <div className="stat-sub">Problem-solving, values &amp; career goals</div>
                   </div>
                   <div className="stat-card">
                     <div className="stat-label">Local PII Redactions</div>
                     <div className="stat-value">{data.summary.total_redactions.toLocaleString()}</div>
-                    <div className="stat-sub">Emails, phones & keys scrubbed on disk</div>
+                    <div className="stat-sub">Emails, phones &amp; keys scrubbed on disk</div>
                   </div>
                   <div className="stat-card">
                     <div className="stat-label">Peak Deep-Flow Window</div>
@@ -1910,6 +2044,8 @@ export default function App() {
                     <div className="stat-sub">{peakInfo.shareSub}</div>
                   </div>
                 </div>
+
+                {renderWritingLevelSwitcherCard()}
 
                 {isVaultEmpty ? (
                   <>
@@ -2097,8 +2233,15 @@ export default function App() {
                               }}
                               data-testid="mirror-assumption-box"
                             >
-                              <strong>Test Assumption:</strong>{" "}
-                              {card.assumption_challenged.replace(/^Assumption Tested:\s*/i, "")}
+                              <strong>
+                                {effectiveWritingLevel === "everyday"
+                                  ? "Reality Check:"
+                                  : "Test Assumption:"}
+                              </strong>{" "}
+                              {card.assumption_challenged.replace(
+                                /^(?:Assumption Tested|Reality Check):\s*/i,
+                                ""
+                              )}
                             </div>
                           )}
 
@@ -2114,8 +2257,15 @@ export default function App() {
                               }}
                               data-testid="mirror-gap-box"
                             >
-                              <strong>Identify Gap:</strong>{" "}
-                              {card.identified_gap.replace(/^Gap Identified:\s*/i, "")}
+                              <strong>
+                                {effectiveWritingLevel === "everyday"
+                                  ? "Next Step to Grow:"
+                                  : "Identify Gap:"}
+                              </strong>{" "}
+                              {card.identified_gap.replace(
+                                /^(?:Gap Identified|Next Step to Grow):\s*/i,
+                                ""
+                              )}
                             </div>
                           )}
 
@@ -2151,7 +2301,7 @@ export default function App() {
                             ? "Next Up: Chapter 2 — Where We Think You Could Grow"
                             : activeStoryChapter === "grow"
                             ? "Next Up: Chapter 3 — What Is Causing You Friction"
-                            : "Story Complete — Unlock Your O*NET Natural Path Finder"}
+                            : "Story Complete — Unlock Your Career Path Matches"}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -2183,7 +2333,7 @@ export default function App() {
                             data-testid="btn-unlock-onet"
                           >
                             <Compass size={15} />
-                            <span>Continue to O*NET Path Finder</span>
+                            <span>Continue to Career Path Matches</span>
                             <ArrowRight size={15} />
                           </button>
                         )}
@@ -2196,12 +2346,15 @@ export default function App() {
 
             {activeTab === "onet" && (
               <div>
-                <h1 className="page-title">{ownerPossessive} O*NET Natural Path Finder</h1>
+                <h1 className="page-title">{ownerPossessive} Career Path Matches</h1>
                 <p className="page-lead">
                   Most people don’t know what job titles exist that match who they naturally are. Below are the
                   occupations and modern role tracks matched directly to your demonstrated behaviors, energy
-                  drivers, and burnout guardrails. Shortlist any track to unlock your <strong>5-Year Equity Map</strong>.
+                  drivers, and burnout guardrails. Shortlist any track to unlock your{" "}
+                  <strong>Next Steps &amp; Growth Plan</strong>.
                 </p>
+
+                {renderWritingLevelSwitcherCard()}
 
                 {isVaultEmpty && renderOnboardingPanel()}
 
@@ -2232,6 +2385,21 @@ export default function App() {
                             <h3 style={{ fontSize: "21px", marginTop: "8px" }}>
                               {role.positioned_title}
                             </h3>
+                            {(effectiveWritingLevel === "everyday" ||
+                              effectiveWritingLevel === "professional") &&
+                              role.plain_english_description && (
+                                <p
+                                  style={{
+                                    fontSize: "13.5px",
+                                    color: "var(--accent-sage)",
+                                    fontWeight: 600,
+                                    marginTop: 4,
+                                  }}
+                                  data-testid="onet-plain-english-desc"
+                                >
+                                  <strong>In Plain English:</strong> {role.plain_english_description}
+                                </p>
+                              )}
                             <p style={{ fontSize: "12.5px", color: "var(--text-muted)", marginTop: 2 }}>
                               Track Ceiling ({role.salary_range_usd}): {role.modern_titles.join(" • ")}
                             </p>
@@ -2375,7 +2543,9 @@ export default function App() {
                             <strong>Tested Assumptions:</strong>
                             <ul style={{ marginTop: 4, paddingLeft: 18 }}>
                               {role.tested_assumptions.map((ta, tIdx) => (
-                                <li key={tIdx}>{ta.replace(/^Assumption Tested:\s*/i, "")}</li>
+                                <li key={tIdx}>
+                                  {ta.replace(/^(?:Assumption Tested|Reality Check):\s*/i, "")}
+                                </li>
                               ))}
                             </ul>
                           </div>
@@ -2425,7 +2595,7 @@ export default function App() {
                   <div>
                     <div className="stat-label">Next Dependent Milestone</div>
                     <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2 }}>
-                      Ready to commit to a 5-year trajectory based on your matched tracks?
+                      Ready to build your personalized growth plan based on your matched career paths?
                     </div>
                   </div>
                   <button
@@ -2440,7 +2610,7 @@ export default function App() {
                     data-testid="btn-unlock-equity"
                   >
                     <TrendingUp size={15} />
-                    <span>Unlock 5-Year Equity & Quests</span>
+                    <span>Unlock Next Steps &amp; Growth Plan</span>
                     <ArrowRight size={15} />
                   </button>
                 </div>
@@ -2449,11 +2619,13 @@ export default function App() {
 
             {activeTab === "equity" && (
               <div>
-                <h1 className="page-title">{ownerPossessive} 5-Year Personal Equity Map</h1>
+                <h1 className="page-title">{ownerPossessive} Next Steps &amp; Growth Plan</h1>
                 <p className="page-lead">
-                  Life is about walking a path you are excited to walk. Accept at least 1 recommendation below to
-                  unlock your <strong>Reflective Sanctuary & Socratic Journal</strong>.
+                  Practical, personalized action steps tailored to your top career matches and growth areas. Accept at least 1 step below to unlock your{" "}
+                  <strong>Personal Reflection Journal</strong>.
                 </p>
+
+                {renderWritingLevelSwitcherCard()}
 
                 <div className="insight-card" style={{ marginTop: 22 }} data-testid="equity-summary-card">
                   <div
@@ -2466,10 +2638,10 @@ export default function App() {
                     }}
                   >
                     <div>
-                      <div className="stat-label">5-Year Trajectory Commitment</div>
+                      <div className="stat-label">Growth Plan Commitment</div>
                       <h3 style={{ fontSize: 20, marginTop: 4 }}>
                         {committedQuestPoints.toLocaleString()} /{" "}
-                        {totalAvailableQuestPoints.toLocaleString()} Equity Points Committed (
+                        {totalAvailableQuestPoints.toLocaleString()} Growth Points Committed (
                         {equityProgressPct}%)
                       </h3>
                       <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 2 }}>
@@ -2478,16 +2650,16 @@ export default function App() {
                       </p>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <span className="badge value">Now (30 Days)</span>
-                      <span className="badge superpower">Year 1 Milestone</span>
-                      <span className="badge superpower">Year 3 Milestone</span>
-                      <span className="badge value">Year 5 Horizon</span>
+                      <span className="badge value">Next 7 Days (Quick Win)</span>
+                      <span className="badge superpower">Next 30 Days (Skill Builder)</span>
+                      <span className="badge superpower">3-Month Milestone (Practical Project)</span>
+                      <span className="badge value">1-Year Goal (Career Growth)</span>
                     </div>
                   </div>
                   <div
                     className="equity-progress-track"
                     role="progressbar"
-                    aria-label="5-Year Equity Commitment Progress"
+                    aria-label="Growth Plan Commitment Progress"
                     aria-valuenow={equityProgressPct}
                     aria-valuemin={0}
                     aria-valuemax={100}
@@ -2501,7 +2673,7 @@ export default function App() {
 
                 <div className="card-stack">
                   {data.quests.map((q) => (
-                    <div key={q.id} className="insight-card">
+                    <div key={q.id} className="insight-card" data-testid="quest-card">
                       <div
                         style={{
                           display: "flex",
@@ -2514,7 +2686,7 @@ export default function App() {
                         <div>
                           <span className="badge value">{q.horizon}</span>
                           <span className="badge superpower" style={{ marginLeft: 8 }}>
-                            +{q.equity_points} Equity • {q.equity_category}
+                            +{q.equity_points} pts • {q.equity_category}
                           </span>
                         </div>
                         <div style={{ display: "flex", gap: 8 }}>
@@ -2523,7 +2695,7 @@ export default function App() {
                             onClick={() => handleToggleQuest(q.id, "accepted")}
                           >
                             <CheckCircle2 size={14} />
-                            <span>{q.accepted ? "On My Path" : "Accept Recommendation"}</span>
+                            <span>{q.accepted ? "On My Path" : "Accept Step"}</span>
                           </button>
                           <button
                             className={`btn-outline ${q.completed ? "active" : ""}`}
@@ -2556,7 +2728,7 @@ export default function App() {
                     <div>
                       <div className="stat-label">Milestone Unlocked</div>
                       <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2 }}>
-                        Reflective Sanctuary & Socratic Journal is now unlocked!
+                        Personal Reflection Journal is now unlocked!
                       </div>
                     </div>
                     <button
@@ -2566,7 +2738,7 @@ export default function App() {
                       data-testid="btn-go-journal"
                     >
                       <BookOpen size={15} />
-                      <span>Open Reflective Journal</span>
+                      <span>Open Personal Reflection Journal</span>
                       <ArrowRight size={15} />
                     </button>
                   </div>
@@ -2576,14 +2748,14 @@ export default function App() {
 
             {activeTab === "journal" && (
               <div>
-                <h1 className="page-title">{ownerPossessive} Reflective Sanctuary & Socratic Journal</h1>
+                <h1 className="page-title">{ownerPossessive} Personal Reflection Journal</h1>
                 <p className="page-lead">
-                  A private, non-judgmental space stored strictly in your local vault. Choose a Socratic
-                  prompt derived from your behavioral graph or write freely.
+                  A private, non-judgmental space stored strictly in your local vault. Choose a guided
+                  reflection question below or write freely.
                 </p>
 
                 <div className="insight-card" style={{ marginTop: 22 }}>
-                  <div className="stat-label">Socratic Prompt (Derived from Your Graph)</div>
+                  <div className="stat-label">Guided Reflection Question</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                     {SOCRATIC_PROMPTS.map((_sp, idx) => (
                       <button
@@ -2591,7 +2763,7 @@ export default function App() {
                         className={`btn-outline ${selectedPromptIdx === idx ? "active" : ""}`}
                         onClick={() => setSelectedPromptIdx(idx)}
                       >
-                        Prompt #{idx + 1}
+                        Question #{idx + 1}
                       </button>
                     ))}
                   </div>
@@ -2627,10 +2799,10 @@ export default function App() {
                         color: "var(--text-primary)",
                       }}
                     >
-                      <option>Energized & Clear</option>
+                      <option>Energized &amp; Clear</option>
                       <option>In Deep Flow</option>
                       <option>Questioning / At a Crossroads</option>
-                      <option>Feeling Maintenance Drag</option>
+                      <option>Feeling Drained by Routine</option>
                     </select>
                     <button className="btn-primary" onClick={handleSaveJournal}>
                       Save to Local Vault
@@ -2658,7 +2830,7 @@ export default function App() {
 
             {activeTab === "vault" && (
               <div>
-                <h1 className="page-title">Zero-Knowledge Local Vault & Scrubber</h1>
+                <h1 className="page-title">Zero-Knowledge Local Vault &amp; Scrubber</h1>
                 <p className="page-lead">
                   Inspect how your local data is parsed and scrubbed. Your local database lives at:{" "}
                   <code style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{data.db_path}</code>
@@ -2678,15 +2850,15 @@ export default function App() {
                   data-testid="vault-upgrade-safety-card"
                 >
                   <div>
-                    <div className="stat-label">Desktop Upgrade & Schema Migration Guard</div>
+                    <div className="stat-label">Desktop Upgrade &amp; Schema Migration Guard</div>
                     <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>
                       Clearspace v{data.update_status?.installed_version ?? "0.2.0"} • SQLite Schema v
-                      {data.update_status?.schema_version ?? 2} (`PRAGMA user_version`)
+                      {data.update_status?.schema_version ?? 3} (`PRAGMA user_version`)
                     </div>
                     <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 2 }}>
                       Installing a newer `.exe` or `.msi` release never overwrites your vault. Before any schema
                       upgrade, Clearspace automatically snapshots{" "}
-                      <code>clearspace_vault.db.bak-v{data.update_status?.schema_version ?? 2}</code>.
+                      <code>clearspace_vault.db.bak-v{data.update_status?.schema_version ?? 3}</code>.
                     </div>
                     {backupNotice && (
                       <div
@@ -2806,7 +2978,7 @@ export default function App() {
                     <div>
                       <h3 style={{ fontSize: 18 }}>Interactive Scrubbed Prompt Explorer</h3>
                       <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                        Search and filter your high-signal prompts after deterministic local PII redaction.
+                        Search and filter your Meaningful Prompts after deterministic local PII redaction.
                       </p>
                     </div>
                     <div className="search-input-wrap">
