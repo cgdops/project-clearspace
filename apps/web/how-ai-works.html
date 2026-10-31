@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>How We Use AI in the System — Clearspace Methodology</title>
+    <meta
+      name="description"
+      content="Discover how Clearspace synthesizes your AI prompt archives into citation-backed career insights using deterministic Rust parsers and O*NET 29.x matching without external LLM calls."
+    />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div id="status-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href="/index.html" class="brand-lockup" aria-label="Clearspace Home">
+          <svg class="brand-icon" width="34" height="34" viewBox="0 0 1024 1024" aria-hidden="true">
+            <rect x="64" y="64" width="896" height="896" rx="220" fill="#2B5B48" />
+            <circle cx="512" cy="512" r="295" stroke="#FAF7F2" stroke-width="34" fill="none" />
+            <path
+              d="M512 190 L580 444 L834 512 L580 580 L512 834 L444 580 L190 512 L444 444 Z"
+              fill="#FAF7F2"
+            />
+            <path
+              d="M512 270 L556 468 L754 512 L556 556 L512 754 L468 556 L270 512 L468 468 Z"
+              fill="#C86D44"
+            />
+            <circle cx="512" cy="512" r="44" fill="#FAF7F2" />
+            <circle cx="512" cy="512" r="20" fill="#2B5B48" />
+          </svg>
+          <span class="brand-name">Clearspace</span>
+          <span class="version-badge">AI Methodology Brief</span>
+        </a>
+
+        <nav class="site-nav" aria-label="Primary Navigation">
+          <a href="/index.html">Home &amp; Download</a>
+          <a href="/zero-knowledge.html">Zero-Knowledge Proof</a>
+          <a href="/how-ai-works.html" aria-current="page">How We Use AI</a>
+        </nav>
+
+        <div class="header-actions">
+          <button
+            type="button"
+            id="theme-toggle-btn"
+            class="btn-ghost"
+            aria-label="Switch color theme (currently System)"
+          >
+            <span id="theme-toggle-label">Theme: Auto</span>
+          </button>
+          <a href="/index.html#download-hub" class="btn-primary btn-sm">Download Desktop App</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="architecture-section" style="padding-top: 64px">
+        <div class="container">
+          <div class="section-header">
+            <span class="eyebrow">STANDALONE AI TRANSPARENCY BRIEF</span>
+            <h1 id="ai-page-heading" style="font-family: var(--font-serif); font-size: clamp(2.2rem, 4vw, 3.4rem); font-weight: 400; line-height: 1.15; margin-top: 8px">
+              How We Use AI &amp; Deterministic Behavioral Scoring
+            </h1>
+            <p style="margin-top: 12px; max-width: 760px">
+              Clearspace does <strong>not</strong> pipe your private thoughts into an external cloud LLM API.
+              Instead, it treats the AI prompts you have already written across ChatGPT, Claude, and Gemini as an
+              unmasked behavioral graph—and scores them deterministically on your CPU.
+            </p>
+          </div>
+
+          <div class="arch-grid" style="margin-top: 32px">
+            <article class="arch-card">
+              <div class="arch-card-kicker">01 &bull; EVIDENCE-WEIGHTED DEPTH RUBRIC</div>
+              <h3>Zero Ego-Inflation Calibration</h3>
+              <p>
+                Every prompt is weighted by demonstrated technical and strategic depth:
+                <code>0.35x</code> for Beginner lookup, <code>0.75x</code> for Intermediate component implementation,
+                and <code>1.15x</code> for Advanced systems architecture, unit-economics modeling, and adversarial verification.
+              </p>
+            </article>
+
+            <article class="arch-card">
+              <div class="arch-card-kicker">02 &bull; 3-CHAPTER NARRATIVE MIRROR</div>
+              <h3>Excel, Grow &amp; Friction Synthesis</h3>
+              <p>
+                Your prompts are organized into a 3-part story: <strong>Where You Currently Excel</strong> (demonstrated superpowers),
+                <strong>Where We Think You Could Grow</strong> (untested assumptions &amp; seniority gaps), and
+                <strong>What Is Causing You Friction</strong> (repetitive maintenance traps).
+              </p>
+            </article>
+
+            <article class="arch-card">
+              <div class="arch-card-kicker">03 &bull; CITATION-BACKED O*NET 29.x MATCHING</div>
+              <h3>Every Insight Cites Your Exact Words</h3>
+              <p>
+                Role fit scores across O*NET 29.x tracks are computed from Skill Overlap, Energy Alignment,
+                Values Match, and Burnout Friction—always accompanied by verbatim dated citations from your vault.
+              </p>
+            </article>
+          </div>
+
+          <div style="margin-top: 40px; text-align: center">
+            <a href="/index.html#download-hub" class="btn-primary">
+              Download Clearspace Desktop (100% Local) &rarr;
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div>
+          <strong>Clearspace v0.1.0</strong> — The Zero-Knowledge Career &amp; Cognitive Compass
+        </div>
+        <div class="footer-links">
+          <a href="/index.html">Home</a>
+          <a href="/zero-knowledge.html">Zero-Knowledge Proof</a>
+          <a href="/how-ai-works.html">How We Use AI</a>
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

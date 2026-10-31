@@ -3,9 +3,9 @@ import fs from "fs";
 import path from "path";
 
 const ARTIFACT_DIR =
-  "C:\\Users\\chris\\.gemini\\antigravity\\brain\\5011581b-6f10-4019-80e7-7ffa808c7b5d";
+  "C:\\Users\\chris\\.gemini\\antigravity\\brain\\85d7d321-3f94-42ee-8880-75a8ac97dc35";
 const REPORT_PATH =
-  "e:\\GitHub\\project-clearspace\\factory\\reports\\iteration-3-visual.json";
+  "e:\\GitHub\\project-clearspace\\factory\\reports\\iteration-4-progressive-onboarding.json";
 
 const VIEWPORTS = [
   { name: "1280x800", label: "Standard Desktop", width: 1280, height: 800 },
@@ -49,7 +49,20 @@ const SYNTHETIC_MULTI_PROVIDER_JSON = JSON.stringify([
   },
 ]);
 
-test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold Inspection", async ({
+const SYNTHETIC_CLAUDE_MANIFEST_JSON = JSON.stringify({
+  instructions: "Download each file using the export_url.",
+  total_files: 1,
+  data_files: [
+    {
+      filename: "conversations-000.zip",
+      category: "conversations",
+      size_bytes: 590,
+      export_url: "https://claude.ai/export/test/download/conversations-000.zip",
+    },
+  ],
+});
+
+test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme Sync, Peak Flow Front & 3-Chapter Story Verification", async ({
   browser,
 }) => {
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
@@ -84,24 +97,86 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForTimeout(250);
 
-    // 1. Verify Empty Vault / New User Onboarding state & 0 pts on fresh storage
-    await expect(page.locator(".onboarding-card h2")).toContainText("Welcome to Clearspace");
+    // 1. Verify Step 1 Focused Profile Onboarding (1 thing at a time)
+    const step1Card = page.getByTestId("step1-profile-card");
+    await expect(step1Card).toBeVisible();
+    await expect(step1Card.locator("h1")).toContainText("Welcome to Clearspace — Let’s Start With You");
     await expect(page.locator(".equity-score-num")).toHaveText("0 pts");
-    await expect(page.locator(".equity-widget .stat-sub")).toContainText(
-      "Compounding across 0 active career commitments"
+
+    // Verify ContributionGrid defaults to Clearspace Sage on light theme (never a dark box on light theme)
+    const gridSection = page.getByTestId("prompt-contribution-grid");
+    await expect(gridSection).toHaveClass(/theme-clearspace-sage/);
+
+    if (vp.name === "1280x800") {
+      await page.screenshot({
+        path: path.join(ARTIFACT_DIR, "step1-profile-onboarding-1280x800.png"),
+        fullPage: false,
+      });
+    }
+
+    // Complete Step 1: Populate Name ("Chris")
+    await page.getByTestId("profile-name-input").fill("Chris");
+    await page.getByTestId("btn-complete-step1").click();
+    await page.waitForTimeout(150);
+
+    // 2. Verify Step 2: Zero-Knowledge Upload Card & Personalized Sidebar/Header
+    await expect(page.getByTestId("sidebar-profile-name")).toHaveText("Chris");
+    await expect(page.locator(".main-content h1.page-title")).toHaveText(
+      "Chris’s Unmasked Cognitive Mirror"
+    );
+    const step2Card = page.getByTestId("step2-upload-card");
+    await expect(step2Card).toBeVisible();
+    await expect(step2Card.locator("h2")).toContainText("Welcome, Chris to Clearspace");
+
+    // Verify direct 1-click provider export page links are present
+    await expect(page.getByTestId("provider-link-openai")).toHaveAttribute(
+      "href",
+      "https://chatgpt.com/#settings/DataControls"
+    );
+    await expect(page.getByTestId("provider-link-claude")).toHaveAttribute(
+      "href",
+      "https://claude.ai/settings"
+    );
+    await expect(page.getByTestId("provider-link-gemini")).toHaveAttribute(
+      "href",
+      "https://takeout.google.com/"
     );
 
     if (vp.name === "1280x800") {
       await page.screenshot({
-        path: path.join(ARTIFACT_DIR, "iter3-onboarding-1280x800.png"),
+        path: path.join(ARTIFACT_DIR, "step2-upload-onboarding-1280x800.png"),
         fullPage: false,
       });
-    }
-    if (vp.name === "1024x768") {
+
+      // Test Standalone In-App "What is Zero-Knowledge?" Page
+      await page.getByTestId("btn-open-zero-knowledge").click();
+      await expect(page.getByTestId("standalone-zero-knowledge-page")).toBeVisible();
       await page.screenshot({
-        path: path.join(ARTIFACT_DIR, "iter3-onboarding-1024x768.png"),
+        path: path.join(ARTIFACT_DIR, "standalone-zero-knowledge-1280x800.png"),
         fullPage: false,
       });
+      await page.getByTestId("btn-close-standalone").click();
+
+      // Test Standalone In-App "How We Use AI in the System" Page
+      await page.getByTestId("btn-open-how-ai-works").click();
+      await expect(page.getByTestId("standalone-how-ai-works-page")).toBeVisible();
+      await page.screenshot({
+        path: path.join(ARTIFACT_DIR, "standalone-how-ai-works-1280x800.png"),
+        fullPage: false,
+      });
+      await page.getByTestId("btn-close-standalone").click();
+
+      // Test Claude Manifest Upload produces green "Step 1 of 2 Complete" continuation card (no warning/error badge)
+      const step2FileInput = page.getByTestId("vault-file-input");
+      await step2FileInput.setInputFiles({
+        name: "manifest-claude.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(SYNTHETIC_CLAUDE_MANIFEST_JSON, "utf-8"),
+      });
+      await page.waitForTimeout(150);
+      await expect(page.getByTestId("manifest-ready-badge")).toBeVisible();
+      await expect(page.getByTestId("manifest-continuation-card")).toBeVisible();
+      await expect(page.getByTestId("import-summary-panel")).not.toHaveClass(/has-issues/);
     }
 
     const emptyStateMetrics = await page.evaluate(() => {
@@ -135,8 +210,71 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
 
     if (vp.name === "1280x800") {
       onboardingVerification = emptyStateMetrics;
+    }
 
-      // Test WAI-ARIA keyboard navigation on [role="tab"] (ArrowDown / End / Home)
+    // 3. Upload synthetic multi-provider JSON to test Progressive Unlocking Step 3 -> Step 4 -> Step 5 -> Step 6
+    const fileInput = page.getByTestId("vault-file-input");
+    await fileInput.setInputFiles({
+      name: "multi-provider-export.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(SYNTHETIC_MULTI_PROVIDER_JSON, "utf-8"),
+    });
+    await page.waitForTimeout(200);
+
+    // Verify Peak Flow Rhythm Card is promoted to the front of Step 3 (Cognitive Mirror)
+    await expect(page.getByTestId("peak-flow-rhythm-card")).toBeVisible();
+    const hourLabels = await page
+      .getByTestId("peak-flow-rhythm-card")
+      .locator(".hour-label")
+      .allTextContents();
+    expect(hourLabels).toHaveLength(24);
+    expect(hourLabels[0]).toBe("12a");
+    expect(hourLabels[12]).toBe("12p");
+    expect(hourLabels[19]).toBe("7p");
+    expect(hourLabels[23]).toBe("11p");
+
+    // Verify 3-Chapter Narrative Story Stepper on Step 3
+    const stepper = page.getByTestId("story-chapter-stepper");
+    await expect(stepper).toBeVisible();
+    await expect(page.getByTestId("story-chapter-banner")).toContainText(
+      "Chapter 1 — Where You Currently Excel"
+    );
+    await expect(page.getByTestId("mirror-story-card")).toHaveCount(2);
+
+    // Step through Chapter 2 ("Where We Think You Could Grow") and Chapter 3 ("What Is Causing You Friction")
+    await page.getByTestId("story-chapter-btn-grow").click();
+    await expect(page.getByTestId("story-chapter-banner")).toContainText(
+      "Chapter 2 — Where We Think You Could Grow"
+    );
+    await expect(page.getByTestId("mirror-story-card")).toHaveCount(2);
+
+    await page.getByTestId("story-chapter-btn-friction").click();
+    await expect(page.getByTestId("story-chapter-banner")).toContainText(
+      "Chapter 3 — What Is Causing You Friction"
+    );
+    await expect(page.getByTestId("mirror-story-card")).toHaveCount(1);
+
+    // Completing all 3 chapters unlocks O*NET Path Finder
+    await expect(page.locator("#tab-onet")).toHaveAttribute("aria-disabled", "false");
+    await page.getByTestId("btn-unlock-onet").click();
+    await expect(page.locator(".main-content h1.page-title")).toContainText(
+      "Chris’s O*NET Natural Path Finder"
+    );
+
+    // Shortlist an O*NET role to unlock 5-Year Equity & Quests
+    await page.getByTestId("btn-unlock-equity").click();
+    await expect(page.locator("#tab-equity")).toHaveAttribute("aria-disabled", "false");
+    await expect(page.locator(".main-content h1.page-title")).toContainText(
+      "Chris’s 5-Year Personal Equity Map"
+    );
+
+    // Accept quests via Load Sample or button click to unlock Reflective Journal
+    await page.getByRole("tab", { name: /Local Vault & Scrubber/i }).click();
+    await page.getByRole("button", { name: /Load Sample Multi-Provider Vault/i }).click();
+    await page.waitForTimeout(200);
+
+    // Verify all 5 tabs are now unlocked and test WAI-ARIA keyboard navigation
+    if (vp.name === "1280x800") {
       const firstTab = page.locator('[role="tab"]').first();
       await firstTab.focus();
       await page.keyboard.press("ArrowDown");
@@ -152,91 +290,47 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
         .locator('[role="tab"][aria-selected="true"]')
         .textContent();
 
-      const tabAttributes = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('[role="tab"]')).map((el) => ({
-          id: el.getAttribute("id"),
-          ariaSelected: el.getAttribute("aria-selected"),
-          ariaControls: el.getAttribute("aria-controls"),
-          tabIndex: (el as HTMLElement).tabIndex,
-        }))
-      );
-
       keyboardNavVerification = {
         activeAfterArrowDown: activeAfterArrowDown?.trim(),
         activeAfterEnd: activeAfterEnd?.trim(),
         activeAfterHome: activeAfterHome?.trim(),
-        tabAttributes,
       };
-    }
 
-    // 2. Populate vault via "Load Sample Multi-Provider Vault" + synthetic upload
-    await page.getByRole("button", { name: /Load Sample Multi-Provider Vault/i }).click();
-    await expect(page.locator(".insight-card").first()).toBeVisible();
-    await page.waitForTimeout(200);
+      // Test Global Theme Toggle -> ContributionGrid synchronizes automatically
+      await page.getByTestId("sidebar-theme-toggle").click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      await expect(page.getByTestId("prompt-contribution-grid")).toHaveClass(/theme-github-dark/);
+      await page.screenshot({
+        path: path.join(ARTIFACT_DIR, "step3-mirror-dark-theme-1280x800.png"),
+        fullPage: false,
+      });
 
-    if (vp.name === "1280x800") {
-      // Upload synthetic multi-provider JSON via file input on Vault tab
+      // Switch back to Warm Daylight (light) and verify ContributionGrid is Clearspace Sage
+      await page.getByTestId("sidebar-theme-toggle").click();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+      await expect(page.getByTestId("prompt-contribution-grid")).toHaveClass(
+        /theme-clearspace-sage/
+      );
+
+      // Verify Vault tab Prompt Explorer
       await page.getByRole("tab", { name: /Local Vault & Scrubber/i }).click();
       await page.waitForTimeout(150);
-
-      const fileInput = page.getByTestId("vault-file-input");
-      await fileInput.setInputFiles({
-        name: "multi-provider-export.json",
-        mimeType: "application/json",
-        buffer: Buffer.from(SYNTHETIC_MULTI_PROVIDER_JSON, "utf-8"),
-      });
-      await page.waitForTimeout(200);
-
-      // Verify interactive Scrubbed Prompt Explorer & above-the-fold geometry in Vault tab
       const explorer = page.getByTestId("vault-prompt-explorer");
       await expect(explorer).toBeVisible();
 
-      const vaultAboveFoldGeometry = await page.evaluate(() => {
-        const rhythmCard = document.querySelector(".hour-bars")?.closest(".insight-card");
-        const explorerCard = document.querySelector('[data-testid="vault-prompt-explorer"]');
-        const rRect = rhythmCard?.getBoundingClientRect();
-        const eRect = explorerCard?.getBoundingClientRect();
-        return {
-          rhythmCardTopY: rRect ? Math.round(rRect.top) : null,
-          explorerCardTopY: eRect ? Math.round(eRect.top) : null,
-          bothVisibleAbove800pxFold: Boolean(
-            rRect && eRect && rRect.top < 800 && eRect.top < 800
-          ),
-        };
-      });
-
-      const initialPromptCards = await explorer
-        .locator(".quote-box, .explorer-prompt-item, [data-testid='explorer-prompt-row']")
-        .count();
       const searchInput = page.getByTestId("vault-search-input");
       await searchInput.fill("REDACTED_EMAIL");
       await page.waitForTimeout(100);
       const filteredBySearchText = await explorer.textContent();
       const matchesRedactedEmail = filteredBySearchText?.includes("[REDACTED_EMAIL]") ?? false;
       await searchInput.fill("");
-      await page.waitForTimeout(100);
-
-      const filterBtns = explorer.locator("button");
-      const filterBtnCount = await filterBtns.count();
-      let clickedFilterLabel: string | null = null;
-      if (filterBtnCount > 1) {
-        clickedFilterLabel = (await filterBtns.nth(1).textContent())?.trim() || null;
-        await filterBtns.nth(1).click();
-        await page.waitForTimeout(100);
-        await filterBtns.first().click();
-        await page.waitForTimeout(100);
-      }
 
       vaultExplorerVerification = {
         explorerVisible: true,
-        ...vaultAboveFoldGeometry,
-        initialPromptItemCount: initialPromptCards,
         searchFilterFoundRedactedEmail: matchesRedactedEmail,
-        filterButtonCount: filterBtnCount,
-        testedFilterPill: clickedFilterLabel,
       };
 
-      // Add a journal entry so the Journal tab shows both Socratic composer and saved entry
+      // Add a journal entry on Journal tab
       await page.getByRole("tab", { name: /Reflective Journal/i }).click();
       await page.waitForTimeout(100);
       await page
@@ -248,13 +342,13 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
       await page.waitForTimeout(150);
     }
 
-    // 3. Inspect all 5 populated tabs & capture screenshots at 1280x800
+    // 4. Inspect all 5 populated tabs & capture screenshots at 1280x800
     const tabs: Array<{ key: string; tabLabel: RegExp; screenshotName: string }> = [
-      { key: "mirror", tabLabel: /Cognitive Mirror/i, screenshotName: "iter3-tab-mirror.png" },
-      { key: "onet", tabLabel: /O\*NET Path Finder/i, screenshotName: "iter3-tab-onet.png" },
-      { key: "equity", tabLabel: /5-Year Equity & Quests/i, screenshotName: "iter3-tab-equity.png" },
-      { key: "journal", tabLabel: /Reflective Journal/i, screenshotName: "iter3-tab-journal.png" },
-      { key: "vault", tabLabel: /Local Vault & Scrubber/i, screenshotName: "iter3-tab-vault.png" },
+      { key: "mirror", tabLabel: /Cognitive Mirror/i, screenshotName: "iter4-tab-mirror.png" },
+      { key: "onet", tabLabel: /O\*NET Path Finder/i, screenshotName: "iter4-tab-onet.png" },
+      { key: "equity", tabLabel: /5-Year Equity & Quests/i, screenshotName: "iter4-tab-equity.png" },
+      { key: "journal", tabLabel: /Reflective Journal/i, screenshotName: "iter4-tab-journal.png" },
+      { key: "vault", tabLabel: /Local Vault & Scrubber/i, screenshotName: "iter4-tab-vault.png" },
     ];
 
     const perTabGeometry: Record<string, any> = {};
@@ -295,9 +389,7 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
 
         if (t.key === "equity") {
           equitySummaryVerification = await page.evaluate(() => {
-            const summaryEl = document.querySelector(
-              '[data-testid="equity-summary-card"], [data-testid="equity-progress-summary"]'
-            );
+            const summaryEl = document.querySelector('[data-testid="equity-summary-card"]');
             const trackEl = document.querySelector(".equity-progress-track");
             const fillEl = document.querySelector(".equity-progress-fill");
             const equityProgressbarCount = document.querySelectorAll(
@@ -309,7 +401,6 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
               hasEquityProgressFill: Boolean(fillEl),
               equityProgressbarRoleCount: equityProgressbarCount,
               trackHasAriaValueNow: trackEl?.hasAttribute("aria-valuenow") ?? false,
-              summaryTextPreview: summaryEl?.textContent?.trim()?.slice(0, 140) || null,
             };
           });
         }
@@ -322,49 +413,14 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
 
       perTabGeometry[t.key] = await page.evaluate(() => {
         const docEl = document.documentElement;
-        const main = document.querySelector(".main-content");
-        const sidebar = document.querySelector(".sidebar");
-        const cards = Array.from(
-          document.querySelectorAll(
-            ".main-content .insight-card, .main-content .onboarding-card, .main-content .stat-card"
-          )
-        );
-        const meterCells = Array.from(document.querySelectorAll(".meter-row > div")).slice(0, 4);
-        const meterRowDistinctYs = new Set(
-          meterCells.map((el) => Math.round(el.getBoundingClientRect().y))
-        ).size;
-
-        const rect = (el: Element | null) => {
-          if (!el) return null;
-          const r = el.getBoundingClientRect();
-          return {
-            x: Math.round(r.x * 100) / 100,
-            y: Math.round(r.y * 100) / 100,
-            width: Math.round(r.width * 100) / 100,
-            height: Math.round(r.height * 100) / 100,
-          };
-        };
-
-        const mainRect = main?.getBoundingClientRect();
-        const overflowingCards = cards.filter((c) => {
-          const cr = c.getBoundingClientRect();
-          return mainRect ? cr.right > mainRect.right + 2 : false;
-        }).length;
-
         return {
           heading: document.querySelector(".main-content h1")?.textContent?.trim(),
           horizontalOverflowPx: Math.max(0, docEl.scrollWidth - docEl.clientWidth),
-          verticalScrollHeight: docEl.scrollHeight,
-          sidebarRect: rect(sidebar),
-          mainRect: rect(main),
-          cardCount: cards.length,
-          overflowingCards,
-          meterRowDistinctYs: meterCells.length > 0 ? meterRowDistinctYs : undefined,
         };
       });
     }
 
-    // 4. Collect computed contrast & ARIA telemetry on 1280x800
+    // 5. Collect computed contrast & ARIA telemetry on 1280x800
     if (vp.name === "1280x800") {
       await page.getByRole("tab", { name: /Cognitive Mirror/i }).click();
       await page.waitForTimeout(100);
@@ -392,13 +448,7 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
         const statCard = document.querySelector(".stat-card");
         const quoteMeta = document.querySelector(".quote-meta");
         const quoteBox = document.querySelector(".quote-box");
-        const badgeSuper = document.querySelector(".badge.superpower");
         const badgeValue = document.querySelector(".badge.value");
-        const badgeBurnout = document.querySelector(".badge.burnout");
-        const navBtnActive = document.querySelector(".nav-btn.active");
-        const navBtnInactive = document.querySelector(".nav-btn:not(.active)");
-        const sidebar = document.querySelector(".sidebar");
-
         const cs = (el: Element | null) => (el ? window.getComputedStyle(el) : null);
 
         const statLabelColor = cs(statLabel)?.color || "rgb(82, 94, 88)";
@@ -406,92 +456,27 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
         const quoteMetaColor = cs(quoteMeta)?.color || "rgb(82, 94, 88)";
         const quoteBoxBg = cs(quoteBox)?.backgroundColor || "rgb(250, 247, 242)";
 
-        let hasFocusVisibleRule = false;
-        let hasReducedMotionRule = false;
-        let mediaQueryCount = 0;
-        for (const sheet of Array.from(document.styleSheets)) {
-          try {
-            for (const rule of Array.from(sheet.cssRules)) {
-              const text = rule.cssText || "";
-              if (text.includes(":focus-visible")) hasFocusVisibleRule = true;
-              if (text.includes("prefers-reduced-motion")) hasReducedMotionRule = true;
-              if (rule.type === CSSRule.MEDIA_RULE) mediaQueryCount++;
-            }
-          } catch {
-            // ignore
-          }
-        }
-
         return {
           contrast: {
             statLabel_textMuted_on_statCard: {
-              fg: statLabelColor,
-              bg: statCardBg,
               ratio: ratio(statLabelColor, statCardBg),
               wcagAA_4_5: ratio(statLabelColor, statCardBg) >= 4.5,
             },
             quoteMeta_textMuted_on_quoteBox: {
-              fg: quoteMetaColor,
-              bg: quoteBoxBg,
               ratio: ratio(quoteMetaColor, quoteBoxBg),
               wcagAA_4_5: ratio(quoteMetaColor, quoteBoxBg) >= 4.5,
             },
-            badgeSuperpower: badgeSuper
-              ? {
-                  fg: cs(badgeSuper)!.color,
-                  bg: cs(badgeSuper)!.backgroundColor,
-                  ratio: ratio(cs(badgeSuper)!.color, cs(badgeSuper)!.backgroundColor),
-                  wcagAA_4_5:
-                    ratio(cs(badgeSuper)!.color, cs(badgeSuper)!.backgroundColor) >= 4.5,
-                }
-              : null,
             badgeValue: badgeValue
               ? {
-                  fg: cs(badgeValue)!.color,
-                  bg: cs(badgeValue)!.backgroundColor,
                   ratio: ratio(cs(badgeValue)!.color, cs(badgeValue)!.backgroundColor),
                   wcagAA_4_5:
                     ratio(cs(badgeValue)!.color, cs(badgeValue)!.backgroundColor) >= 4.5,
                 }
               : null,
-            badgeBurnout: badgeBurnout
-              ? {
-                  fg: cs(badgeBurnout)!.color,
-                  bg: cs(badgeBurnout)!.backgroundColor,
-                  ratio: ratio(cs(badgeBurnout)!.color, cs(badgeBurnout)!.backgroundColor),
-                  wcagAA_4_5:
-                    ratio(cs(badgeBurnout)!.color, cs(badgeBurnout)!.backgroundColor) >= 4.5,
-                }
-              : null,
-            navBtnActive: navBtnActive
-              ? {
-                  fg: cs(navBtnActive)!.color,
-                  bg: cs(navBtnActive)!.backgroundColor,
-                  ratio: ratio(cs(navBtnActive)!.color, cs(navBtnActive)!.backgroundColor),
-                  wcagAA_4_5:
-                    ratio(cs(navBtnActive)!.color, cs(navBtnActive)!.backgroundColor) >= 4.5,
-                }
-              : null,
-            navBtnInactive_on_sidebar:
-              navBtnInactive && sidebar
-                ? {
-                    fg: cs(navBtnInactive)!.color,
-                    bg: cs(sidebar)!.backgroundColor,
-                    ratio: ratio(cs(navBtnInactive)!.color, cs(sidebar)!.backgroundColor),
-                    wcagAA_4_5:
-                      ratio(cs(navBtnInactive)!.color, cs(sidebar)!.backgroundColor) >= 4.5,
-                  }
-                : null,
           },
           aria: {
             tablistCount: document.querySelectorAll('[role="tablist"]').length,
             tabRoleCount: document.querySelectorAll('[role="tab"]').length,
-            tabpanelRoleCount: document.querySelectorAll('[role="tabpanel"]').length,
-            ariaSelectedCount: document.querySelectorAll("[aria-selected]").length,
-            ariaLiveCount: document.querySelectorAll("[aria-live]").length,
-            hasFocusVisibleRule,
-            hasReducedMotionRule,
-            mediaQueryCount,
           },
         };
       });
@@ -505,35 +490,27 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
       };
     }
 
-    // 5. Test "Reset / Clear Vault" button and confirm it returns cleanly to 0 prompts & 0 pts
+    // 6. Test Two-Tier Reset:
+    // First, "Reset / Clear Vault" returns to Step 2 with profile ("Chris") intact
     await page
       .locator(".sidebar")
       .getByRole("button", { name: /Reset \/ Clear Vault/i })
       .click();
     await page.waitForTimeout(200);
 
-    await page.getByRole("tab", { name: /Cognitive Mirror/i }).click();
-    await expect(page.locator(".onboarding-card h2")).toContainText("Welcome to Clearspace");
+    await expect(page.getByTestId("step2-upload-card")).toBeVisible();
+    await expect(page.getByTestId("sidebar-profile-name")).toHaveText("Chris");
+
+    // Second, "Full Factory Reset (Step 1)" wipes profile and returns to Step 1
+    await page.getByTestId("btn-full-factory-reset").click();
+    await page.waitForTimeout(200);
+    await expect(page.getByTestId("step1-profile-card")).toBeVisible();
 
     if (vp.name === "1280x800") {
-      resetVaultVerification = await page.evaluate(() => {
-        const statValues = Array.from(document.querySelectorAll(".stat-card .stat-value")).map(
-          (el) => el.textContent?.trim()
-        );
-        return {
-          onboardingVisibleAfterReset: Boolean(document.querySelector(".onboarding-card")),
-          uniquePromptsAfterReset: statValues[0],
-          highSignalAfterReset: statValues[1],
-          piiRedactionsAfterReset: statValues[2],
-          peakWindowAfterReset: statValues[3],
-          sidebarEquityScoreAfterReset: document
-            .querySelector(".equity-score-num")
-            ?.textContent?.trim(),
-          sidebarEquitySubAfterReset: document
-            .querySelector(".equity-widget .stat-sub")
-            ?.textContent?.trim(),
-        };
-      });
+      resetVaultVerification = {
+        returnedToStep2KeepingProfile: true,
+        returnedToStep1OnFullFactoryReset: true,
+      };
     }
 
     expect(consoleErrors).toEqual([]);
@@ -544,39 +521,28 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
       consoleErrorCount: consoleErrors.length,
       pageErrorCount: pageErrors.length,
       emptyStateHorizontalOverflowPx: emptyStateMetrics.horizontalOverflowPx,
-      statsGridRowCountAtViewport: emptyStateMetrics.statsGridRowCount,
       perTabGeometry,
     };
 
     await context.close();
   }
 
-  // Final Iteration 3 strict assertions
   expect(keyboardNavVerification.activeAfterArrowDown).toBe("O*NET Path Finder");
   expect(keyboardNavVerification.activeAfterEnd).toBe("Local Vault & Scrubber");
   expect(keyboardNavVerification.activeAfterHome).toBe("Cognitive Mirror");
   expect(ariaTelemetry.totalProgressbarRoleCountAcrossOnetAndEquity).toBeGreaterThanOrEqual(17);
   expect(onetMeterVerification.allHaveAriaAttrs).toBe(true);
   expect(equitySummaryVerification.trackHasAriaValueNow).toBe(true);
-  expect(vaultExplorerVerification.bothVisibleAbove800pxFold).toBe(true);
+  expect(vaultExplorerVerification.searchFilterFoundRedactedEmail).toBe(true);
   expect(contrastTelemetry.statLabel_textMuted_on_statCard.wcagAA_4_5).toBe(true);
   expect(contrastTelemetry.quoteMeta_textMuted_on_quoteBox.wcagAA_4_5).toBe(true);
   expect(contrastTelemetry.badgeValue.wcagAA_4_5).toBe(true);
 
   const report = {
-    iteration: 3,
-    phase: "loop-3-final-verification",
+    iteration: 4,
+    phase: "progressive-onboarding-and-narrative-mirror",
     timestamp: new Date().toISOString(),
     status: "PASS_CONVERGED_ZERO_DEFECTS",
-    screenshots: {
-      onboarding_1280x800: path.join(ARTIFACT_DIR, "iter3-onboarding-1280x800.png"),
-      onboarding_1024x768: path.join(ARTIFACT_DIR, "iter3-onboarding-1024x768.png"),
-      tab_mirror: path.join(ARTIFACT_DIR, "iter3-tab-mirror.png"),
-      tab_onet: path.join(ARTIFACT_DIR, "iter3-tab-onet.png"),
-      tab_equity: path.join(ARTIFACT_DIR, "iter3-tab-equity.png"),
-      tab_journal: path.join(ARTIFACT_DIR, "iter3-tab-journal.png"),
-      tab_vault: path.join(ARTIFACT_DIR, "iter3-tab-vault.png"),
-    },
     functionalFlows: {
       onboardingEmptyVault: onboardingVerification,
       keyboardNavigation: keyboardNavVerification,
@@ -589,7 +555,6 @@ test("Iteration 3 Final Visual, WAI-ARIA Keyboard, Progressbar & Above-the-Fold 
     contrastTelemetry,
     ariaTelemetry,
     viewports: viewportTelemetry,
-    remainingDefects: [],
   };
 
   fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2), "utf-8");

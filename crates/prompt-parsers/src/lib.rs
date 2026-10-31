@@ -54,6 +54,41 @@ impl PromptSource {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillTier {
+    #[default]
+    Beginner,
+    Intermediate,
+    Advanced,
+}
+
+impl SkillTier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SkillTier::Beginner => "beginner",
+            SkillTier::Intermediate => "intermediate",
+            SkillTier::Advanced => "advanced",
+        }
+    }
+
+    pub fn positioning_label(&self) -> &'static str {
+        match self {
+            SkillTier::Beginner => "Beginner → Junior",
+            SkillTier::Intermediate => "Intermediate → Mid-Level",
+            SkillTier::Advanced => "Advanced → Senior / Staff",
+        }
+    }
+
+    pub fn depth_weight(&self) -> f32 {
+        match self {
+            SkillTier::Beginner => 0.35,
+            SkillTier::Intermediate => 0.75,
+            SkillTier::Advanced => 1.15,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NormalizedPrompt {
     pub id: String,
@@ -66,6 +101,15 @@ pub struct NormalizedPrompt {
     pub redactions_made: usize,
     pub is_high_signal: bool,
     pub signal_categories: Vec<String>,
+    #[serde(default)]
+    pub skill_tier: SkillTier,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManifestFileLink {
+    pub filename: String,
+    pub category: String,
+    pub export_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -83,6 +127,18 @@ pub struct IngestionSummary {
     pub category_counts: Vec<(String, usize)>,
     #[serde(default)]
     pub source_counts: Vec<(String, usize)>,
+    #[serde(default)]
+    pub tier_counts: [usize; 3],
+    #[serde(default)]
+    pub overall_positioning: String,
+    #[serde(default)]
+    pub detected_format: String,
+    #[serde(default)]
+    pub warnings: Vec<String>,
+    #[serde(default)]
+    pub manifest_links: Vec<ManifestFileLink>,
+    #[serde(default)]
+    pub daily_counts: Vec<(String, usize)>,
 }
 
 struct SignalPatterns {
@@ -90,11 +146,16 @@ struct SignalPatterns {
     local_time: Regex,
     hour_iso: Regex,
     md_date_heading: Regex,
+    yaml_date: Regex,
+    html_tag: Regex,
     career: Regex,
     values_emotion: Regex,
     architecture: Regex,
     learning: Regex,
     grill_me: Regex,
+    beginner_markers: Regex,
+    intermediate_markers: Regex,
+    advanced_markers: Regex,
 }
 
 fn patterns() -> &'static SignalPatterns {
@@ -107,6 +168,9 @@ fn patterns() -> &'static SignalPatterns {
         hour_iso: Regex::new(r"(?:T|\s)(\d{2}):\d{2}").expect("valid hour_iso regex"),
         md_date_heading: Regex::new(r"(?m)^#{1,4}\s*(\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?)?)")
             .expect("valid md_date_heading regex"),
+        yaml_date: Regex::new(r"(?m)^date:\s*['\x22]?(\d{4}-\d{2}-\d{2})['\x22]?")
+            .expect("valid yaml_date regex"),
+        html_tag: Regex::new(r"<[^>]+>").expect("valid html_tag regex"),
         career: Regex::new(r"(?i)\b(career|job|resume|interview|role|salary|hire|hiring|company|director|manager|lead|position|linkedin|portfolio|freelance|agency|client|pricing|revenue|offer|laid off|industry|market|positioning|strategy|icp)\b")
             .expect("valid career regex"),
         values_emotion: Regex::new(r"(?i)\b(i want|i feel|i think|my goal|honestly|frustrat|worry|afraid|doubt|wonder|struggl|burnout|demoraliz|excited|love|hate|family|kids|home|stability|unfair advantage|authentic|simplify|meaningful|autonomy|peace|clarity|energy)\b")
@@ -117,6 +181,12 @@ fn patterns() -> &'static SignalPatterns {
             .expect("valid learning regex"),
         grill_me: Regex::new(r"(?i)(/grill-me|as a skeptic|expose its flaws|super critical|worth solving|steelman|devil's advocate|blind spot|critique)\b")
             .expect("valid grill_me regex"),
+        beginner_markers: Regex::new(r"(?i)\b(what is a|what is an|how do i|how to basic|explain like i'm|for a beginner|step by step tutorial|fix this syntax|syntax error|what does this error mean|help me understand basic|beginner|newbie|just starting out|hello world)\b")
+            .expect("valid beginner_markers regex"),
+        intermediate_markers: Regex::new(r"(?i)\b(integrate|refactor|implement|workflow|api|database|sqlite|rust|typescript|test|endpoint|component|deployment|optimize|automation|query|parser)\b")
+            .expect("valid intermediate_markers regex"),
+        advanced_markers: Regex::new(r"(?i)(/grill-me|\b(architect|architecture|tradeoff|trade-off|scale|scalability|unit economics|first principles|bottleneck|telemetry|idempoten|concurrency|distributed|schema|compiler|pipeline|deterministic|zero-knowledge|autonomy|icp|positioning|multi-tenant|latency|throughput)\b)")
+            .expect("valid advanced_markers regex"),
     })
 }
 
@@ -223,6 +293,39 @@ pub fn classify_signals(text: &str, word_count: usize) -> (bool, Vec<String>) {
     (is_high, cats)
 }
 
+/// Objectively classifies a prompt's cognitive & technical depth into:
+/// - `Beginner` (`Beginner → Junior`): basic syntax, "how do I", introductory lookup
+/// - `Intermediate` (`Intermediate → Mid-Level`): feature implementation, component wiring, testing
+/// - `Advanced` (`Advanced → Senior / Staff`): systems architecture, tradeoffs, unit economics, adversarial verification
+pub fn classify_skill_tier(
+    text: &str,
+    word_count: usize,
+    signal_categories: &[String],
+) -> SkillTier {
+    let p = patterns();
+    let has_beginner = p.beginner_markers.is_match(text);
+    let has_advanced = p.advanced_markers.is_match(text);
+    let has_intermediate = p.intermediate_markers.is_match(text);
+
+    if has_beginner && !has_advanced {
+        return SkillTier::Beginner;
+    }
+
+    let has_arch_or_skeptic = signal_categories
+        .iter()
+        .any(|c| c == "Systems & Architecture" || c == "Skeptical Truth-Seeking");
+
+    if has_advanced && (has_arch_or_skeptic || signal_categories.len() >= 2 || word_count >= 14) {
+        return SkillTier::Advanced;
+    }
+
+    if has_intermediate || !signal_categories.is_empty() {
+        return SkillTier::Intermediate;
+    }
+
+    SkillTier::Beginner
+}
+
 fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSummary) {
     results.sort_by(|a, b| a.created_at.cmp(&b.created_at));
     summary.earliest_date = results
@@ -239,17 +342,32 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
 
     let mut cat_map: HashMap<String, usize> = HashMap::new();
     let mut src_map: HashMap<String, usize> = HashMap::new();
+    let mut day_map: HashMap<String, usize> = HashMap::new();
     summary.hourly_distribution = [0usize; 24];
+    summary.tier_counts = [0usize; 3];
     summary.high_signal_prompts = 0;
 
     for r in results.iter() {
         if r.is_high_signal {
             summary.high_signal_prompts += 1;
         }
+        let trimmed_dt = r.created_at.trim();
+        if trimmed_dt.len() >= 10 {
+            let day_key = &trimmed_dt[..10];
+            if day_key.as_bytes().get(4) == Some(&b'-') && day_key.as_bytes().get(7) == Some(&b'-')
+            {
+                *day_map.entry(day_key.to_string()).or_insert(0usize) += 1;
+            }
+        }
         if let Some(h) = r.local_hour {
             if (h as usize) < 24 {
                 summary.hourly_distribution[h as usize] += 1;
             }
+        }
+        match r.skill_tier {
+            SkillTier::Beginner => summary.tier_counts[0] += 1,
+            SkillTier::Intermediate => summary.tier_counts[1] += 1,
+            SkillTier::Advanced => summary.tier_counts[2] += 1,
         }
         for c in &r.signal_categories {
             *cat_map.entry(c.clone()).or_insert(0usize) += 1;
@@ -266,7 +384,27 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
     let mut src_vec: Vec<(String, usize)> = src_map.into_iter().collect();
     src_vec.sort_by_key(|entry| Reverse(entry.1));
     summary.source_counts = src_vec;
+
+    let mut day_vec: Vec<(String, usize)> = day_map.into_iter().collect();
+    day_vec.sort_by(|a, b| a.0.cmp(&b.0));
+    summary.daily_counts = day_vec;
+
     summary.clean_prompts_kept = results.len();
+
+    summary.overall_positioning = if results.is_empty() {
+        "Awaiting Evidence".to_string()
+    } else {
+        let total = results.len() as f32;
+        let weighted_idx =
+            (summary.tier_counts[1] as f32 + 2.0 * summary.tier_counts[2] as f32) / total;
+        if weighted_idx < 0.65 {
+            SkillTier::Beginner.positioning_label().to_string()
+        } else if weighted_idx < 1.35 {
+            SkillTier::Intermediate.positioning_label().to_string()
+        } else {
+            SkillTier::Advanced.positioning_label().to_string()
+        }
+    };
 }
 
 /// Rebuilds an `IngestionSummary` from a slice of persisted `NormalizedPrompt` items.
@@ -392,15 +530,32 @@ pub fn parse_markdown_journal(md_str: &str) -> (Vec<NormalizedPrompt>, Ingestion
     let p = patterns();
     let mut summary = IngestionSummary {
         total_files_scanned: 1,
+        detected_format: "Markdown / Plain-Text Journal".to_string(),
         ..Default::default()
     };
     let mut seen_hashes = HashSet::new();
     let mut results = Vec::new();
 
     let mut current_date = String::from("2026-01-15T20:00:00Z");
+    if let Some(caps) = p.yaml_date.captures(md_str) {
+        current_date = format!("{}T20:00:00Z", &caps[1]);
+    }
+
+    // Strip leading YAML frontmatter (`--- ... ---`) so metadata keys are not ingested as prompts
+    let body_str = if let Some(rest) = md_str.trim_start().strip_prefix("---") {
+        if let Some(end_idx) = rest.find("\n---") {
+            let after = &rest[end_idx + 4..];
+            after.strip_prefix('\n').or_else(|| after.strip_prefix("\r\n")).unwrap_or(after)
+        } else {
+            md_str
+        }
+    } else {
+        md_str
+    };
+
     let mut current_block = String::new();
 
-    for line in md_str.lines() {
+    for line in body_str.lines() {
         let trimmed = line.trim();
         if let Some(caps) = p.md_date_heading.captures(trimmed) {
             if !current_block.trim().is_empty() {
@@ -473,17 +628,115 @@ pub fn parse_markdown_journal(md_str: &str) -> (Vec<NormalizedPrompt>, Ingestion
     (results, summary)
 }
 
+fn decode_basic_html_entities(s: &str) -> String {
+    s.replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
+}
+
+fn parse_html_export(
+    html_str: &str,
+) -> Result<(Vec<NormalizedPrompt>, IngestionSummary), String> {
+    let p = patterns();
+
+    // 1. OpenAI ChatGPT `chat.html` export (`var jsonData = [...]`)
+    if let Some(idx) = html_str.find("var jsonData =") {
+        let after = html_str[idx + "var jsonData =".len()..].trim_start();
+        if after.starts_with('[') {
+            if let Some(end_script) = after.find(";\n</script>").or_else(|| after.find(";</script>")) {
+                let json_slice = after[..end_script].trim();
+                if let Ok(res) = parse_exported_conversations_json(json_slice) {
+                    return Ok(res);
+                }
+            }
+        }
+    }
+
+    // 2. Google Gemini Takeout `gemini_gems_data.html` (`<b>Name:</b>...<b>Instructions:</b>...`)
+    if html_str.contains("<b>Name:</b>") && html_str.contains("<b>Instructions:</b>") {
+        let mut summary = IngestionSummary {
+            total_files_scanned: 1,
+            detected_format: "Google Gemini Takeout (Custom Gems HTML)".to_string(),
+            ..Default::default()
+        };
+        let mut seen_hashes = HashSet::new();
+        let mut results = Vec::new();
+
+        for (idx, chunk) in html_str.split("<b>Name:</b>").skip(1).enumerate() {
+            let mut parts = chunk.splitn(2, "<b>Instructions:</b>");
+            let raw_name = parts.next().unwrap_or("");
+            let raw_rest = parts.next().unwrap_or("");
+            let raw_instr = raw_rest.split("<b>Files:</b>").next().unwrap_or(raw_rest);
+            let name = decode_basic_html_entities(&p.html_tag.replace_all(raw_name, " "))
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            let instr = decode_basic_html_entities(&p.html_tag.replace_all(raw_instr, " "))
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            if !instr.is_empty() {
+                let text = if name.is_empty() {
+                    format!("Gemini Custom Gem: {instr}")
+                } else {
+                    format!("Gemini Custom Gem ({name}): {instr}")
+                };
+                let convo_id = format!("gemini-gem-{}", idx + 1);
+                ingest_single_prompt(
+                    &text,
+                    "2026-02-15T20:00:00Z".to_string(),
+                    &convo_id,
+                    PromptSource::GeminiTakeout,
+                    &mut seen_hashes,
+                    &mut summary,
+                    &mut results,
+                );
+            }
+        }
+        finalize_summary(&mut results, &mut summary);
+        return Ok((results, summary));
+    }
+
+    // 3. Generic / empty HTML export (`<div></div>` like `gemini_scheduled_actions_data.html`)
+    let stripped = decode_basic_html_entities(&p.html_tag.replace_all(html_str, " "));
+    let cleaned = stripped.trim();
+    if cleaned.is_empty() {
+        let mut summary = IngestionSummary {
+            total_files_scanned: 1,
+            detected_format: "Empty HTML Export".to_string(),
+            warnings: vec![
+                "This HTML export file is empty and contains 0 conversation or activity records."
+                    .to_string(),
+            ],
+            ..Default::default()
+        };
+        finalize_summary(&mut [], &mut summary);
+        return Ok((Vec::new(), summary));
+    }
+
+    Ok(parse_markdown_journal(cleaned))
+}
+
 /// Universal multi-provider parser supporting:
-/// 1. OpenAI ChatGPT `conversations.json` (`mapping` nodes with Unix epoch `create_time`)
-/// 2. Anthropic Claude `conversations.json` (`chat_messages` array with `sender == "human"` or `role == "user"`)
-/// 3. Google Gemini Takeout `MyActivity.json` (`title: "Prompted ..."` / `gemini_activity` / `subtitles`)
-/// 4. Markdown / Plain-Text Journals (when content is Markdown prose/headings)
+/// 1. OpenAI ChatGPT `conversations.json` (`mapping` nodes or `messages` arrays with Unix epoch `create_time`)
+/// 2. Anthropic Claude `conversations.json` (`chat_messages`), `projects.json` (`prompt_template` / `docs`), and Export Batch Manifests (`data_files` / `export_url`)
+/// 3. Google Gemini Takeout `MyActivity.json` (`title: "Prompted ..."` / `Branched ...` / `gemini_activity`), Workspace `conversation_*.txt` (`conversation_turns`), and `gemini_gems_data.html`
+/// 4. Markdown / Plain-Text Journals (with optional YAML frontmatter and date headings)
 pub fn parse_exported_conversations_json(
     raw_input: &str,
 ) -> Result<(Vec<NormalizedPrompt>, IngestionSummary), String> {
     let trimmed = raw_input.trim();
     if trimmed.is_empty() {
         return Err("Empty import file".to_string());
+    }
+
+    // Handle HTML exports (`gemini_gems_data.html`, `gemini_scheduled_actions_data.html`, `chat.html`)
+    if trimmed.starts_with('<') {
+        return parse_html_export(trimmed);
     }
 
     // If the file does not start with JSON delimiters `{` or `[`, parse as Markdown journal
@@ -493,22 +746,70 @@ pub fn parse_exported_conversations_json(
 
     let root: Value = serde_json::from_str(trimmed).map_err(|e| e.to_string())?;
 
-    // Unwrap either a top-level array or an object containing an array (`conversations`, `activities`, `messages`, `items`)
+    // Check for Anthropic Claude Export Batch Manifest (`data_files` with `export_url`)
+    if let Some(obj) = root.as_object() {
+        if let Some(data_files) = obj.get("data_files").and_then(|v| v.as_array()) {
+            let mut manifest_links = Vec::new();
+            for df in data_files {
+                let filename = df
+                    .get("filename")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("export.zip")
+                    .to_string();
+                let category = df
+                    .get("category")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("archive")
+                    .to_string();
+                let export_url = df
+                    .get("export_url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !export_url.is_empty() {
+                    manifest_links.push(ManifestFileLink {
+                        filename,
+                        category,
+                        export_url,
+                    });
+                }
+            }
+            let mut summary = IngestionSummary {
+                total_files_scanned: 1,
+                detected_format: "Anthropic Claude Export Manifest".to_string(),
+                warnings: vec![format!(
+                    "Anthropic Claude Export Manifest detected ({} archive download link(s) found). This JSON file is a download manifest rather than the conversations archive itself—download conversations-000.zip (and projects-000.zip) using the links below while signed into claude.ai, then upload the .zip or conversations.json file.",
+                    manifest_links.len()
+                )],
+                manifest_links,
+                ..Default::default()
+            };
+            finalize_summary(&mut [], &mut summary);
+            return Ok((Vec::new(), summary));
+        }
+    }
+
+    // Unwrap either a top-level array or an object containing an array (`conversations`, `activities`, `conversation_turns`, `messages`, `items`, `data`)
     let items_vec: Vec<Value> = if let Some(arr) = root.as_array() {
         arr.clone()
     } else if let Some(obj) = root.as_object() {
         if let Some(arr) = obj
             .get("conversations")
             .or_else(|| obj.get("activities"))
+            .or_else(|| obj.get("conversation_turns"))
             .or_else(|| obj.get("items"))
             .or_else(|| obj.get("data"))
             .and_then(|v| v.as_array())
         {
             arr.clone()
         } else if obj.contains_key("chat_messages")
+            || obj.contains_key("messages")
             || obj.contains_key("mapping")
             || obj.contains_key("title")
             || obj.contains_key("gemini_activity")
+            || obj.contains_key("user_turn")
+            || obj.contains_key("prompt_template")
+            || obj.contains_key("docs")
         {
             vec![root]
         } else {
@@ -542,22 +843,32 @@ pub fn parse_exported_conversations_json(
                 .or_else(|| item.get("timestamp")),
         );
 
-        // 1. Anthropic Claude format (`chat_messages` or `messages`)
+        // 1. Anthropic Claude `chat_messages` or OpenAI/Claude `messages` array
         if let Some(msgs) = item
             .get("chat_messages")
             .or_else(|| item.get("messages"))
             .and_then(|v| v.as_array())
         {
+            let has_chat_messages_key = item.get("chat_messages").is_some();
             for msg in msgs {
-                let sender = msg
-                    .get("sender")
-                    .or_else(|| msg.get("role"))
+                let sender_raw = msg.get("sender").and_then(|v| v.as_str()).unwrap_or("");
+                let role_raw = msg
+                    .get("role")
+                    .or_else(|| msg.get("author").and_then(|a| a.get("role")))
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                if sender != "human" && sender != "user" {
+                let effective_sender = if !sender_raw.is_empty() {
+                    sender_raw
+                } else {
+                    role_raw
+                };
+                if effective_sender != "human" && effective_sender != "user" {
                     continue;
                 }
-                let text = extract_claude_message_text(msg);
+                let text = extract_claude_or_generic_message_text(msg);
+                if text.trim().is_empty() {
+                    continue;
+                }
                 let mut created_at = normalize_timestamp_value(
                     msg.get("created_at")
                         .or_else(|| msg.get("create_time"))
@@ -566,11 +877,21 @@ pub fn parse_exported_conversations_json(
                 if created_at.is_empty() {
                     created_at = convo_fallback_time.clone();
                 }
+                let source = if has_chat_messages_key || sender_raw == "human" {
+                    PromptSource::ClaudeWeb
+                } else {
+                    // Check if conversation has `uuid` (Claude) vs `id`/`create_time` (OpenAI)
+                    if item.get("uuid").is_some() {
+                        PromptSource::ClaudeWeb
+                    } else {
+                        PromptSource::ChatGptWeb
+                    }
+                };
                 ingest_single_prompt(
                     &text,
                     created_at,
                     &convo_id,
-                    PromptSource::ClaudeWeb,
+                    source,
                     &mut seen_hashes,
                     &mut summary,
                     &mut results,
@@ -589,19 +910,21 @@ pub fn parse_exported_conversations_json(
                 let role = message
                     .get("author")
                     .and_then(|a| a.get("role"))
+                    .or_else(|| message.get("role"))
                     .and_then(|r| r.as_str())
                     .unwrap_or("");
-                if role != "user" {
+                if role != "user" && role != "human" {
                     continue;
                 }
                 let text = extract_chatgpt_message_text(message);
-                if text.is_empty() {
+                if text.trim().is_empty() {
                     continue;
                 }
                 let mut created_at = normalize_timestamp_value(
                     message
                         .get("create_time")
-                        .or_else(|| message.get("created_at")),
+                        .or_else(|| message.get("created_at"))
+                        .or_else(|| message.get("timestamp")),
                 );
                 if created_at.is_empty() {
                     created_at = convo_fallback_time.clone();
@@ -617,26 +940,174 @@ pub fn parse_exported_conversations_json(
                 );
             }
         }
-        // 3. Google Gemini Takeout format (`MyActivity.json` or Gemini prompt objects)
-        else if is_gemini_takeout_item(item) {
-            if let Some(prompt_text) = extract_gemini_takeout_text(item) {
-                let created_at = normalize_timestamp_value(
-                    item.get("time")
-                        .or_else(|| item.get("timestamp"))
-                        .or_else(|| item.get("created_at")),
-                );
-                ingest_single_prompt(
-                    &prompt_text,
-                    created_at,
-                    &convo_id,
-                    PromptSource::GeminiTakeout,
-                    &mut seen_hashes,
-                    &mut summary,
-                    &mut results,
-                );
+        // 3. Google Gemini Workspace Conversation History (`user_turn` or nested `conversation_turns`)
+        else if item.get("user_turn").is_some() || item.get("conversation_turns").is_some() {
+            if let Some(ut) = item.get("user_turn") {
+                if let Some(prompt_text) = ut
+                    .get("prompt")
+                    .or_else(|| ut.get("text"))
+                    .and_then(|v| v.as_str())
+                {
+                    let created_at = normalize_timestamp_value(
+                        ut.get("turn_last_modified")
+                            .or_else(|| ut.get("created_at"))
+                            .or_else(|| ut.get("timestamp")),
+                    );
+                    ingest_single_prompt(
+                        prompt_text,
+                        if created_at.is_empty() {
+                            convo_fallback_time.clone()
+                        } else {
+                            created_at
+                        },
+                        &convo_id,
+                        PromptSource::GeminiTakeout,
+                        &mut seen_hashes,
+                        &mut summary,
+                        &mut results,
+                    );
+                }
+            }
+            if let Some(turns) = item.get("conversation_turns").and_then(|v| v.as_array()) {
+                for turn in turns {
+                    if let Some(ut) = turn.get("user_turn") {
+                        if let Some(prompt_text) = ut
+                            .get("prompt")
+                            .or_else(|| ut.get("text"))
+                            .and_then(|v| v.as_str())
+                        {
+                            let created_at = normalize_timestamp_value(
+                                ut.get("turn_last_modified")
+                                    .or_else(|| ut.get("created_at"))
+                                    .or_else(|| ut.get("timestamp")),
+                            );
+                            ingest_single_prompt(
+                                prompt_text,
+                                if created_at.is_empty() {
+                                    convo_fallback_time.clone()
+                                } else {
+                                    created_at
+                                },
+                                &convo_id,
+                                PromptSource::GeminiTakeout,
+                                &mut seen_hashes,
+                                &mut summary,
+                                &mut results,
+                            );
+                        }
+                    }
+                }
             }
         }
-        // 4. Generic prompt/reflection entry in JSON array (`{ "prompt": "...", "source": "..." }`)
+        // 4. Anthropic Claude `projects.json` (`prompt_template` / `description` / `docs`)
+        else if item.get("prompt_template").is_some() || item.get("docs").is_some() {
+            if let Some(pt) = item.get("prompt_template").and_then(|v| v.as_str()) {
+                if !pt.trim().is_empty() {
+                    ingest_single_prompt(
+                        pt,
+                        convo_fallback_time.clone(),
+                        &convo_id,
+                        PromptSource::ClaudeWeb,
+                        &mut seen_hashes,
+                        &mut summary,
+                        &mut results,
+                    );
+                }
+            }
+            if let Some(desc) = item.get("description").and_then(|v| v.as_str()) {
+                if !desc.trim().is_empty() {
+                    ingest_single_prompt(
+                        desc,
+                        convo_fallback_time.clone(),
+                        &convo_id,
+                        PromptSource::ClaudeWeb,
+                        &mut seen_hashes,
+                        &mut summary,
+                        &mut results,
+                    );
+                }
+            }
+            if let Some(docs) = item.get("docs").and_then(|v| v.as_array()) {
+                for doc in docs {
+                    if let Some(content) = doc.get("content").and_then(|v| v.as_str()) {
+                        let doc_ts = normalize_timestamp_value(doc.get("created_at"));
+                        ingest_single_prompt(
+                            content,
+                            if doc_ts.is_empty() {
+                                convo_fallback_time.clone()
+                            } else {
+                                doc_ts
+                            },
+                            &convo_id,
+                            PromptSource::ClaudeWeb,
+                            &mut seen_hashes,
+                            &mut summary,
+                            &mut results,
+                        );
+                    }
+                }
+            }
+        }
+        // 5. Google Gemini Takeout format (`MyActivity.json` or Gemini prompt objects)
+        else if is_gemini_takeout_item(item) {
+            match extract_gemini_takeout_text(item) {
+                GeminiExtraction::Prompt(prompt_text) => {
+                    let created_at = normalize_timestamp_value(
+                        item.get("time")
+                            .or_else(|| item.get("timestamp"))
+                            .or_else(|| item.get("created_at")),
+                    );
+                    ingest_single_prompt(
+                        &prompt_text,
+                        created_at,
+                        &convo_id,
+                        PromptSource::GeminiTakeout,
+                        &mut seen_hashes,
+                        &mut summary,
+                        &mut results,
+                    );
+                }
+                GeminiExtraction::SystemEvent => {
+                    summary.total_raw_prompts += 1;
+                    summary.noise_filtered_out += 1;
+                }
+                GeminiExtraction::Empty => {}
+            }
+        }
+        // 6. Direct single message object in array (`{ "sender": "human", "text": "..." }` or `{ "role": "user", "content": "..." }`)
+        else if item.get("sender").is_some() || item.get("role").is_some() || item.get("author").is_some() {
+            let sender_raw = item.get("sender").and_then(|v| v.as_str()).unwrap_or("");
+            let role_raw = item
+                .get("role")
+                .or_else(|| item.get("author").and_then(|a| a.get("role")))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let effective = if !sender_raw.is_empty() {
+                sender_raw
+            } else {
+                role_raw
+            };
+            if effective == "human" || effective == "user" {
+                let text = extract_claude_or_generic_message_text(item);
+                if !text.trim().is_empty() {
+                    let source = if sender_raw == "human" {
+                        PromptSource::ClaudeWeb
+                    } else {
+                        PromptSource::ChatGptWeb
+                    };
+                    ingest_single_prompt(
+                        &text,
+                        convo_fallback_time,
+                        &convo_id,
+                        source,
+                        &mut seen_hashes,
+                        &mut summary,
+                        &mut results,
+                    );
+                }
+            }
+        }
+        // 7. Generic prompt/reflection entry in JSON array (`{ "prompt": "...", "source": "..." }`)
         else if let Some(text) = item
             .get("prompt")
             .or_else(|| item.get("text"))
@@ -661,55 +1132,86 @@ pub fn parse_exported_conversations_json(
     }
 
     finalize_summary(&mut results, &mut summary);
+    if summary.detected_format.is_empty() {
+        summary.detected_format = summary
+            .source_counts
+            .first()
+            .map(|(s, _)| s.clone())
+            .unwrap_or_else(|| "JSON Conversation Archive".to_string());
+    }
     Ok((results, summary))
 }
 
-fn extract_claude_message_text(msg: &Value) -> String {
+fn extract_claude_or_generic_message_text(msg: &Value) -> String {
     if let Some(t) = msg.get("text").and_then(|v| v.as_str()) {
         if !t.trim().is_empty() {
             return t.to_string();
         }
     }
-    if let Some(content_arr) = msg.get("content").and_then(|v| v.as_array()) {
-        let joined = content_arr
-            .iter()
-            .filter_map(|block| {
-                block
-                    .get("text")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| block.as_str())
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        return joined;
-    }
-    if let Some(s) = msg.get("content").and_then(|v| v.as_str()) {
-        return s.to_string();
+    if let Some(content) = msg.get("content") {
+        if let Some(s) = content.as_str() {
+            if !s.trim().is_empty() {
+                return s.to_string();
+            }
+        }
+        if let Some(content_arr) = content.as_array() {
+            let joined = content_arr
+                .iter()
+                .filter_map(|block| {
+                    block
+                        .get("text")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| block.get("content").and_then(|v| v.as_str()))
+                        .or_else(|| block.as_str())
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !joined.trim().is_empty() {
+                return joined;
+            }
+        }
+        if content.is_object() {
+            let from_chatgpt = extract_chatgpt_message_text(msg);
+            if !from_chatgpt.trim().is_empty() {
+                return from_chatgpt;
+            }
+        }
     }
     String::new()
 }
 
 fn extract_chatgpt_message_text(message: &Value) -> String {
-    let Some(content) = message.get("content") else {
-        return String::new();
-    };
-    if let Some(parts) = content.get("parts").and_then(|p| p.as_array()) {
-        let joined = parts
-            .iter()
-            .filter_map(|p| {
-                if let Some(s) = p.as_str() {
-                    Some(s)
-                } else {
-                    p.get("text").and_then(|t| t.as_str())
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        if !joined.trim().is_empty() {
-            return joined;
+    if let Some(content) = message.get("content") {
+        if let Some(s) = content.as_str() {
+            if !s.trim().is_empty() {
+                return s.to_string();
+            }
+        }
+        if let Some(parts) = content.get("parts").and_then(|p| p.as_array()) {
+            let joined = parts
+                .iter()
+                .filter_map(|p| {
+                    if let Some(s) = p.as_str() {
+                        Some(s)
+                    } else {
+                        p.get("text")
+                            .or_else(|| p.get("content"))
+                            .and_then(|t| t.as_str())
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !joined.trim().is_empty() {
+                return joined;
+            }
+        }
+        if let Some(text) = content.get("text").and_then(|t| t.as_str()) {
+            if !text.trim().is_empty() {
+                return text.to_string();
+            }
         }
     }
-    if let Some(text) = content.get("text").and_then(|t| t.as_str()) {
+    if let Some(text) = message.get("text").and_then(|t| t.as_str()) {
         return text.to_string();
     }
     String::new()
@@ -729,6 +1231,8 @@ fn is_gemini_takeout_item(item: &Value) -> bool {
         if title.starts_with("Prompted ")
             || title.starts_with("Asked ")
             || title.starts_with("Submitted prompt:")
+            || title.starts_with("Branched ")
+            || title.starts_with("Added chat from link:")
         {
             return true;
         }
@@ -739,18 +1243,57 @@ fn is_gemini_takeout_item(item: &Value) -> bool {
     false
 }
 
-fn extract_gemini_takeout_text(item: &Value) -> Option<String> {
+enum GeminiExtraction {
+    Prompt(String),
+    SystemEvent,
+    Empty,
+}
+
+fn is_gemini_system_event_title(title: &str) -> bool {
+    let t = title.trim();
+    t.starts_with("Cleared ")
+        || t.starts_with("Created Gemini Canvas")
+        || t.starts_with("Selected preferred draft")
+        || t.starts_with("Used Gemini Apps")
+        || t.starts_with("Gave feedback")
+        || t.starts_with("Opened ")
+}
+
+fn is_gemini_attachment_subtitle(sub: &Value, text: &str) -> bool {
+    if sub.get("url").is_some() {
+        return true;
+    }
+    let t = text.trim();
+    let lower = t.to_lowercase();
+    t.starts_with("- ")
+        || t.starts_with("```")
+        || t.starts_with("<!DOCTYPE")
+        || lower.ends_with("generated image.")
+        || lower.ends_with("generated images.")
+        || (lower.starts_with("attached ") && lower.ends_with("file."))
+        || (lower.starts_with("attached ") && lower.ends_with("files."))
+        || lower == "audio included."
+}
+
+fn extract_gemini_takeout_text(item: &Value) -> GeminiExtraction {
     if let Some(ga) = item.get("gemini_activity") {
         if let Some(p) = ga.get("prompt").or_else(|| ga.get("text")).and_then(|v| v.as_str()) {
-            return Some(p.to_string());
+            if !p.trim().is_empty() {
+                return GeminiExtraction::Prompt(p.to_string());
+            }
         }
     }
     let mut parts = Vec::new();
     if let Some(title) = item.get("title").and_then(|v| v.as_str()) {
+        if is_gemini_system_event_title(title) {
+            return GeminiExtraction::SystemEvent;
+        }
         let stripped = title
             .strip_prefix("Prompted ")
             .or_else(|| title.strip_prefix("Asked "))
             .or_else(|| title.strip_prefix("Submitted prompt:"))
+            .or_else(|| title.strip_prefix("Branched "))
+            .or_else(|| title.strip_prefix("Added chat from link:"))
             .unwrap_or(title)
             .trim();
         if !stripped.is_empty() && !stripped.eq_ignore_ascii_case("Gemini Apps") {
@@ -762,16 +1305,19 @@ fn extract_gemini_takeout_text(item: &Value) -> Option<String> {
             if let Some(name) = sub.get("name").or_else(|| sub.get("text")).and_then(|v| v.as_str())
             {
                 let trimmed = name.trim();
-                if !trimmed.is_empty() && !parts.iter().any(|existing| existing == trimmed) {
+                if !trimmed.is_empty()
+                    && !is_gemini_attachment_subtitle(sub, trimmed)
+                    && !parts.iter().any(|existing| existing == trimmed)
+                {
                     parts.push(trimmed.to_string());
                 }
             }
         }
     }
     if parts.is_empty() {
-        None
+        GeminiExtraction::Empty
     } else {
-        Some(parts.join("\n"))
+        GeminiExtraction::Prompt(parts.join("\n"))
     }
 }
 
@@ -801,6 +1347,11 @@ fn ingest_single_prompt_with_local_ts(
     let local_hour = extract_hour(local_ts);
     let (is_high_signal, signal_categories) =
         classify_signals(&scrubbed.cleaned_text, scrubbed.word_count);
+    let skill_tier = classify_skill_tier(
+        &scrubbed.cleaned_text,
+        scrubbed.word_count,
+        &signal_categories,
+    );
 
     results.push(NormalizedPrompt {
         id: hash,
@@ -813,6 +1364,7 @@ fn ingest_single_prompt_with_local_ts(
         redactions_made: scrubbed.redactions_made,
         is_high_signal,
         signal_categories,
+        skill_tier,
     });
 }
 
@@ -1037,6 +1589,7 @@ mod tests {
             redactions_made: 1,
             is_high_signal: true,
             signal_categories: vec!["Systems & Architecture".to_string()],
+            skill_tier: SkillTier::Advanced,
         };
         let p2 = NormalizedPrompt {
             id: "h2".to_string(),
@@ -1049,6 +1602,7 @@ mod tests {
             redactions_made: 2,
             is_high_signal: true,
             signal_categories: vec!["Career & Positioning".to_string()],
+            skill_tier: SkillTier::Advanced,
         };
         let summary = summarize_persisted_prompts(&[p1, p2]);
         assert_eq!(summary.clean_prompts_kept, 2);
@@ -1062,6 +1616,32 @@ mod tests {
         assert_eq!(summary.hourly_distribution[8], 1);
         assert_eq!(summary.hourly_distribution[21], 1);
         assert_eq!(summary.source_counts.len(), 2);
+        assert_eq!(summary.tier_counts, [0, 0, 2]);
+        assert_eq!(summary.overall_positioning, "Advanced → Senior / Staff");
+    }
+
+    #[test]
+    fn classifies_beginner_intermediate_and_advanced_skill_tiers_honestly() {
+        let beg_text = "How do I write a basic hello world function for a beginner in python?";
+        let (_, beg_cats) = classify_signals(beg_text, 14);
+        assert_eq!(
+            classify_skill_tier(beg_text, 14, &beg_cats),
+            SkillTier::Beginner
+        );
+
+        let int_text = "Let us implement and test an API endpoint using SQLite and TypeScript for our user component.";
+        let (_, int_cats) = classify_signals(int_text, 16);
+        assert_eq!(
+            classify_skill_tier(int_text, 16, &int_cats),
+            SkillTier::Intermediate
+        );
+
+        let adv_text = "As a skeptic (/grill-me), critique our distributed schema architecture, latency tradeoffs, and unit economics from first principles.";
+        let (_, adv_cats) = classify_signals(adv_text, 17);
+        assert_eq!(
+            classify_skill_tier(adv_text, 17, &adv_cats),
+            SkillTier::Advanced
+        );
     }
 
     #[test]
@@ -1129,5 +1709,123 @@ mod tests {
             "Expected 1,000-prompt ingestion under 150ms, took {}ms",
             elapsed.as_millis()
         );
+    }
+
+    #[test]
+    fn detects_anthropic_export_manifest_with_actionable_download_links() {
+        let manifest_json = r#"{
+            "instructions": "Download each file using the export_url.",
+            "created_at": "2026-10-30T16:38:23.517958+00:00",
+            "total_files": 3,
+            "data_files": [
+                {
+                    "batch_index": 0,
+                    "export_url": "https://claude.ai/export/abc/download/111",
+                    "category": "light_metadata",
+                    "part": 0,
+                    "filename": "light_metadata-000.zip"
+                },
+                {
+                    "batch_index": 1,
+                    "export_url": "https://claude.ai/export/abc/download/222",
+                    "category": "projects",
+                    "part": 0,
+                    "filename": "projects-000.zip"
+                },
+                {
+                    "batch_index": 2,
+                    "export_url": "https://claude.ai/export/abc/download/333",
+                    "category": "conversations",
+                    "part": 0,
+                    "filename": "conversations-000.zip"
+                }
+            ],
+            "version": "1.0"
+        }"#;
+        let (prompts, summary) =
+            parse_exported_conversations_json(manifest_json).expect("manifest handled gracefully");
+        assert!(prompts.is_empty());
+        assert_eq!(summary.detected_format, "Anthropic Claude Export Manifest");
+        assert_eq!(summary.manifest_links.len(), 3);
+        assert_eq!(summary.manifest_links[2].filename, "conversations-000.zip");
+        assert_eq!(summary.manifest_links[2].category, "conversations");
+        assert!(!summary.warnings.is_empty());
+    }
+
+    #[test]
+    fn parses_gemini_workspace_conversation_turns_and_filters_system_canvas_events() {
+        let workspace_txt = r#"{
+            "conversation_turns": [
+                {
+                    "user_turn": {
+                        "prompt": "what's the time to kill formula again? Enemy max health is 100",
+                        "turn_index": 0,
+                        "turn_last_modified": "2026-08-23T01:29:39.506159+00:00"
+                    }
+                },
+                {
+                    "user_turn": {
+                        "prompt": "how to format in miliseconds?",
+                        "turn_index": 2,
+                        "turn_last_modified": "2026-08-23T01:31:02.403039+00:00"
+                    }
+                }
+            ]
+        }"#;
+        let (prompts, summary) =
+            parse_exported_conversations_json(workspace_txt).expect("valid workspace turns");
+        assert_eq!(summary.total_raw_prompts, 2);
+        assert_eq!(summary.noise_filtered_out, 0);
+        assert_eq!(prompts.len(), 2);
+        assert_eq!(prompts[0].source, PromptSource::GeminiTakeout);
+
+        let mixed_gemini = r#"[
+            {
+                "header": "Gemini Apps",
+                "title": "Cleared previous feedback",
+                "time": "2026-10-30T14:09:23.535Z"
+            },
+            {
+                "header": "Gemini Apps",
+                "title": "Created Gemini Canvas titled HomeSchoolPup Growth & Rev-Share Launch Checklist",
+                "time": "2026-10-30T14:09:00.000Z",
+                "subtitles": [{ "name": "```html\n<!DOCTYPE html><html></html>\n```" }]
+            },
+            {
+                "header": "Gemini Apps",
+                "title": "Branched How can I build a structured dataset pipeline that powers gaming LLMs and telemetry?",
+                "time": "2026-10-28T21:18:06.123Z",
+                "subtitles": [{ "name": "1 generated image." }]
+            }
+        ]"#;
+        let (g_prompts, g_summary) =
+            parse_exported_conversations_json(mixed_gemini).expect("valid mixed gemini");
+        assert_eq!(g_prompts.len(), 1);
+        assert_eq!(g_summary.noise_filtered_out, 2);
+        assert!(g_prompts[0]
+            .cleaned_text
+            .starts_with("How can I build a structured dataset pipeline"));
+        assert!(!g_prompts[0].cleaned_text.contains("1 generated image"));
+    }
+
+    #[test]
+    fn parses_gemini_gems_html_and_empty_scheduled_actions_html() {
+        let gems_html = "<div><b>Name:</b>LoL Matchup Coach<br><b>Instructions:</b>You are a league of legends expert analyst. You look at matchups and recommend the optimal strategy and early build recommendations.<br><br></div>";
+        let (prompts, summary) =
+            parse_exported_conversations_json(gems_html).expect("valid gems html");
+        assert_eq!(prompts.len(), 1);
+        assert_eq!(prompts[0].source, PromptSource::GeminiTakeout);
+        assert!(prompts[0].cleaned_text.contains("LoL Matchup Coach"));
+        assert_eq!(
+            summary.detected_format,
+            "Google Gemini Takeout (Custom Gems HTML)"
+        );
+
+        let empty_html = "<div></div>";
+        let (empty_p, empty_s) =
+            parse_exported_conversations_json(empty_html).expect("empty html handled");
+        assert!(empty_p.is_empty());
+        assert_eq!(empty_s.detected_format, "Empty HTML Export");
+        assert!(!empty_s.warnings.is_empty());
     }
 }

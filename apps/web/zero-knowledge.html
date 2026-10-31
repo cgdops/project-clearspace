@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>What Zero-Knowledge Means — Clearspace Privacy Architecture</title>
+    <meta
+      name="description"
+      content="Learn how Clearspace processes OpenAI, Anthropic Claude, and Google Gemini prompt archives 100% locally in Rust & SQLite with zero cloud servers or telemetry."
+    />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div id="status-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href="/index.html" class="brand-lockup" aria-label="Clearspace Home">
+          <svg class="brand-icon" width="34" height="34" viewBox="0 0 1024 1024" aria-hidden="true">
+            <rect x="64" y="64" width="896" height="896" rx="220" fill="#2B5B48" />
+            <circle cx="512" cy="512" r="295" stroke="#FAF7F2" stroke-width="34" fill="none" />
+            <path
+              d="M512 190 L580 444 L834 512 L580 580 L512 834 L444 580 L190 512 L444 444 Z"
+              fill="#FAF7F2"
+            />
+            <path
+              d="M512 270 L556 468 L754 512 L556 556 L512 754 L468 556 L270 512 L468 468 Z"
+              fill="#C86D44"
+            />
+            <circle cx="512" cy="512" r="44" fill="#FAF7F2" />
+            <circle cx="512" cy="512" r="20" fill="#2B5B48" />
+          </svg>
+          <span class="brand-name">Clearspace</span>
+          <span class="version-badge">Zero-Knowledge Brief</span>
+        </a>
+
+        <nav class="site-nav" aria-label="Primary Navigation">
+          <a href="/index.html">Home &amp; Download</a>
+          <a href="/zero-knowledge.html" aria-current="page">Zero-Knowledge Proof</a>
+          <a href="/how-ai-works.html">How We Use AI</a>
+        </nav>
+
+        <div class="header-actions">
+          <button
+            type="button"
+            id="theme-toggle-btn"
+            class="btn-ghost"
+            aria-label="Switch color theme (currently System)"
+          >
+            <span id="theme-toggle-label">Theme: Auto</span>
+          </button>
+          <a href="/index.html#download-hub" class="btn-primary btn-sm">Download Desktop App</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="architecture-section" style="padding-top: 64px">
+        <div class="container">
+          <div class="section-header">
+            <span class="eyebrow">STANDALONE PRIVACY ARCHITECTURE BRIEF</span>
+            <h1 id="zk-page-heading" style="font-family: var(--font-serif); font-size: clamp(2.2rem, 4vw, 3.4rem); font-weight: 400; line-height: 1.15; margin-top: 8px">
+              What “Zero-Knowledge” Means in Clearspace
+            </h1>
+            <p style="margin-top: 12px; max-width: 760px">
+              People already distrust uploading sensitive conversations to cloud AI wrappers—and they should.
+              Clearspace is engineered so <strong>we cannot see, access, or monetize your data even if subpoenaed or breached</strong>, because your data never leaves your local disk.
+            </p>
+          </div>
+
+          <div class="arch-grid" style="margin-top: 32px">
+            <article class="arch-card">
+              <div class="arch-card-kicker">01 &bull; ZERO CLOUD STORAGE</div>
+              <h3>100% On-Device SQLite Vault</h3>
+              <p>
+                When you import your OpenAI ChatGPT, Anthropic Claude, or Google Gemini Takeout archives,
+                every byte is parsed directly in local RAM and persisted to <code>clearspace_vault.db</code> on your machine.
+                There is no Clearspace cloud database, account login, or background sync.
+              </p>
+            </article>
+
+            <article class="arch-card">
+              <div class="arch-card-kicker">02 &bull; DETERMINISTIC PII SCRUBBER</div>
+              <h3>Scrubbed Before Touching Disk</h3>
+              <p>
+                Before any prompt is indexed in your local SQLite database, our compiled Rust scrubber
+                (<code>crates/pii-scrubber</code>) automatically redacts API keys (<code>sk-...</code>, <code>ghp_...</code>),
+                emails, phone numbers, SSNs, and local filesystem paths.
+              </p>
+            </article>
+
+            <article class="arch-card">
+              <div class="arch-card-kicker">03 &bull; HUMAN PROMPTS ONLY</div>
+              <h3>Assistant Replies Are Ignored</h3>
+              <p>
+                Clearspace strips out verbose AI responses, third-party code blocks, and UI noise during ingestion.
+                Only your first-person questions, architectural inquiries, and reflections are analyzed.
+              </p>
+            </article>
+          </div>
+
+          <div style="margin-top: 40px; text-align: center">
+            <a href="/how-ai-works.html" class="btn-primary">
+              Next: Read How We Use AI &amp; Deterministic Scoring &rarr;
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div>
+          <strong>Clearspace v0.1.0</strong> — The Zero-Knowledge Career &amp; Cognitive Compass
+        </div>
+        <div class="footer-links">
+          <a href="/index.html">Home</a>
+          <a href="/zero-knowledge.html">Zero-Knowledge Proof</a>
+          <a href="/how-ai-works.html">How We Use AI</a>
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

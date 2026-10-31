@@ -7,3 +7,11 @@ dist/
 .env
 apps/desktop/test-results/
 apps/desktop/playwright-report/
+apps/web/test-results/
+apps/web/playwright-report/
+test-results/
+playwright-report/
+apps/web/public/downloads/*.exe
+apps/web/public/downloads/*.msi
+notes/*.exe
+notes/*.msi

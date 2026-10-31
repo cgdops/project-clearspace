@@ -3,8 +3,8 @@
 
 use clearspace_onet_engine::{match_onet_paths, RoleMatchResult};
 use clearspace_prompt_parsers::{
-    parse_exported_conversations_json, scan_antigravity_brain_dir, summarize_persisted_prompts,
-    IngestionSummary, NormalizedPrompt, PromptSource,
+    classify_skill_tier, parse_exported_conversations_json, scan_antigravity_brain_dir,
+    summarize_persisted_prompts, IngestionSummary, NormalizedPrompt, PromptSource, SkillTier,
 };
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -23,11 +23,37 @@ struct AppState {
 pub struct MirrorInsightCard {
     pub id: String,
     pub category: String, // "Superpower", "Core Value", "Burnout Trigger", "Cognitive Rhythm"
+    pub story_chapter: String, // "excel", "grow", "friction"
+    pub story_chapter_title: String,
     pub title: String,
     pub summary: String,
     pub confidence_pct: u8,
     pub pinned: bool,
     pub quotes: Vec<QuoteCitation>,
+    pub assessed_tier: String,
+    pub assumption_challenged: String,
+    pub identified_gap: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserProfile {
+    pub name: String,
+    pub avatar_data_url: Option<String>,
+    pub theme_mode: String, // "light" or "dark"
+    pub mirror_story_completed: bool,
+    pub shortlisted_onet_codes: Vec<String>,
+}
+
+impl Default for UserProfile {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            avatar_data_url: None,
+            theme_mode: "light".to_string(),
+            mirror_story_completed: false,
+            shortlisted_onet_codes: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +87,7 @@ pub struct JournalEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultDashboardPayload {
     pub db_path: String,
+    pub profile: UserProfile,
     pub summary: IngestionSummary,
     pub mirror_cards: Vec<MirrorInsightCard>,
     pub onet_matches: Vec<RoleMatchResult>,
@@ -200,8 +227,23 @@ fn init_sqlite_schema(conn: &Connection) -> rusqlite::Result<()> {
             card_id TEXT PRIMARY KEY,
             pinned INTEGER NOT NULL DEFAULT 1
         );
+
+        CREATE TABLE IF NOT EXISTS user_profile (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            name TEXT NOT NULL DEFAULT '',
+            avatar_data_url TEXT,
+            theme_mode TEXT NOT NULL DEFAULT 'light',
+            mirror_story_completed INTEGER NOT NULL DEFAULT 0,
+            shortlisted_onet_codes_json TEXT NOT NULL DEFAULT '[]'
+        );
         ",
     )?;
+
+    let _ = conn.execute(
+        "INSERT OR IGNORE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json)
+         VALUES (1, '', NULL, 'light', 0, '[]')",
+        [],
+    );
 
     seed_or_migrate_quests(conn)?;
     Ok(())
@@ -277,11 +319,30 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
 
     let calc_conf = |hits: usize| -> u8 {
         if hits == 0 {
-            68
+            0
         } else {
-            let norm = (hits as f32 / (prompts.len() as f32 * 0.25).max(2.0)).min(1.0);
-            (76.0 + 22.0 * norm).round().clamp(72.0, 98.0) as u8
+            let norm = (hits as f32 / (prompts.len() as f32 * 0.35).max(2.0)).min(1.0);
+            (32.0 + 62.0 * norm).round().clamp(25.0, 94.0) as u8
         }
+    };
+
+    let mut tier_counts = [0usize; 3];
+    for p in prompts {
+        match p.skill_tier {
+            SkillTier::Beginner => tier_counts[0] += 1,
+            SkillTier::Intermediate => tier_counts[1] += 1,
+            SkillTier::Advanced => tier_counts[2] += 1,
+        }
+    }
+    let total_prompts = prompts.len().max(1);
+    let weighted_tier_idx =
+        (tier_counts[1] as f32 + 2.0 * tier_counts[2] as f32) / (total_prompts as f32);
+    let overall_tier_label = if weighted_tier_idx < 0.65 {
+        SkillTier::Beginner.positioning_label()
+    } else if weighted_tier_idx < 1.35 {
+        SkillTier::Intermediate.positioning_label()
+    } else {
+        SkillTier::Advanced.positioning_label()
     };
 
     let (tool_quotes, tool_hits) = find_quotes_and_hits(
@@ -326,64 +387,129 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
         MirrorInsightCard {
             id: "card-tool-builder".to_string(),
             category: "Superpower".to_string(),
+            story_chapter: "excel".to_string(),
+            story_chapter_title: "1. Where You Currently Excel".to_string(),
             title: "The 'Bottleneck → Build the System' Reflex".to_string(),
             summary: format!(
-                "Across {} matching prompts, when you encounter friction or manual overhead, you instinctively step back to design a reusable software tool, schema, or automated pipeline rather than grinding through repetitive tasks.",
-                tool_hits.max(1)
+                "Detected in {} of {} prompts ({} Beginner / {} Intermediate / {} Advanced across vault): when you encounter manual overhead, evaluate whether you are designing durable systems or just scripting one-off patches.",
+                tool_hits, prompts.len(), tier_counts[0], tier_counts[1], tier_counts[2]
             ),
             confidence_pct: calc_conf(tool_hits),
             pinned: true,
             quotes: tool_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: if tool_hits == 0 {
+                "Assumption Tested: 0 systems/tooling prompts found—do not position yourself as a platform architect without concrete build evidence.".to_string()
+            } else if tier_counts[2] == 0 {
+                "Assumption Tested: You reference tools/workflows, but your prompts lack Senior-level tradeoff, failure-mode, or scale constraints.".to_string()
+            } else {
+                "Assumption Tested: Building a new tool for every bottleneck can become procrastination if it avoids shipping and validating with real users.".to_string()
+            },
+            identified_gap: if tool_hits == 0 {
+                "Gap Identified: No architectural or workflow automation prompts recorded in your vault yet.".to_string()
+            } else {
+                format!(
+                    "Gap Identified: {} Beginner / {} Intermediate prompt(s) still rely on tactical execution rather than reusable schema or telemetry contracts.",
+                    tier_counts[0], tier_counts[1]
+                )
+            },
         },
         MirrorInsightCard {
             id: "card-bilingual-empathy".to_string(),
             category: "Superpower".to_string(),
+            story_chapter: "excel".to_string(),
+            story_chapter_title: "1. Where You Currently Excel".to_string(),
             title: "Bilingual Translation: Systems Depth → Clear Human Value".to_string(),
             summary: format!(
-                "Identified across {} prompts: you bridge backend systems architecture with clear, human-centered positioning so stakeholders and end-users immediately grasp the practical outcome without jargon.",
-                empathy_hits.max(1)
+                "Identified across {} of {} prompts: measures how consistently you connect backend engineering decisions to user clarity, positioning, and measurable unit economics.",
+                empathy_hits, prompts.len()
             ),
             confidence_pct: calc_conf(empathy_hits),
             pinned: true,
             quotes: empathy_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: if empathy_hits == 0 {
+                "Assumption Tested: 0 user/positioning signals detected—technical code alone rarely speaks for itself without explicit value translation.".to_string()
+            } else {
+                "Assumption Tested: Clear positioning language in prompts must be backed by quantified customer outcomes (latency, revenue, retention), not just clean copy.".to_string()
+            },
+            identified_gap: if empathy_hits < 2 {
+                "Gap Identified: Sparse commercial/user-value framing—add explicit ICP, pricing, and outcome constraints when designing technical systems.".to_string()
+            } else {
+                "Gap Identified: Pair qualitative user empathy with hard unit-economics and conversion metrics to prove Staff/Principal business impact.".to_string()
+            },
         },
         MirrorInsightCard {
             id: "card-values-anchor".to_string(),
             category: "Core Value".to_string(),
+            story_chapter: "grow".to_string(),
+            story_chapter_title: "2. Where We Think You Could Grow".to_string(),
             title: "Autonomy, Sustainable Stability & High-Leverage Ownership".to_string(),
             summary: format!(
-                "Synthesized from {} value-signal reflections: your core motivation centers on building durable personal equity, household stability, and authentic work aligned with your natural strengths.",
-                values_hits.max(1)
+                "Synthesized from {} value-signal prompt(s): tracks whether your daily technical work actually compounds toward household stability and autonomy.",
+                values_hits
             ),
             confidence_pct: calc_conf(values_hits),
             pinned: true,
             quotes: values_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: "Assumption Tested: Wanting autonomy or founder-level equity does not create it—if your daily prompts are 80% reactive maintenance, your trajectory will stay linear.".to_string(),
+            identified_gap: if values_hits == 0 {
+                "Gap Identified: 0 explicit career/value constraints logged—define your non-negotiables (comp floor, ownership scope, work rhythm) in the Reflective Journal.".to_string()
+            } else {
+                "Gap Identified: Audit how many hours per week go toward compounding assets vs. unleveraged ad-hoc requests.".to_string()
+            },
         },
         MirrorInsightCard {
             id: "card-burnout-trigger".to_string(),
             category: "Burnout Trigger".to_string(),
+            story_chapter: "friction".to_string(),
+            story_chapter_title: "3. What Is Causing You Friction".to_string(),
             title: "The Repetitive Manual Maintenance Trap".to_string(),
             summary: format!(
-                "Detected {} friction signals: energy drain in your prompt archive correlates strongly with linear, repetitive asset maintenance or fragmented context-switching rather than 1-to-Many systems design.",
+                "Detected {} friction signal(s): tracks where repetitive hand-maintenance, boilerplate, or fragmented context-switching drains your cognitive output.",
                 burnout_hits
             ),
             confidence_pct: calc_conf(burnout_hits),
             pinned: true,
             quotes: burnout_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: "Assumption Tested: High output during crunch periods is not sustainable leverage—ignoring repetitive maintenance drag leads to silent skill stagnation.".to_string(),
+            identified_gap: if burnout_hits == 0 {
+                "Gap Identified: 0 explicit burnout markers detected yet—proactively document which weekly tasks drain your energy so Clearspace can flag role mismatches.".to_string()
+            } else {
+                format!(
+                    "Gap Identified: {} prompt(s) show maintenance friction; convert the top recurring manual chore into a deterministic script or test suite.",
+                    burnout_hits
+                )
+            },
         },
         MirrorInsightCard {
             id: "card-grill-me".to_string(),
             category: "Cognitive Rhythm".to_string(),
+            story_chapter: "grow".to_string(),
+            story_chapter_title: "2. Where We Think You Could Grow".to_string(),
             title: format!("First-Principles Truth-Seeking & {} Deep Flow", peak_window),
             summary: format!(
-                "With {}% of your timestamped prompts concentrated during {} and {} skeptical inquiry signals, you use AI as a dialectical sparring partner to stress-test assumptions before committing engineering effort.",
+                "With {}% of timestamped prompts in {} and {} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions before building.",
                 peak_share,
                 peak_window,
-                skeptic_hits.max(1)
+                skeptic_hits
             ),
             confidence_pct: calc_conf(skeptic_hits),
             pinned: true,
             quotes: skeptic_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: if skeptic_hits == 0 {
+                "Assumption Tested: 0 skeptical/adversarial prompts found—using AI only for confirmation or code generation creates blind spots and inflates confidence.".to_string()
+            } else {
+                "Assumption Tested: Stress-testing ideas in chat is only half the loop—verify that critiques translate into shipped tests and falsifiable benchmarks.".to_string()
+            },
+            identified_gap: if skeptic_hits == 0 {
+                "Gap Identified: Start asking AI to expose flaws, edge cases, and failure modes in your designs before writing implementation code.".to_string()
+            } else {
+                "Gap Identified: Expand adversarial verification from product strategy into automated regression and load-testing benchmarks.".to_string()
+            },
         },
     ]
 }
@@ -421,20 +547,24 @@ fn load_prompts_from_sqlite(conn: &Connection) -> Vec<NormalizedPrompt> {
     };
     let Ok(rows) = stmt.query_map([], |row| {
         let source_str: String = row.get(1)?;
+        let cleaned_text: String = row.get(5)?;
+        let word_count: usize = row.get(6)?;
         let cats_str: String = row.get(9)?;
         let signal_categories: Vec<String> =
             serde_json::from_str(&cats_str).unwrap_or_default();
+        let skill_tier = classify_skill_tier(&cleaned_text, word_count, &signal_categories);
         Ok(NormalizedPrompt {
             id: row.get(0)?,
             source: PromptSource::from_str_lossy(&source_str),
             conversation_id: row.get(2)?,
             created_at: row.get(3)?,
             local_hour: row.get::<_, Option<u8>>(4)?,
-            cleaned_text: row.get(5)?,
-            word_count: row.get::<_, usize>(6)?,
+            cleaned_text,
+            word_count,
             redactions_made: row.get::<_, usize>(7)?,
             is_high_signal: row.get::<_, i64>(8)? != 0,
             signal_categories,
+            skill_tier,
         })
     }) else {
         return Vec::new();
@@ -485,7 +615,54 @@ fn load_journals(conn: &Connection) -> Vec<JournalEntry> {
     rows.filter_map(|r| r.ok()).collect()
 }
 
+fn load_user_profile(conn: &Connection) -> UserProfile {
+    conn.query_row(
+        "SELECT name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json
+         FROM user_profile WHERE id = 1",
+        [],
+        |row| {
+            let name: String = row.get(0)?;
+            let avatar_data_url: Option<String> = row.get(1)?;
+            let theme_mode: String = row.get(2)?;
+            let mirror_story_completed: i64 = row.get(3)?;
+            let codes_json: String = row.get(4)?;
+            let shortlisted_onet_codes: Vec<String> =
+                serde_json::from_str(&codes_json).unwrap_or_default();
+            Ok(UserProfile {
+                name,
+                avatar_data_url,
+                theme_mode: if theme_mode == "dark" {
+                    "dark".to_string()
+                } else {
+                    "light".to_string()
+                },
+                mirror_story_completed: mirror_story_completed != 0,
+                shortlisted_onet_codes,
+            })
+        },
+    )
+    .unwrap_or_default()
+}
+
+fn save_user_profile_to_sqlite(conn: &Connection, profile: &UserProfile) -> rusqlite::Result<()> {
+    let codes_json =
+        serde_json::to_string(&profile.shortlisted_onet_codes).unwrap_or_else(|_| "[]".into());
+    conn.execute(
+        "INSERT OR REPLACE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5)",
+        params![
+            profile.name.trim(),
+            profile.avatar_data_url,
+            if profile.theme_mode == "dark" { "dark" } else { "light" },
+            if profile.mirror_story_completed { 1 } else { 0 },
+            codes_json,
+        ],
+    )?;
+    Ok(())
+}
+
 fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashboardPayload {
+    let profile = load_user_profile(conn);
     let prompts = load_prompts_from_sqlite(conn);
     let summary = summarize_persisted_prompts(&prompts);
     let mirror_cards = build_mirror_cards(&prompts);
@@ -501,6 +678,7 @@ fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashbo
 
     VaultDashboardPayload {
         db_path: db_path.to_string_lossy().to_string(),
+        profile,
         summary,
         mirror_cards,
         onet_matches,
@@ -514,6 +692,16 @@ fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashbo
 fn get_vault_dashboard(state: State<AppState>) -> Result<VaultDashboardPayload, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     Ok(build_dashboard_from_sqlite(&conn, &state.db_path))
+}
+
+#[tauri::command]
+fn update_user_profile(
+    profile: UserProfile,
+    state: State<AppState>,
+) -> Result<UserProfile, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    save_user_profile_to_sqlite(&conn, &profile).map_err(|e| e.to_string())?;
+    Ok(load_user_profile(&conn))
 }
 
 #[tauri::command]
@@ -549,6 +737,23 @@ fn reset_local_vault(state: State<AppState>) -> Result<VaultDashboardPayload, St
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let _ = conn.execute("DELETE FROM prompts", []);
     let _ = conn.execute("UPDATE quests SET accepted = 0, completed = 0", []);
+    let _ = conn.execute(
+        "UPDATE user_profile SET mirror_story_completed = 0, shortlisted_onet_codes_json = '[]' WHERE id = 1",
+        [],
+    );
+    Ok(build_dashboard_from_sqlite(&conn, &state.db_path))
+}
+
+#[tauri::command]
+fn reset_full_factory(state: State<AppState>) -> Result<VaultDashboardPayload, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let _ = conn.execute("DELETE FROM prompts", []);
+    let _ = conn.execute("DELETE FROM journals", []);
+    let _ = conn.execute("UPDATE quests SET accepted = 0, completed = 0", []);
+    let _ = conn.execute(
+        "UPDATE user_profile SET name = '', avatar_data_url = NULL, mirror_story_completed = 0, shortlisted_onet_codes_json = '[]' WHERE id = 1",
+        [],
+    );
     Ok(build_dashboard_from_sqlite(&conn, &state.db_path))
 }
 
@@ -608,12 +813,67 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_vault_dashboard,
+            update_user_profile,
             scan_local_vault,
             import_exported_json,
             reset_local_vault,
+            reset_full_factory,
             toggle_quest_state,
             add_journal_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running Clearspace desktop application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sqlite_profile_and_story_chapters_roundtrip_and_reset_cleanly() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        init_sqlite_schema(&conn).expect("schema init");
+
+        let default_profile = load_user_profile(&conn);
+        assert_eq!(default_profile.name, "");
+        assert_eq!(default_profile.theme_mode, "light");
+        assert!(!default_profile.mirror_story_completed);
+        assert!(default_profile.shortlisted_onet_codes.is_empty());
+
+        let updated = UserProfile {
+            name: "Chris".to_string(),
+            avatar_data_url: Some("data:image/png;base64,abc".to_string()),
+            theme_mode: "dark".to_string(),
+            mirror_story_completed: true,
+            shortlisted_onet_codes: vec!["15-1252.00".to_string()],
+        };
+        save_user_profile_to_sqlite(&conn, &updated).expect("save profile");
+
+        let loaded = load_user_profile(&conn);
+        assert_eq!(loaded.name, "Chris");
+        assert_eq!(loaded.theme_mode, "dark");
+        assert!(loaded.mirror_story_completed);
+        assert_eq!(loaded.shortlisted_onet_codes, vec!["15-1252.00".to_string()]);
+
+        let sample_prompts = vec![NormalizedPrompt {
+            id: "p1".to_string(),
+            source: PromptSource::ClaudeWeb,
+            conversation_id: "c1".to_string(),
+            created_at: "2026-03-10T21:00:00Z".to_string(),
+            local_hour: Some(21),
+            cleaned_text: "I want to architect an automated workflow and tool system from first principles to eliminate manual maintenance.".to_string(),
+            word_count: 17,
+            redactions_made: 0,
+            is_high_signal: true,
+            signal_categories: vec!["Systems & Architecture".to_string()],
+            skill_tier: SkillTier::Advanced,
+        }];
+        let cards = build_mirror_cards(&sample_prompts);
+        assert_eq!(cards.len(), 5);
+        assert_eq!(cards[0].story_chapter, "excel");
+        assert_eq!(cards[1].story_chapter, "excel");
+        assert_eq!(cards[2].story_chapter, "grow");
+        assert_eq!(cards[3].story_chapter, "friction");
+        assert_eq!(cards[4].story_chapter, "grow");
+    }
 }
