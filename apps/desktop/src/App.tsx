@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Sparkles,
   Compass,
@@ -26,6 +26,8 @@ import {
   ArrowLeft,
   Edit3,
   Bookmark,
+  Settings,
+  X,
 } from "lucide-react";
 import {
   VaultDashboardPayload,
@@ -192,6 +194,7 @@ function getInitials(name: string): string {
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("mirror");
   const [standalonePage, setStandalonePage] = useState<StandalonePageKey>("none");
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [data, setData] = useState<VaultDashboardPayload | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedPromptIdx, setSelectedPromptIdx] = useState<number>(0);
@@ -251,6 +254,25 @@ export default function App() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const settingsCloseBtnRef = useRef<HTMLButtonElement | null>(null);
+  const wasSettingsOpenRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (isSettingsOpen) {
+      wasSettingsOpenRef.current = true;
+      settingsCloseBtnRef.current?.focus();
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setIsSettingsOpen(false);
+      };
+      window.addEventListener("keydown", onKeyDown);
+      return () => window.removeEventListener("keydown", onKeyDown);
+    } else if (wasSettingsOpenRef.current) {
+      wasSettingsOpenRef.current = false;
+      if (!isEditingProfile) settingsTriggerRef.current?.focus();
+    }
+  }, [isSettingsOpen, isEditingProfile]);
 
   const appTheme: "light" | "dark" = data?.profile?.theme_mode === "dark" ? "dark" : "light";
 
@@ -684,13 +706,6 @@ export default function App() {
     data?.quests.reduce((acc, q) => acc + q.equity_points, 0) ?? 2600;
   const committedQuestPoints = acceptedQuests.reduce((acc, q) => acc + q.equity_points, 0);
 
-  const baseEquity =
-    data && data.summary.clean_prompts_kept > 0 && acceptedQuests.length > 0 ? 225 : 0;
-  const totalEquityPoints = acceptedQuests.reduce(
-    (acc, q) => acc + (q.completed ? q.equity_points : Math.round(q.equity_points * 0.35)),
-    baseEquity
-  );
-
   const equityProgressPct = Math.min(
     100,
     Math.round((committedQuestPoints / Math.max(totalAvailableQuestPoints, 1)) * 100)
@@ -873,9 +888,9 @@ export default function App() {
           }}
         >
           <div>
-            <span className="badge superpower">Peak Flow Windows • 24-Hour Cognitive Rhythm</span>
+            <span className="badge superpower">Peak Flow Windows</span>
             <h3 style={{ fontSize: 19, marginTop: 6 }}>
-              Your Natural Deep-Flow Window: <strong>{peakInfo.windowLabel}</strong>
+              Your Deep-Flow Window: <strong>{peakInfo.windowLabel}</strong>
             </h3>
             <p style={{ fontSize: 13.5, color: "var(--text-secondary)", marginTop: 2 }}>
               {peakInfo.shareSub}. Protect these hours for high-leverage architecture and creative problem-solving.
@@ -1652,93 +1667,9 @@ export default function App() {
       <aside className="sidebar">
         <div>
           <div className="brand-header">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <div className="brand-title">
-                <Compass size={24} color="var(--accent-sage)" />
-                <span>Clearspace</span>
-              </div>
-              <button
-                type="button"
-                className="btn-outline"
-                style={{ padding: "5px 9px", fontSize: 11.5 }}
-                onClick={handleToggleTheme}
-                title="Switch application color theme"
-                aria-label={`Switch color theme (currently ${appTheme === "dark" ? "Dark" : "Light"})`}
-                data-testid="sidebar-theme-toggle"
-              >
-                {appTheme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
-                <span>{appTheme === "dark" ? "Light" : "Dark"}</span>
-              </button>
-            </div>
-            <p className="brand-subtitle">
-              Therapeutic, zero-knowledge career & cognitive mirror.
-            </p>
-            <div className="privacy-pill">
-              <Lock size={12} />
-              <span>100% Local SQLite • Zero Cloud Logs</span>
-            </div>
-
-            {/* Sidebar User Profile Card */}
-            <div className="sidebar-profile-card" data-testid="sidebar-profile-card">
-              <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-                <div className="profile-avatar-circle sm">
-                  {data?.profile?.avatar_data_url ? (
-                    <img src={data.profile.avatar_data_url} alt={data.profile.name || "Profile"} />
-                  ) : (
-                    <span>{getInitials(data?.profile?.name || "CS")}</span>
-                  )}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 13,
-                      color: "var(--text-primary)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                    data-testid="sidebar-profile-name"
-                  >
-                    {hasProfileName ? data?.profile.name : "Step 1: Set Profile"}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    {isVaultEmpty
-                      ? hasProfileName
-                        ? "Step 2: Upload Data"
-                        : "1-Step Onboarding"
-                      : `${unlockedTabOrder.length} of 5 Modules Unlocked`}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 10.5,
-                      color: "var(--accent-sage)",
-                      fontWeight: 600,
-                      marginTop: 2,
-                    }}
-                    data-testid="sidebar-writing-level-pill"
-                  >
-                    Writing Style: {writingStyleShortBand} (
-                    {activeWritingLevelMode === "auto" ? "Auto" : "Custom"})
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn-outline"
-                style={{ padding: "4px 8px", fontSize: 11 }}
-                onClick={() => {
-                  setProfileNameDraft(data?.profile?.name ?? "");
-                  setProfileAvatarDraft(data?.profile?.avatar_data_url ?? null);
-                  setIsEditingProfile(true);
-                  setStandalonePage("none");
-                }}
-                title="Edit your profile name or photo"
-                data-testid="btn-edit-profile"
-              >
-                <Edit3 size={12} />
-                <span>Edit</span>
-              </button>
+            <div className="brand-title">
+              <Compass size={24} color="var(--accent-sage)" />
+              <span>Clearspace</span>
             </div>
           </div>
 
@@ -1761,8 +1692,14 @@ export default function App() {
                 setActiveTab("mirror");
               }}
             >
-              <Sparkles size={17} />
-              <span>Your Strengths &amp; Habits</span>
+              <div className="profile-avatar-circle xs" data-testid="nav-profile-avatar" aria-hidden="true">
+                {data?.profile?.avatar_data_url ? (
+                  <img src={data.profile.avatar_data_url} alt={data.profile.name || "Profile"} />
+                ) : (
+                  <span>{getInitials(data?.profile?.name || "CS")}</span>
+                )}
+              </div>
+              <span>Your Profile</span>
             </button>
 
             <button
@@ -1782,12 +1719,12 @@ export default function App() {
               }}
               title={
                 isOnetUnlocked
-                  ? "Career Path Matches"
-                  : "Unlocks after reviewing your 3-Chapter Story in Your Strengths & Habits"
+                  ? "Career Path"
+                  : "Unlocks after reviewing your 3-Chapter Story in Your Profile"
               }
             >
               {isOnetUnlocked ? <Compass size={17} /> : <Lock size={15} />}
-              <span>Career Path Matches</span>
+              <span>Career Path</span>
             </button>
 
             <button
@@ -1807,12 +1744,12 @@ export default function App() {
               }}
               title={
                 isEquityUnlocked
-                  ? "Next Steps & Growth Plan"
-                  : "Unlocks after exploring or shortlisting a role in Career Path Matches"
+                  ? "Growth Plan"
+                  : "Unlocks after exploring or shortlisting a role in Career Path"
               }
             >
               {isEquityUnlocked ? <TrendingUp size={17} /> : <Lock size={15} />}
-              <span>Next Steps &amp; Growth Plan</span>
+              <span>Growth Plan</span>
             </button>
 
             <button
@@ -1832,12 +1769,12 @@ export default function App() {
               }}
               title={
                 isJournalUnlocked
-                  ? "Personal Reflection Journal"
-                  : "Unlocks after accepting at least 1 milestone in Next Steps & Growth Plan"
+                  ? "Personal Journal"
+                  : "Unlocks after accepting at least 1 milestone in Growth Plan"
               }
             >
               {isJournalUnlocked ? <BookOpen size={17} /> : <Lock size={15} />}
-              <span>Personal Reflection Journal</span>
+              <span>Personal Journal</span>
             </button>
 
             <button
@@ -1857,25 +1794,95 @@ export default function App() {
               }}
               title={
                 isVaultUnlocked
-                  ? "Local Vault & Scrubber"
+                  ? "Your Data"
                   : "Unlocks as soon as you upload or scan your prompt archive"
               }
             >
               {isVaultUnlocked ? <Database size={17} /> : <Lock size={15} />}
-              <span>Local Vault &amp; Scrubber</span>
+              <span>Your Data</span>
             </button>
           </nav>
+        </div>
 
-          {/* Standalone Trust & AI Links in Sidebar */}
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-warm)", display: "flex", flexDirection: "column", gap: 4 }}>
-            <div className="stat-label" style={{ paddingLeft: 8, fontSize: 10.5 }}>
+        <div className="sidebar-footer">
+          <button
+            ref={settingsTriggerRef}
+            type="button"
+            className={`nav-btn ${isSettingsOpen ? "active" : ""}`}
+            aria-haspopup="dialog"
+            aria-expanded={isSettingsOpen}
+            onClick={() => setIsSettingsOpen(true)}
+            data-testid="btn-settings-drawer"
+          >
+            <Settings size={17} />
+            <span>Settings</span>
+          </button>
+        </div>
+
+        {isSettingsOpen && (
+        <div className="settings-drawer-backdrop" onClick={() => setIsSettingsOpen(false)} data-testid="settings-drawer-backdrop">
+          <div className="settings-drawer" role="dialog" aria-modal="true" aria-label="Clearspace Settings" onClick={(e) => e.stopPropagation()} data-testid="settings-drawer">
+            <div className="settings-drawer-header">
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 16 }}>
+                <Settings size={18} color="var(--accent-sage)" />
+                <span>Settings</span>
+              </div>
+              <button ref={settingsCloseBtnRef} type="button" className="btn-outline" style={{ padding: "5px 9px", fontSize: 12 }} onClick={() => setIsSettingsOpen(false)} aria-label="Close Settings" data-testid="btn-close-settings">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="settings-section">
+              <div className="settings-section-title">Profile</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <div className="profile-avatar-circle sm">
+                    {data?.profile?.avatar_data_url ? <img src={data.profile.avatar_data_url} alt={data.profile.name || "Profile"} /> : <span>{getInitials(data?.profile?.name || "CS")}</span>}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} data-testid="sidebar-profile-name">
+                      {hasProfileName ? data?.profile.name : "Step 1: Set Profile"}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                      {isVaultEmpty ? (hasProfileName ? "Step 2: Upload Data" : "1-Step Onboarding") : `${unlockedTabOrder.length} of 5 Modules Unlocked`}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" className="btn-outline" style={{ padding: "5px 10px", fontSize: 11.5 }} onClick={() => { setProfileNameDraft(data?.profile?.name ?? ""); setProfileAvatarDraft(data?.profile?.avatar_data_url ?? null); setIsEditingProfile(true); setStandalonePage("none"); setIsSettingsOpen(false); }} title="Edit your profile name or photo" data-testid="btn-edit-profile">
+                  <Edit3 size={12} />
+                  <span>Edit</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="settings-section">
+              <div className="settings-section-title">Appearance</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Color Theme ({appTheme === "dark" ? "Dark" : "Warm Daylight"})</span>
+                <button type="button" className="btn-outline" style={{ padding: "6px 11px", fontSize: 12 }} onClick={handleToggleTheme} title="Switch application color theme" aria-label={`Switch color theme (currently ${appTheme === "dark" ? "Dark" : "Light"})`} data-testid="sidebar-theme-toggle">
+                  {appTheme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+                  <span>{appTheme === "dark" ? "Light" : "Dark"}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="settings-section">
+              <div className="settings-section-title">Writing Style &amp; Explanation Tone</div>
+              <div style={{ fontSize: 12, color: "var(--accent-sage)", fontWeight: 600 }} data-testid="sidebar-writing-level-pill">
+                Writing Style: {writingStyleShortBand} ({activeWritingLevelMode === "auto" ? "Auto" : "Custom"})
+              </div>
+              {renderWritingLevelSwitcherCard()}
+            </div>
+
+          <div className="settings-section">
+            <div className="settings-section-title">
               Privacy &amp; AI Architecture
             </div>
             <button
               type="button"
               className={`nav-btn ${standalonePage === "zero-knowledge" ? "active" : ""}`}
               style={{ padding: "8px 11px", fontSize: 12.5 }}
-              onClick={() => setStandalonePage("zero-knowledge")}
+              onClick={() => { setStandalonePage("zero-knowledge"); setIsSettingsOpen(false); }}
               data-testid="sidebar-link-zero-knowledge"
             >
               <ShieldCheck size={15} />
@@ -1885,31 +1892,16 @@ export default function App() {
               type="button"
               className={`nav-btn ${standalonePage === "how-ai-works" ? "active" : ""}`}
               style={{ padding: "8px 11px", fontSize: 12.5 }}
-              onClick={() => setStandalonePage("how-ai-works")}
+              onClick={() => { setStandalonePage("how-ai-works"); setIsSettingsOpen(false); }}
               data-testid="sidebar-link-how-ai"
             >
               <Cpu size={15} />
               <span>How We Use AI</span>
             </button>
           </div>
-        </div>
 
-        <div className="equity-widget" aria-live="polite">
-          <div className="stat-label">Growth Plan Progress</div>
-          <div className="equity-score-num">{totalEquityPoints.toLocaleString()} pts</div>
-          <p className="stat-sub">
-            Building momentum across {acceptedQuests.length} active career steps.
-          </p>
-          <div
-            style={{
-              marginTop: 12,
-              paddingTop: 10,
-              borderTop: "1px solid var(--border-warm)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
+          <div className="settings-section">
+            <div className="settings-section-title">Updates &amp; Vault Management</div>
             <div
               style={{
                 display: "flex",
@@ -1982,7 +1974,7 @@ export default function App() {
             <button
               className="btn-outline"
               style={{ width: "100%", justifyContent: "center", fontSize: 11.5, padding: "6px 10px" }}
-              onClick={handleResetVault}
+              onClick={() => { void handleResetVault(); setIsSettingsOpen(false); }}
               title="Wipe imported prompts and return to Step 2 upload while keeping your profile"
             >
               <Trash2 size={12} />
@@ -1992,7 +1984,7 @@ export default function App() {
               <button
                 className="btn-outline"
                 style={{ width: "100%", justifyContent: "center", fontSize: 11, padding: "5px 10px" }}
-                onClick={handleFullFactoryReset}
+                onClick={() => { void handleFullFactoryReset(); setIsSettingsOpen(false); }}
                 title="Wipe both profile and vault to restart at Step 1"
                 data-testid="btn-full-factory-reset"
               >
@@ -2000,7 +1992,9 @@ export default function App() {
               </button>
             )}
           </div>
+          </div>
         </div>
+        )}
       </aside>
 
       <main
@@ -2027,7 +2021,7 @@ export default function App() {
           <>
             {activeTab === "mirror" && (
               <div>
-                <h1 className="page-title">{ownerPossessive} Strengths &amp; Habits</h1>
+                <h1 className="page-title">{ownerPossessive} Profile</h1>
                 <p className="page-lead">
                   {isVaultEmpty ? (
                     <>
@@ -2036,7 +2030,7 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      Synthesized locally from{" "}
+                      Built from{" "}
                       <strong>{data.summary.clean_prompts_kept.toLocaleString()} unique first-person prompts</strong>{" "}
                       across <strong>{data.summary.total_files_scanned} conversations</strong> (
                       {data.summary.earliest_date?.slice(0, 10) ?? "N/A"} →{" "}
@@ -2070,8 +2064,6 @@ export default function App() {
                     <div className="stat-sub">{peakInfo.shareSub}</div>
                   </div>
                 </div>
-
-                {renderWritingLevelSwitcherCard()}
 
                 {isVaultEmpty ? (
                   <>
@@ -2327,7 +2319,7 @@ export default function App() {
                             ? "Next Up: Chapter 2 — Where We Think You Could Grow"
                             : activeStoryChapter === "grow"
                             ? "Next Up: Chapter 3 — What Is Causing You Friction"
-                            : "Story Complete — Unlock Your Career Path Matches"}
+                            : "Story Complete — Unlock Your Career Path"}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -2359,7 +2351,7 @@ export default function App() {
                             data-testid="btn-unlock-onet"
                           >
                             <Compass size={15} />
-                            <span>Continue to Career Path Matches</span>
+                            <span>Continue to Career Path</span>
                             <ArrowRight size={15} />
                           </button>
                         )}
@@ -2372,15 +2364,13 @@ export default function App() {
 
             {activeTab === "onet" && (
               <div>
-                <h1 className="page-title">{ownerPossessive} Career Path Matches</h1>
+                <h1 className="page-title">{ownerPossessive} Career Path</h1>
                 <p className="page-lead">
                   Most people don’t know what job titles exist that match who they naturally are. Below are the
                   occupations and modern role tracks matched directly to your demonstrated behaviors, energy
                   drivers, and burnout guardrails. Shortlist any track to unlock your{" "}
-                  <strong>Next Steps &amp; Growth Plan</strong>.
+                  <strong>Growth Plan</strong>.
                 </p>
-
-                {renderWritingLevelSwitcherCard()}
 
                 {isVaultEmpty && renderOnboardingPanel()}
 
@@ -2636,7 +2626,7 @@ export default function App() {
                     data-testid="btn-unlock-equity"
                   >
                     <TrendingUp size={15} />
-                    <span>Unlock Next Steps &amp; Growth Plan</span>
+                    <span>Unlock Growth Plan</span>
                     <ArrowRight size={15} />
                   </button>
                 </div>
@@ -2645,13 +2635,11 @@ export default function App() {
 
             {activeTab === "equity" && (
               <div>
-                <h1 className="page-title">{ownerPossessive} Next Steps &amp; Growth Plan</h1>
+                <h1 className="page-title">{ownerPossessive} Growth Plan</h1>
                 <p className="page-lead">
                   Practical, personalized action steps tailored to your top career matches and growth areas. Accept at least 1 step below to unlock your{" "}
-                  <strong>Personal Reflection Journal</strong>.
+                  <strong>Personal Journal</strong>.
                 </p>
-
-                {renderWritingLevelSwitcherCard()}
 
                 <div className="insight-card" style={{ marginTop: 22 }} data-testid="equity-summary-card">
                   <div
@@ -2754,7 +2742,7 @@ export default function App() {
                     <div>
                       <div className="stat-label">Milestone Unlocked</div>
                       <div style={{ fontWeight: 700, fontSize: 15, marginTop: 2 }}>
-                        Personal Reflection Journal is now unlocked!
+                        Personal Journal is now unlocked!
                       </div>
                     </div>
                     <button
@@ -2764,7 +2752,7 @@ export default function App() {
                       data-testid="btn-go-journal"
                     >
                       <BookOpen size={15} />
-                      <span>Open Personal Reflection Journal</span>
+                      <span>Open Personal Journal</span>
                       <ArrowRight size={15} />
                     </button>
                   </div>
@@ -2774,7 +2762,7 @@ export default function App() {
 
             {activeTab === "journal" && (
               <div>
-                <h1 className="page-title">{ownerPossessive} Personal Reflection Journal</h1>
+                <h1 className="page-title">{ownerPossessive} Personal Journal</h1>
                 <p className="page-lead">
                   A private, non-judgmental space stored strictly in your local vault. Choose a guided
                   reflection question below or write freely.
@@ -2856,7 +2844,7 @@ export default function App() {
 
             {activeTab === "vault" && (
               <div>
-                <h1 className="page-title">Zero-Knowledge Local Vault &amp; Scrubber</h1>
+                <h1 className="page-title">Your Data</h1>
                 <p className="page-lead">
                   Inspect how your local data is parsed and scrubbed. Your local database lives at:{" "}
                   <code style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{data.db_path}</code>
