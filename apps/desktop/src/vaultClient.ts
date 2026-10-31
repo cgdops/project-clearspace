@@ -3353,7 +3353,7 @@ export function buildGrowthTrajectoryModel(
   period: GrowthPeriod = "30d",
   latestDate?: string | null
 ): GrowthTrajectoryModel {
-  let anchorStr = new Date().toISOString().slice(0, 10);
+  let anchorStr = "";
   const bump = (raw?: string | null) => {
     const d = raw?.trim().slice(0, 10);
     if (d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d > anchorStr) anchorStr = d;
@@ -3371,6 +3371,7 @@ export function buildGrowthTrajectoryModel(
     qualMap.set(d, prev ? { count: prev.count + dq.prompt_count, avg: (prev.avg * prev.count + dq.avg_quality_score * dq.prompt_count) / (prev.count + dq.prompt_count) } : { count: dq.prompt_count, avg: dq.avg_quality_score });
   }
   quests.forEach((q) => { bump(q.accepted_at); bump(q.completed_at); });
+  if (!anchorStr) anchorStr = new Date().toISOString().slice(0, 10);
 
   const numPoints = period === "7d" ? 7 : period === "30d" ? 30 : 52;
   const step = period === "1y" ? 7 : 1;
@@ -3404,8 +3405,10 @@ export function buildGrowthTrajectoryModel(
     const promptScore = dailyPromptScore.get(dateStr) ?? 0;
     let earnedPts = 0;
     for (const q of quests) {
-      if (q.accepted && (q.accepted_at?.slice(0, 10) || anchorStr) <= dateStr) earnedPts += 0.5 * q.equity_points;
-      if (q.completed && (q.completed_at?.slice(0, 10) || anchorStr) <= dateStr) earnedPts += (q.accepted ? 0.5 : 1.0) * q.equity_points;
+      const accDate = q.accepted_at?.trim().slice(0, 10) || "0000-01-01";
+      const compDate = q.completed_at?.trim().slice(0, 10) || "0000-01-01";
+      if (q.completed && compDate <= dateStr) earnedPts += q.equity_points;
+      else if (q.accepted && accDate <= dateStr) earnedPts += 0.5 * q.equity_points;
     }
     const commitmentScore = Math.min(50, Math.round((earnedPts / totalPts) * 50));
     const compositeScore = Math.min(100, Math.max(0, promptScore + commitmentScore));

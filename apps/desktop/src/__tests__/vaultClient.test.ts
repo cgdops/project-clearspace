@@ -844,22 +844,23 @@ We need to ensure that every user import produces immediate visual confirmation 
     ];
     const quests = [
       { id: "q1", horizon: "7d", title: "Q1", rationale: "R", equity_category: "C", equity_points: 500, accepted: true, completed: true, accepted_at: "2026-11-12 10:00", completed_at: "2026-11-15 14:00" },
-      { id: "q2", horizon: "30d", title: "Q2", rationale: "R", equity_category: "C", equity_points: 500, accepted: false, completed: false, accepted_at: null, completed_at: null },
+      { id: "q2", horizon: "30d", title: "Q2", rationale: "R", equity_category: "C", equity_points: 500, accepted: true, completed: false, accepted_at: null, completed_at: null },
     ];
 
     const m7 = buildGrowthTrajectoryModel(upQuality, quests, "7d", "2026-11-15");
     expect(m7.points).toHaveLength(7);
     expect(m7.points[6].dateStr).toBe("2026-11-15");
     expect(m7.promptDelta).toBeGreaterThan(0);
-    expect(m7.points.find((p) => p.dateStr === "2026-11-11")?.commitmentScore).toBe(0);
-    expect(m7.points.find((p) => p.dateStr === "2026-11-12")?.commitmentScore).toBe(13);
-    expect(m7.points.find((p) => p.dateStr === "2026-11-15")?.commitmentScore).toBe(25);
+    expect(m7.points.find((p) => p.dateStr === "2026-11-11")?.commitmentScore).toBe(13);
+    expect(m7.points.find((p) => p.dateStr === "2026-11-12")?.commitmentScore).toBe(25);
+    expect(m7.points.find((p) => p.dateStr === "2026-11-15")?.commitmentScore).toBe(38);
 
     const downQuality = [
-      { date: "2026-11-10", prompt_count: 2, avg_quality_score: 100, tier_counts: [0, 0, 2] as [number, number, number] },
-      { date: "2026-11-15", prompt_count: 2, avg_quality_score: 25, tier_counts: [2, 0, 0] as [number, number, number] },
+      { date: "2026-03-10", prompt_count: 2, avg_quality_score: 100, tier_counts: [0, 0, 2] as [number, number, number] },
+      { date: "2026-03-15", prompt_count: 2, avg_quality_score: 25, tier_counts: [2, 0, 0] as [number, number, number] },
     ];
-    const mDown = buildGrowthTrajectoryModel(downQuality, [], "7d", "2026-11-15");
+    const mDown = buildGrowthTrajectoryModel(downQuality, [], "7d", "2026-03-15");
+    expect(mDown.points[6].dateStr).toBe("2026-03-15");
     expect(mDown.points[6].promptScore).toBeLessThan(mDown.points[1].promptScore);
 
     expect(buildGrowthTrajectoryModel(upQuality, quests, "30d", "2026-11-15").points).toHaveLength(30);
