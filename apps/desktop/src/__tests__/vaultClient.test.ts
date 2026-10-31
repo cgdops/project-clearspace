@@ -5,6 +5,7 @@ import {
   backupLocalVault,
   checkForAppUpdates,
   compareSemver,
+  computeWritingLevelClient,
   getVaultDashboard,
   importExportedContent,
   importFilesBatch,
@@ -712,12 +713,95 @@ We need to ensure that every user import produces immediate visual confirmation 
 
     const status = await backupLocalVault();
     expect(status.installed_version).toBe("0.2.0");
-    expect(status.schema_version).toBe(2);
-    expect(status.last_backup_path).toContain("clearspace_vault.db.bak-v2");
+    expect(status.schema_version).toBe(3);
+    expect(status.last_backup_path).toContain("clearspace_vault.db.bak-v3");
 
-    const checkRes = await checkForAppUpdates("0.2.0", 2);
+    const checkRes = await checkForAppUpdates("0.2.0", 3);
     expect(checkRes.installed_version).toBe("0.2.0");
-    expect(checkRes.schema_version).toBe(2);
+    expect(checkRes.schema_version).toBe(3);
     expect(checkRes.update_available).toBe(false);
+  });
+
+  it("computes Everyday, Professional, and Technical writing levels and adapts cards, O*NET matches, and quests with zero jargon leakage", async () => {
+    // 1. Empty vault defaults to everyday
+    const emptyMetrics = computeWritingLevelClient([]);
+    expect(emptyMetrics.measured_level).toBe("everyday");
+    expect(emptyMetrics.level_label).toBe("Everyday / Plain English");
+
+    // 2. Simple prompts -> everyday
+    const everydayExport = JSON.stringify([
+      {
+        uuid: "ev-1",
+        chat_messages: [
+          {
+            sender: "human",
+            created_at: "2026-03-01T10:00:00Z",
+            text: "How can I make a simple weekly plan so I finish my work on time and have more free time with my family?",
+          },
+        ],
+      },
+    ]);
+    const { dashboard: evDash } = await importExportedContent(everydayExport);
+    expect(evDash.summary.writing_level?.measured_level).toBe("everyday");
+    expect(evDash.profile.writing_level_mode).toBe("auto");
+
+    // 3. Load sample vault and test explicit mode switching across everyday, professional, and technical
+    await loadSampleMultiProviderVault();
+    const forbiddenJargon = [
+      "unit economics",
+      "unit-economics",
+      "telemetry contracts",
+      "automated regression",
+      "load-testing benchmarks",
+      "1-to-many",
+      "dialectical verification",
+    ];
+
+    for (const mode of ["everyday", "professional"] as const) {
+      await updateUserProfile({ writing_level_mode: mode });
+      const dash = await getVaultDashboard();
+      expect(dash.profile.writing_level_mode).toBe(mode);
+
+      for (const card of dash.mirror_cards) {
+        const combined = `${card.title} ${card.summary} ${card.assumption_challenged} ${card.identified_gap}`.toLowerCase();
+        for (const term of forbiddenJargon) {
+          expect(combined).not.toContain(term);
+        }
+      }
+
+      for (const match of dash.onet_matches) {
+        expect(match.plain_english_description.length).toBeGreaterThan(20);
+        const combined = `${match.plain_english_description} ${match.why_it_fits} ${match.honest_positioning_rationale} ${match.identified_gaps.join(" ")} ${match.tested_assumptions.join(" ")} ${match.burnout_guardrail}`.toLowerCase();
+        for (const term of forbiddenJargon) {
+          expect(combined).not.toContain(term);
+        }
+      }
+
+      expect(dash.quests).toHaveLength(6);
+      expect(dash.quests.map((q) => q.horizon)).toEqual([
+        "Next 7 Days (Quick Win)",
+        "Next 7 Days (Quick Win)",
+        "Next 30 Days (Skill Builder)",
+        "Next 30 Days (Skill Builder)",
+        "3-Month Milestone (Practical Project)",
+        "1-Year Goal (Career Growth)",
+      ]);
+      for (const q of dash.quests) {
+        const combined = `${q.title} ${q.rationale}`.toLowerCase();
+        for (const term of forbiddenJargon) {
+          expect(combined).not.toContain(term);
+        }
+      }
+    }
+
+    // 4. Technical mode surfaces deep systems/architectural vocabulary
+    await updateUserProfile({ writing_level_mode: "technical" });
+    const techDash = await getVaultDashboard();
+    expect(techDash.profile.writing_level_mode).toBe("technical");
+    expect(techDash.mirror_cards[0].title).toBe("The 'Bottleneck → Build the System' Reflex");
+    expect(techDash.mirror_cards[1].title).toBe(
+      "Bilingual Translation: Systems Depth → Clear Human Value"
+    );
+    expect(techDash.quests[4].title).toContain("Open-Core Software");
   });
 });

@@ -1,12 +1,12 @@
 {
   "iteration": 4,
   "phase": "progressive-onboarding-and-narrative-mirror",
-  "timestamp": "2026-10-31T03:18:34.044Z",
+  "timestamp": "2026-10-31T04:30:14.382Z",
   "status": "PASS_CONVERGED_ZERO_DEFECTS",
   "functionalFlows": {
     "onboardingEmptyVault": {
       "horizontalOverflowPx": 0,
-      "mainHeading": "Chris’s Unmasked Cognitive Mirror",
+      "mainHeading": "Chris’s Strengths & Habits",
       "onboardingTitle": "Welcome, Chris to Clearspace — Bring Your Prompt Archive",
       "providerStepCount": 4,
       "statValues": [
@@ -39,12 +39,12 @@
         }
       ],
       "sidebarEquityScoreOnFreshStorage": "0 pts",
-      "sidebarEquitySubOnFreshStorage": "Compounding across 0 active career commitments."
+      "sidebarEquitySubOnFreshStorage": "Building momentum across 0 active career steps."
     },
     "keyboardNavigation": {
-      "activeAfterArrowDown": "O*NET Path Finder",
+      "activeAfterArrowDown": "Career Path Matches",
       "activeAfterEnd": "Local Vault & Scrubber",
-      "activeAfterHome": "Cognitive Mirror"
+      "activeAfterHome": "Your Strengths & Habits"
     },
     "onetMeterBars": {
       "meterTrackCount": 16,
@@ -68,11 +68,11 @@
       "returnedToStep1OnFullFactoryReset": true
     },
     "tabSwitchLatencyMs": {
-      "mirror": 94.9,
-      "onet": 79.3,
-      "equity": 39.5,
-      "journal": 28.5,
-      "vault": 130
+      "mirror": 52.6,
+      "onet": 76.3,
+      "equity": 39.2,
+      "journal": 30.4,
+      "vault": 122.7
     }
   },
   "contrastTelemetry": {
@@ -107,19 +107,19 @@
       "emptyStateHorizontalOverflowPx": 0,
       "perTabGeometry": {
         "mirror": {
-          "heading": "Chris’s Unmasked Cognitive Mirror",
+          "heading": "Chris’s Strengths & Habits",
           "horizontalOverflowPx": 0
         },
         "onet": {
-          "heading": "Chris’s O*NET Natural Path Finder",
+          "heading": "Chris’s Career Path Matches",
           "horizontalOverflowPx": 0
         },
         "equity": {
-          "heading": "Chris’s 5-Year Personal Equity Map",
+          "heading": "Chris’s Next Steps & Growth Plan",
           "horizontalOverflowPx": 0
         },
         "journal": {
-          "heading": "Chris’s Reflective Sanctuary & Socratic Journal",
+          "heading": "Chris’s Personal Reflection Journal",
           "horizontalOverflowPx": 0
         },
         "vault": {
@@ -140,19 +140,19 @@
       "emptyStateHorizontalOverflowPx": 0,
       "perTabGeometry": {
         "mirror": {
-          "heading": "Chris’s Unmasked Cognitive Mirror",
+          "heading": "Chris’s Strengths & Habits",
           "horizontalOverflowPx": 0
         },
         "onet": {
-          "heading": "Chris’s O*NET Natural Path Finder",
+          "heading": "Chris’s Career Path Matches",
           "horizontalOverflowPx": 0
         },
         "equity": {
-          "heading": "Chris’s 5-Year Personal Equity Map",
+          "heading": "Chris’s Next Steps & Growth Plan",
           "horizontalOverflowPx": 0
         },
         "journal": {
-          "heading": "Chris’s Reflective Sanctuary & Socratic Journal",
+          "heading": "Chris’s Personal Reflection Journal",
           "horizontalOverflowPx": 0
         },
         "vault": {
@@ -173,19 +173,19 @@
       "emptyStateHorizontalOverflowPx": 0,
       "perTabGeometry": {
         "mirror": {
-          "heading": "Chris’s Unmasked Cognitive Mirror",
+          "heading": "Chris’s Strengths & Habits",
           "horizontalOverflowPx": 0
         },
         "onet": {
-          "heading": "Chris’s O*NET Natural Path Finder",
+          "heading": "Chris’s Career Path Matches",
           "horizontalOverflowPx": 0
         },
         "equity": {
-          "heading": "Chris’s 5-Year Personal Equity Map",
+          "heading": "Chris’s Next Steps & Growth Plan",
           "horizontalOverflowPx": 0
         },
         "journal": {
-          "heading": "Chris’s Reflective Sanctuary & Socratic Journal",
+          "heading": "Chris’s Personal Reflection Journal",
           "horizontalOverflowPx": 0
         },
         "vault": {

@@ -1,10 +1,11 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use clearspace_onet_engine::{match_onet_paths, RoleMatchResult};
+use clearspace_onet_engine::{match_onet_paths_for_level, RoleMatchResult};
 use clearspace_prompt_parsers::{
     classify_skill_tier, parse_exported_conversations_json, scan_antigravity_brain_dir,
     summarize_persisted_prompts, IngestionSummary, NormalizedPrompt, PromptSource, SkillTier,
+    WritingLevel,
 };
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,10 @@ pub struct MirrorInsightCard {
     pub identified_gap: String,
 }
 
+fn default_writing_level_mode() -> String {
+    "auto".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserProfile {
     pub name: String,
@@ -42,6 +47,8 @@ pub struct UserProfile {
     pub theme_mode: String, // "light" or "dark"
     pub mirror_story_completed: bool,
     pub shortlisted_onet_codes: Vec<String>,
+    #[serde(default = "default_writing_level_mode")]
+    pub writing_level_mode: String, // "auto", "everyday", "professional", "technical"
 }
 
 impl Default for UserProfile {
@@ -52,6 +59,7 @@ impl Default for UserProfile {
             theme_mode: "light".to_string(),
             mirror_story_completed: false,
             shortlisted_onet_codes: Vec::new(),
+            writing_level_mode: "auto".to_string(),
         }
     }
 }
@@ -84,7 +92,7 @@ pub struct JournalEntry {
     pub mood_valence: String,
 }
 
-pub const CURRENT_SCHEMA_VERSION: i32 = 2;
+pub const CURRENT_SCHEMA_VERSION: i32 = 3;
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,60 +120,60 @@ fn default_universal_quests() -> Vec<(&'static str, &'static str, &'static str, 
     vec![
         (
             "q-reposition-architect",
-            "Now (30 Days)",
-            "Anchor Positioning in Systems Architecture & Unit-Economics Impact",
-            "Lead your portfolio and interviews with measurable system throughput, automation leverage, and cost-efficiency outcomes synthesized from your high-signal engineering and strategy prompts.",
-            "Positioning Clarity",
+            "Next 7 Days (Quick Win)",
+            "Write Down 3 Real Examples of Problems You Enjoyed Solving",
+            "Start your growth plan by capturing three recent moments where you organized a messy process, solved a tricky problem, or explained a complex idea simply.",
+            "Career Clarity",
             250,
             0,
             0,
         ),
         (
             "q-focus-guardrail",
-            "Now (30 Days)",
-            "Enforce a 3-Pillar Cognitive Focus Rule (1 Core Role, 1 Compounding Engine, 1 Deep-Flow Lab)",
-            "Eliminates context-switching fatigue across fragmented side projects and protects your highest-leverage deep work hours.",
-            "Pitfall Immunity",
+            "Next 7 Days (Quick Win)",
+            "Pick Your Top 3 Priorities for the Week",
+            "Avoid burnout from juggling too many tasks at once by choosing one main project, one skill to practice, and one curiosity topic to explore.",
+            "Energy & Focus",
             200,
             0,
             0,
         ),
         (
             "q-drop-linear-work",
-            "Year 1 Milestone",
-            "Replace Repetitive Manual Maintenance with 1-to-Many Programmatic Workflows",
-            "Burnout signals in your prompt archive correlate with repetitive hand-maintenance. Standardize on reusable tools, schemas, and automated pipelines.",
-            "Pitfall Immunity",
+            "Next 30 Days (Skill Builder)",
+            "Turn One Repetitive Weekly Chore into a Simple Checklist or Template",
+            "Notice which recurring task drains your energy most and build a reusable template, checklist, or helper script so you never start from scratch again.",
+            "Energy & Focus",
             300,
             0,
             0,
         ),
         (
             "q-domain-bridge",
-            "Year 1 Milestone",
-            "Bridge Deep Technical Tooling with Interactive & Companion Ecosystems",
-            "Combine your systems architecture, data telemetry, and workflow automation strengths into high-leverage platform engineering roles without resetting your seniority.",
-            "Mastered Proof-of-Work",
+            "Next 30 Days (Skill Builder)",
+            "Practice Closing One Skill Gap from Your Top Career Match",
+            "Spend two focused sessions practicing the primary growth area highlighted in your top Career Path Match using real examples from your work.",
+            "Practical Proof",
             350,
             0,
             0,
         ),
         (
             "q-open-core-equity",
-            "Year 3 Milestone",
-            "Compound Open-Core Software & Reusable Intellectual Property",
-            "Convert your 'bottleneck -> build the tool' reflex into durable open-core software assets and automated distribution channels that compound independent of linear hours.",
-            "Compounding Distribution",
+            "3-Month Milestone (Practical Project)",
+            "Package a Useful Guide, Tool, or Case Study You Can Share",
+            "Turn the workflows and problem-solving habits from your prompt history into a tangible portfolio piece or shared guide that demonstrates your capabilities.",
+            "Long-Term Growth",
             500,
             0,
             0,
         ),
         (
             "q-year5-autonomy",
-            "Year 5 Horizon",
-            "Full Creative & Financial Autonomy (Principal Architect / Founder Track)",
-            "Align your 5-year trajectory toward long-term household stability, creative ownership, and high-margin technical leadership.",
-            "Compounding Distribution",
+            "1-Year Goal (Career Growth)",
+            "Shape Your Role Around Sustainable Work & Creative Ownership",
+            "Align your next career step toward roles that reward clear thinking, reliable execution, and healthy boundaries.",
+            "Long-Term Growth",
             1000,
             0,
             0,
@@ -328,7 +336,8 @@ fn init_sqlite_schema_with_backup(
             avatar_data_url TEXT,
             theme_mode TEXT NOT NULL DEFAULT 'light',
             mirror_story_completed INTEGER NOT NULL DEFAULT 0,
-            shortlisted_onet_codes_json TEXT NOT NULL DEFAULT '[]'
+            shortlisted_onet_codes_json TEXT NOT NULL DEFAULT '[]',
+            writing_level_mode TEXT NOT NULL DEFAULT 'auto'
         );
 
         CREATE TABLE IF NOT EXISTS app_meta (
@@ -351,10 +360,16 @@ fn init_sqlite_schema_with_backup(
             [],
         );
     }
+    if !table_has_column(conn, "user_profile", "writing_level_mode") {
+        let _ = conn.execute(
+            "ALTER TABLE user_profile ADD COLUMN writing_level_mode TEXT NOT NULL DEFAULT 'auto'",
+            [],
+        );
+    }
 
     let _ = conn.execute(
-        "INSERT OR IGNORE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json)
-         VALUES (1, '', NULL, 'light', 0, '[]')",
+        "INSERT OR IGNORE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json, writing_level_mode)
+         VALUES (1, '', NULL, 'light', 0, '[]', 'auto')",
         [],
     );
 
@@ -420,7 +435,7 @@ fn compute_peak_window_description(prompts: &[NormalizedPrompt]) -> (String, usi
     (format!("{} – {}", fmt_hr(best_start), fmt_hr(end_hr)), share_pct)
 }
 
-fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
+fn build_mirror_cards(prompts: &[NormalizedPrompt], level: WritingLevel) -> Vec<MirrorInsightCard> {
     if prompts.is_empty() {
         return Vec::new();
     }
@@ -516,29 +531,64 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
 
     let (peak_window, peak_share) = compute_peak_window_description(prompts);
 
-    vec![
-        MirrorInsightCard {
-            id: "card-tool-builder".to_string(),
-            category: "Superpower".to_string(),
-            story_chapter: "excel".to_string(),
-            story_chapter_title: "1. Where You Currently Excel".to_string(),
-            title: "The 'Bottleneck → Build the System' Reflex".to_string(),
-            summary: format!(
+    // Card 1: Tool Builder
+    let (c1_title, c1_summary, c1_assumption, c1_gap) = match level {
+        WritingLevel::Everyday => (
+            "Turning Frustrations into Reusable Checklists & Tools".to_string(),
+            format!(
+                "Spotted in {} of {} prompts: when a task feels slow or messy, you naturally look for ways to organize it once so it is easier next time.",
+                tool_hits, prompts.len()
+            ),
+            if tool_hits == 0 {
+                "Reality Check: We haven't spotted examples of you organizing workflows or building helper tools yet—try saving a few examples first.".to_string()
+            } else {
+                "Reality Check: Creating a brand-new checklist or tool for every small obstacle can delay finishing the actual project.".to_string()
+            },
+            if tool_hits == 0 {
+                "Next Step to Grow: Try documenting one repeatable process or template in your prompts this week.".to_string()
+            } else {
+                format!(
+                    "Next Step to Grow: {} of your prompts focus on quick fixes—try turning your most common task into a simple reusable template.",
+                    tier_counts[0] + tier_counts[1]
+                )
+            },
+        ),
+        WritingLevel::Professional => (
+            "Workflow Improvement & Repeatable Systems".to_string(),
+            format!(
+                "Observed in {} of {} prompts ({} foundational / {} mid-level / {} advanced): when you hit manual bottlenecks, you look for repeatable processes and practical tools.",
+                tool_hits, prompts.len(), tier_counts[0], tier_counts[1], tier_counts[2]
+            ),
+            if tool_hits == 0 {
+                "Assumption Tested: 0 workflow or systems prompts found—avoid positioning yourself around process design until you document concrete examples.".to_string()
+            } else if tier_counts[2] == 0 {
+                "Assumption Tested: You reference tools and workflows, but your prompts rarely specify edge cases, team handoffs, or long-term maintenance.".to_string()
+            } else {
+                "Assumption Tested: Designing a custom workflow for every bottleneck can slow down delivery if it delays testing with real users.".to_string()
+            },
+            if tool_hits == 0 {
+                "Gap Identified: No workflow automation or process design prompts recorded in your vault yet.".to_string()
+            } else {
+                format!(
+                    "Gap Identified: {} Beginner / {} Intermediate prompt(s) still rely on one-off fixes rather than shared templates and clear quality checks.",
+                    tier_counts[0], tier_counts[1]
+                )
+            },
+        ),
+        WritingLevel::Technical => (
+            "The 'Bottleneck → Build the System' Reflex".to_string(),
+            format!(
                 "Detected in {} of {} prompts ({} Beginner / {} Intermediate / {} Advanced across vault): when you encounter manual overhead, evaluate whether you are designing durable systems or just scripting one-off patches.",
                 tool_hits, prompts.len(), tier_counts[0], tier_counts[1], tier_counts[2]
             ),
-            confidence_pct: calc_conf(tool_hits),
-            pinned: true,
-            quotes: tool_quotes,
-            assessed_tier: overall_tier_label.to_string(),
-            assumption_challenged: if tool_hits == 0 {
+            if tool_hits == 0 {
                 "Assumption Tested: 0 systems/tooling prompts found—do not position yourself as a platform architect without concrete build evidence.".to_string()
             } else if tier_counts[2] == 0 {
                 "Assumption Tested: You reference tools/workflows, but your prompts lack Senior-level tradeoff, failure-mode, or scale constraints.".to_string()
             } else {
                 "Assumption Tested: Building a new tool for every bottleneck can become procrastination if it avoids shipping and validating with real users.".to_string()
             },
-            identified_gap: if tool_hits == 0 {
+            if tool_hits == 0 {
                 "Gap Identified: No architectural or workflow automation prompts recorded in your vault yet.".to_string()
             } else {
                 format!(
@@ -546,69 +596,149 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
                     tier_counts[0], tier_counts[1]
                 )
             },
-        },
-        MirrorInsightCard {
-            id: "card-bilingual-empathy".to_string(),
-            category: "Superpower".to_string(),
-            story_chapter: "excel".to_string(),
-            story_chapter_title: "1. Where You Currently Excel".to_string(),
-            title: "Bilingual Translation: Systems Depth → Clear Human Value".to_string(),
-            summary: format!(
+        ),
+    };
+
+    // Card 2: Bilingual Empathy
+    let (c2_title, c2_summary, c2_assumption, c2_gap) = match level {
+        WritingLevel::Everyday => (
+            "Explaining Complicated Ideas in Plain, Helpful Language".to_string(),
+            format!(
+                "Spotted in {} of {} prompts: you care about making your work easy for real people, customers, and teammates to understand and use.",
+                empathy_hits, prompts.len()
+            ),
+            if empathy_hits == 0 {
+                "Reality Check: Your prompts focus mostly on the task itself—remember to explain why the work matters to the person using it.".to_string()
+            } else {
+                "Reality Check: Friendly explanations work best when you also share concrete before-and-after results (like time saved or fewer mistakes).".to_string()
+            },
+            if empathy_hits < 2 {
+                "Next Step to Grow: When working on a project, write one sentence about who it helps and what problem it solves for them.".to_string()
+            } else {
+                "Next Step to Grow: Pair your clear explanations with a simple number—like hours saved per week—when sharing your work.".to_string()
+            },
+        ),
+        WritingLevel::Professional => (
+            "Bridging Technical Detail & Clear Customer Value".to_string(),
+            format!(
+                "Identified across {} of {} prompts: tracks how consistently you connect detailed project decisions to user clarity, team alignment, and business results.",
+                empathy_hits, prompts.len()
+            ),
+            if empathy_hits == 0 {
+                "Assumption Tested: 0 user-value signals detected—strong execution rarely speaks for itself without clear stakeholder communication.".to_string()
+            } else {
+                "Assumption Tested: Clear positioning language in prompts must be backed by measurable customer outcomes (time saved, adoption, retention), not just polished wording.".to_string()
+            },
+            if empathy_hits < 2 {
+                "Gap Identified: Sparse customer-value framing—add explicit audience, goal, and outcome constraints when planning projects.".to_string()
+            } else {
+                "Gap Identified: Pair qualitative user empathy with concrete business outcomes and adoption metrics to demonstrate senior impact.".to_string()
+            },
+        ),
+        WritingLevel::Technical => (
+            "Bilingual Translation: Systems Depth → Clear Human Value".to_string(),
+            format!(
                 "Identified across {} of {} prompts: measures how consistently you connect backend engineering decisions to user clarity, positioning, and measurable unit economics.",
                 empathy_hits, prompts.len()
             ),
-            confidence_pct: calc_conf(empathy_hits),
-            pinned: true,
-            quotes: empathy_quotes,
-            assessed_tier: overall_tier_label.to_string(),
-            assumption_challenged: if empathy_hits == 0 {
+            if empathy_hits == 0 {
                 "Assumption Tested: 0 user/positioning signals detected—technical code alone rarely speaks for itself without explicit value translation.".to_string()
             } else {
                 "Assumption Tested: Clear positioning language in prompts must be backed by quantified customer outcomes (latency, revenue, retention), not just clean copy.".to_string()
             },
-            identified_gap: if empathy_hits < 2 {
+            if empathy_hits < 2 {
                 "Gap Identified: Sparse commercial/user-value framing—add explicit ICP, pricing, and outcome constraints when designing technical systems.".to_string()
             } else {
                 "Gap Identified: Pair qualitative user empathy with hard unit-economics and conversion metrics to prove Staff/Principal business impact.".to_string()
             },
-        },
-        MirrorInsightCard {
-            id: "card-values-anchor".to_string(),
-            category: "Core Value".to_string(),
-            story_chapter: "grow".to_string(),
-            story_chapter_title: "2. Where We Think You Could Grow".to_string(),
-            title: "Autonomy, Sustainable Stability & High-Leverage Ownership".to_string(),
-            summary: format!(
+        ),
+    };
+
+    // Card 3: Values Anchor
+    let (c3_title, c3_summary, c3_assumption, c3_gap) = match level {
+        WritingLevel::Everyday => (
+            "Building Steady Independence & Meaningful Work".to_string(),
+            format!(
+                "Found in {} prompt(s): shows how much you value steady income, healthy work-life balance, and having room to do work you are proud of.",
+                values_hits
+            ),
+            "Reality Check: Wanting more flexibility only works if you protect your time—if most of your week goes to last-minute emergencies, it is hard to get ahead.".to_string(),
+            if values_hits == 0 {
+                "Next Step to Grow: Use the Personal Reflection Journal to write down what a healthy, rewarding workday looks like for you.".to_string()
+            } else {
+                "Next Step to Grow: Block out two hours this week for a project or skill that builds your long-term security.".to_string()
+            },
+        ),
+        WritingLevel::Professional => (
+            "Career Independence, Stability & Meaningful Ownership".to_string(),
+            format!(
+                "Synthesized from {} value-signal prompt(s): tracks whether your weekly work builds long-term career stability and role ownership.",
+                values_hits
+            ),
+            "Assumption Tested: Wanting more autonomy requires intentional calendar boundaries—if 80% of your week is reactive firefighting, your career growth slows down.".to_string(),
+            if values_hits == 0 {
+                "Gap Identified: 0 explicit career priorities logged—define your core requirements (compensation, scope, work pace) in the Personal Reflection Journal.".to_string()
+            } else {
+                "Gap Identified: Review how many hours per week go toward reusable skills and portfolio assets versus one-off reactive requests.".to_string()
+            },
+        ),
+        WritingLevel::Technical => (
+            "Autonomy, Sustainable Stability & High-Leverage Ownership".to_string(),
+            format!(
                 "Synthesized from {} value-signal prompt(s): tracks whether your daily technical work actually compounds toward household stability and autonomy.",
                 values_hits
             ),
-            confidence_pct: calc_conf(values_hits),
-            pinned: true,
-            quotes: values_quotes,
-            assessed_tier: overall_tier_label.to_string(),
-            assumption_challenged: "Assumption Tested: Wanting autonomy or founder-level equity does not create it—if your daily prompts are 80% reactive maintenance, your trajectory will stay linear.".to_string(),
-            identified_gap: if values_hits == 0 {
-                "Gap Identified: 0 explicit career/value constraints logged—define your non-negotiables (comp floor, ownership scope, work rhythm) in the Reflective Journal.".to_string()
+            "Assumption Tested: Wanting autonomy or founder-level equity does not create it—if your daily prompts are 80% reactive maintenance, your trajectory will stay linear.".to_string(),
+            if values_hits == 0 {
+                "Gap Identified: 0 explicit career/value constraints logged—define your non-negotiables (comp floor, ownership scope, work rhythm) in the Personal Reflection Journal.".to_string()
             } else {
                 "Gap Identified: Audit how many hours per week go toward compounding assets vs. unleveraged ad-hoc requests.".to_string()
             },
-        },
-        MirrorInsightCard {
-            id: "card-burnout-trigger".to_string(),
-            category: "Burnout Trigger".to_string(),
-            story_chapter: "friction".to_string(),
-            story_chapter_title: "3. What Is Causing You Friction".to_string(),
-            title: "The Repetitive Manual Maintenance Trap".to_string(),
-            summary: format!(
+        ),
+    };
+
+    // Card 4: Burnout Trigger
+    let (c4_title, c4_summary, c4_assumption, c4_gap) = match level {
+        WritingLevel::Everyday => (
+            "Draining Repetition & Too Much Juggling".to_string(),
+            format!(
+                "Spotted {} friction signal(s): highlights where doing the same tedious chores over and over—or jumping between too many tasks—wears you out.",
+                burnout_hits
+            ),
+            "Reality Check: Pushing through exhaustion during busy weeks isn't a permanent fix—ignoring repetitive chores eventually leads to burnout.".to_string(),
+            if burnout_hits == 0 {
+                "Next Step to Grow: Note which weekly chores drain your energy most so you can simplify or delegate them.".to_string()
+            } else {
+                format!(
+                    "Next Step to Grow: {} prompt(s) show frustration with repetitive work—pick the most annoying weekly chore and simplify it first.",
+                    burnout_hits
+                )
+            },
+        ),
+        WritingLevel::Professional => (
+            "Repetitive Maintenance & Context-Switching Drain".to_string(),
+            format!(
+                "Detected {} friction signal(s): tracks where repetitive upkeep, manual busywork, or frequent context-switching drains your focus.",
+                burnout_hits
+            ),
+            "Assumption Tested: High output during busy weeks is not sustainable—ignoring repetitive maintenance work quietly stalls your skill growth.".to_string(),
+            if burnout_hits == 0 {
+                "Gap Identified: 0 explicit friction markers detected yet—document which weekly tasks drain your energy so Clearspace can flag poor-fit roles.".to_string()
+            } else {
+                format!(
+                    "Gap Identified: {} prompt(s) show maintenance friction; turn your top recurring manual task into a standardized checklist or automated workflow.",
+                    burnout_hits
+                )
+            },
+        ),
+        WritingLevel::Technical => (
+            "The Repetitive Manual Maintenance Trap".to_string(),
+            format!(
                 "Detected {} friction signal(s): tracks where repetitive hand-maintenance, boilerplate, or fragmented context-switching drains your cognitive output.",
                 burnout_hits
             ),
-            confidence_pct: calc_conf(burnout_hits),
-            pinned: true,
-            quotes: burnout_quotes,
-            assessed_tier: overall_tier_label.to_string(),
-            assumption_challenged: "Assumption Tested: High output during crunch periods is not sustainable leverage—ignoring repetitive maintenance drag leads to silent skill stagnation.".to_string(),
-            identified_gap: if burnout_hits == 0 {
+            "Assumption Tested: High output during crunch periods is not sustainable leverage—ignoring repetitive maintenance drag leads to silent skill stagnation.".to_string(),
+            if burnout_hits == 0 {
                 "Gap Identified: 0 explicit burnout markers detected yet—proactively document which weekly tasks drain your energy so Clearspace can flag role mismatches.".to_string()
             } else {
                 format!(
@@ -616,35 +746,384 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
                     burnout_hits
                 )
             },
+        ),
+    };
+
+    // Card 5: Grill-Me / Deep Flow
+    let (c5_title, c5_summary, c5_assumption, c5_gap) = match level {
+        WritingLevel::Everyday => (
+            format!("Asking Good Questions & Your {} Focus Window", peak_window),
+            format!(
+                "With {}% of your timed prompts happening around {} and {} thoughtful question signal(s), this shows when you do your clearest thinking and double-check your ideas.",
+                peak_share, peak_window, skeptic_hits
+            ),
+            if skeptic_hits == 0 {
+                "Reality Check: Using AI only for quick answers can hide blind spots—asking 'what could go wrong with this plan?' saves time later.".to_string()
+            } else {
+                "Reality Check: Asking tough questions in chat is a great start—just make sure you test those ideas in real life too.".to_string()
+            },
+            if skeptic_hits == 0 {
+                "Next Step to Grow: Before starting your next big task, ask AI to point out two things you might have overlooked.".to_string()
+            } else {
+                "Next Step to Grow: Turn the best feedback from your chats into a simple checklist you use before finishing a project.".to_string()
+            },
+        ),
+        WritingLevel::Professional => (
+            format!("Critical Thinking & {} Peak Focus Window", peak_window),
+            format!(
+                "With {}% of timestamped prompts in {} and {} critical-inquiry signal(s), tracks how actively you pressure-test your assumptions before execution.",
+                peak_share, peak_window, skeptic_hits
+            ),
+            if skeptic_hits == 0 {
+                "Assumption Tested: 0 critical-review prompts found—using AI only to draft content or code without asking for critique creates blind spots.".to_string()
+            } else {
+                "Assumption Tested: Stress-testing ideas in chat is only half the loop—make sure those critiques turn into clear quality checks and real-world validation.".to_string()
+            },
+            if skeptic_hits == 0 {
+                "Gap Identified: Start asking AI to highlight risks, edge cases, and blind spots in your plans before you begin execution.".to_string()
+            } else {
+                "Gap Identified: Translate the risks you uncover during planning into repeatable quality checks and measurable project milestones.".to_string()
+            },
+        ),
+        WritingLevel::Technical => (
+            format!("First-Principles Truth-Seeking & {} Deep Flow", peak_window),
+            format!(
+                "With {}% of timestamped prompts in {} and {} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions before building.",
+                peak_share, peak_window, skeptic_hits
+            ),
+            if skeptic_hits == 0 {
+                "Assumption Tested: 0 skeptical/adversarial prompts found—using AI only for confirmation or code generation creates blind spots and inflates confidence.".to_string()
+            } else {
+                "Assumption Tested: Stress-testing ideas in chat is only half the loop—verify that critiques translate into shipped tests and falsifiable benchmarks.".to_string()
+            },
+            if skeptic_hits == 0 {
+                "Gap Identified: Start asking AI to expose flaws, edge cases, and failure modes in your designs before writing implementation code.".to_string()
+            } else {
+                "Gap Identified: Expand adversarial verification from product strategy into automated regression and load-testing benchmarks.".to_string()
+            },
+        ),
+    };
+
+    vec![
+        MirrorInsightCard {
+            id: "card-tool-builder".to_string(),
+            category: "Superpower".to_string(),
+            story_chapter: "excel".to_string(),
+            story_chapter_title: "1. Where You Currently Excel".to_string(),
+            title: c1_title,
+            summary: c1_summary,
+            confidence_pct: calc_conf(tool_hits),
+            pinned: true,
+            quotes: tool_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: c1_assumption,
+            identified_gap: c1_gap,
+        },
+        MirrorInsightCard {
+            id: "card-bilingual-empathy".to_string(),
+            category: "Superpower".to_string(),
+            story_chapter: "excel".to_string(),
+            story_chapter_title: "1. Where You Currently Excel".to_string(),
+            title: c2_title,
+            summary: c2_summary,
+            confidence_pct: calc_conf(empathy_hits),
+            pinned: true,
+            quotes: empathy_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: c2_assumption,
+            identified_gap: c2_gap,
+        },
+        MirrorInsightCard {
+            id: "card-values-anchor".to_string(),
+            category: "Core Value".to_string(),
+            story_chapter: "grow".to_string(),
+            story_chapter_title: "2. Where We Think You Could Grow".to_string(),
+            title: c3_title,
+            summary: c3_summary,
+            confidence_pct: calc_conf(values_hits),
+            pinned: true,
+            quotes: values_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: c3_assumption,
+            identified_gap: c3_gap,
+        },
+        MirrorInsightCard {
+            id: "card-burnout-trigger".to_string(),
+            category: "Burnout Trigger".to_string(),
+            story_chapter: "friction".to_string(),
+            story_chapter_title: "3. What Is Causing You Friction".to_string(),
+            title: c4_title,
+            summary: c4_summary,
+            confidence_pct: calc_conf(burnout_hits),
+            pinned: true,
+            quotes: burnout_quotes,
+            assessed_tier: overall_tier_label.to_string(),
+            assumption_challenged: c4_assumption,
+            identified_gap: c4_gap,
         },
         MirrorInsightCard {
             id: "card-grill-me".to_string(),
             category: "Cognitive Rhythm".to_string(),
             story_chapter: "grow".to_string(),
             story_chapter_title: "2. Where We Think You Could Grow".to_string(),
-            title: format!("First-Principles Truth-Seeking & {} Deep Flow", peak_window),
-            summary: format!(
-                "With {}% of timestamped prompts in {} and {} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions before building.",
-                peak_share,
-                peak_window,
-                skeptic_hits
-            ),
+            title: c5_title,
+            summary: c5_summary,
             confidence_pct: calc_conf(skeptic_hits),
             pinned: true,
             quotes: skeptic_quotes,
             assessed_tier: overall_tier_label.to_string(),
-            assumption_challenged: if skeptic_hits == 0 {
-                "Assumption Tested: 0 skeptical/adversarial prompts found—using AI only for confirmation or code generation creates blind spots and inflates confidence.".to_string()
-            } else {
-                "Assumption Tested: Stress-testing ideas in chat is only half the loop—verify that critiques translate into shipped tests and falsifiable benchmarks.".to_string()
-            },
-            identified_gap: if skeptic_hits == 0 {
-                "Gap Identified: Start asking AI to expose flaws, edge cases, and failure modes in your designs before writing implementation code.".to_string()
-            } else {
-                "Gap Identified: Expand adversarial verification from product strategy into automated regression and load-testing benchmarks.".to_string()
-            },
+            assumption_challenged: c5_assumption,
+            identified_gap: c5_gap,
         },
     ]
+}
+
+fn build_personalized_quests(
+    conn: &Connection,
+    prompts: &[NormalizedPrompt],
+    onet_matches: &[RoleMatchResult],
+    profile: &UserProfile,
+    level: WritingLevel,
+) -> Vec<EquityQuest> {
+    let saved = load_quests(conn);
+    let get_state = |id: &str| -> (bool, bool) {
+        saved
+            .iter()
+            .find(|q| q.id == id)
+            .map(|q| (q.accepted, q.completed))
+            .unwrap_or((false, false))
+    };
+
+    let target_match = onet_matches
+        .iter()
+        .find(|m| profile.shortlisted_onet_codes.contains(&m.onet_code))
+        .or_else(|| onet_matches.first());
+
+    let role_title = target_match
+        .map(|m| m.title.as_str())
+        .unwrap_or("Your Next Role");
+    let top_gap = target_match
+        .and_then(|m| m.identified_gaps.first())
+        .map(|s| s.as_str())
+        .unwrap_or("building repeatable examples of your best work");
+
+    let (peak_window, _) = compute_peak_window_description(prompts);
+
+    let (q1_title, q1_rationale, q1_cat) = match level {
+        WritingLevel::Everyday => (
+            format!("Write Down 3 Real Examples That Fit '{}'", role_title),
+            format!(
+                "Based on your {} prompt(s), jot down three short stories showing how you solve problems so you can talk about your strengths with confidence.",
+                prompts.len()
+            ),
+            "Career Clarity".to_string(),
+        ),
+        WritingLevel::Professional => (
+            format!("Document 3 Concrete Case Studies for {}", role_title),
+            format!(
+                "Synthesize the strongest examples from your {} prompt(s) into concise before-and-after stories highlighting problem scope, actions taken, and practical results.",
+                prompts.len()
+            ),
+            "Positioning Clarity".to_string(),
+        ),
+        WritingLevel::Technical => (
+            format!(
+                "Anchor Positioning for {} in Systems Architecture & Unit-Economics Impact",
+                role_title
+            ),
+            "Lead your portfolio and interviews with measurable system throughput, automation leverage, and cost-efficiency outcomes synthesized from your high-signal engineering and strategy prompts.".to_string(),
+            "Positioning Clarity".to_string(),
+        ),
+    };
+
+    let (q2_title, q2_rationale, q2_cat) = match level {
+        WritingLevel::Everyday => (
+            format!("Protect Your {} Focus Time & Pick 3 Weekly Priorities", peak_window),
+            "Avoid burnout from juggling too many tasks at once by choosing one main project, one skill to practice, and one curiosity topic for the week.".to_string(),
+            "Energy & Focus".to_string(),
+        ),
+        WritingLevel::Professional => (
+            format!("Protect Your {} Deep-Work Window & Set a 3-Priority Cap", peak_window),
+            "Reduce context-switching fatigue across side projects by committing to one core deliverable, one skill-building goal, and one exploratory topic per week.".to_string(),
+            "Pitfall Immunity".to_string(),
+        ),
+        WritingLevel::Technical => (
+            format!(
+                "Enforce a 3-Pillar Cognitive Focus Rule Around Your {} Deep Flow",
+                peak_window
+            ),
+            "Eliminates context-switching fatigue across fragmented side projects and protects your highest-leverage deep work hours.".to_string(),
+            "Pitfall Immunity".to_string(),
+        ),
+    };
+
+    let (q3_title, q3_rationale, q3_cat) = match level {
+        WritingLevel::Everyday => (
+            "Turn One Annoying Weekly Chore into a Simple Checklist or Template".to_string(),
+            "Notice which repetitive chore drains your energy most and create a reusable checklist, template, or helper tool so you never have to start from scratch.".to_string(),
+            "Energy & Focus".to_string(),
+        ),
+        WritingLevel::Professional => (
+            "Standardize One Recurring Manual Workflow into a Reusable Template".to_string(),
+            "Friction signals in your prompt history point to repetitive upkeep. Convert your most frequent manual task into a documented workflow or automated script.".to_string(),
+            "Pitfall Immunity".to_string(),
+        ),
+        WritingLevel::Technical => (
+            "Replace Repetitive Manual Maintenance with 1-to-Many Programmatic Workflows".to_string(),
+            "Burnout signals in your prompt archive correlate with repetitive hand-maintenance. Standardize on reusable tools, schemas, and automated pipelines.".to_string(),
+            "Pitfall Immunity".to_string(),
+        ),
+    };
+
+    let (q4_title, q4_rationale, q4_cat) = match level {
+        WritingLevel::Everyday => (
+            format!("Practice Your Top Growth Step for {}", role_title),
+            format!(
+                "Spend two focused sessions working on a small, low-pressure exercise around your top growth area: {}",
+                top_gap
+            ),
+            "Practical Proof".to_string(),
+        ),
+        WritingLevel::Professional => (
+            format!("Close a Key Skill Gap for {}", role_title),
+            format!(
+                "Build a concrete work sample that directly addresses the primary gap identified for {}: {}",
+                role_title, top_gap
+            ),
+            "Mastered Proof-of-Work".to_string(),
+        ),
+        WritingLevel::Technical => (
+            format!(
+                "Bridge Deep Technical Tooling & close Gaps for {}",
+                role_title
+            ),
+            format!(
+                "Combine your systems architecture and workflow automation strengths while addressing the primary gap for {}: {}",
+                role_title, top_gap
+            ),
+            "Mastered Proof-of-Work".to_string(),
+        ),
+    };
+
+    let (q5_title, q5_rationale, q5_cat) = match level {
+        WritingLevel::Everyday => (
+            "Build and Share One Helpful Guide, Template, or Project".to_string(),
+            "Package something useful you have learned or built into a clear guide or sample project that you can proudly show to teammates or future employers.".to_string(),
+            "Long-Term Growth".to_string(),
+        ),
+        WritingLevel::Professional => (
+            "Publish a Reusable Playbook, Tool, or Portfolio Case Study".to_string(),
+            "Turn your problem-solving patterns into a durable portfolio project, internal playbook, or shared tool that demonstrates your expertise.".to_string(),
+            "Compounding Distribution".to_string(),
+        ),
+        WritingLevel::Technical => (
+            "Compound Open-Core Software & Reusable Intellectual Property".to_string(),
+            "Convert your 'bottleneck -> build the tool' reflex into durable open-core software assets and automated distribution channels that compound independent of linear hours.".to_string(),
+            "Compounding Distribution".to_string(),
+        ),
+    };
+
+    let (q6_title, q6_rationale, q6_cat) = match level {
+        WritingLevel::Everyday => (
+            format!("Grow Toward Sustainable Independence in {}", role_title),
+            "Shape your next year around steady income, healthy boundaries, and work that uses your natural strengths without burning you out.".to_string(),
+            "Long-Term Growth".to_string(),
+        ),
+        WritingLevel::Professional => (
+            format!("Advance Toward Senior Ownership & Autonomy in {}", role_title),
+            "Align your 1-year career plan toward roles that reward clear systems thinking, cross-functional leadership, and sustainable work pace.".to_string(),
+            "Compounding Distribution".to_string(),
+        ),
+        WritingLevel::Technical => (
+            format!(
+                "Full Creative & Financial Autonomy ({} / Principal Track)",
+                role_title
+            ),
+            "Align your trajectory toward long-term household stability, creative ownership, and high-margin technical leadership.".to_string(),
+            "Compounding Distribution".to_string(),
+        ),
+    };
+
+    let definitions = vec![
+        (
+            "q-reposition-architect",
+            "Next 7 Days (Quick Win)",
+            q1_title,
+            q1_rationale,
+            q1_cat,
+            250u16,
+        ),
+        (
+            "q-focus-guardrail",
+            "Next 7 Days (Quick Win)",
+            q2_title,
+            q2_rationale,
+            q2_cat,
+            200u16,
+        ),
+        (
+            "q-drop-linear-work",
+            "Next 30 Days (Skill Builder)",
+            q3_title,
+            q3_rationale,
+            q3_cat,
+            300u16,
+        ),
+        (
+            "q-domain-bridge",
+            "Next 30 Days (Skill Builder)",
+            q4_title,
+            q4_rationale,
+            q4_cat,
+            350u16,
+        ),
+        (
+            "q-open-core-equity",
+            "3-Month Milestone (Practical Project)",
+            q5_title,
+            q5_rationale,
+            q5_cat,
+            500u16,
+        ),
+        (
+            "q-year5-autonomy",
+            "1-Year Goal (Career Growth)",
+            q6_title,
+            q6_rationale,
+            q6_cat,
+            1000u16,
+        ),
+    ];
+
+    let mut out = Vec::with_capacity(definitions.len());
+    for (id, horizon, title, rationale, equity_category, equity_points) in definitions {
+        let (accepted, completed) = get_state(id);
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO quests (id, horizon, title, rationale, equity_category, equity_points, accepted, completed)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                id,
+                horizon,
+                title,
+                rationale,
+                equity_category,
+                equity_points,
+                if accepted { 1 } else { 0 },
+                if completed { 1 } else { 0 }
+            ],
+        );
+        out.push(EquityQuest {
+            id: id.to_string(),
+            horizon: horizon.to_string(),
+            title,
+            rationale,
+            equity_category,
+            equity_points,
+            accepted,
+            completed,
+        });
+    }
+    out
 }
 
 fn upsert_prompts_to_sqlite(conn: &Connection, prompts: &[NormalizedPrompt]) {
@@ -748,9 +1227,18 @@ fn load_journals(conn: &Connection) -> Vec<JournalEntry> {
     rows.filter_map(|r| r.ok()).collect()
 }
 
+fn normalize_writing_level_mode(mode: &str) -> String {
+    match mode.trim().to_ascii_lowercase().as_str() {
+        "everyday" => "everyday".to_string(),
+        "professional" => "professional".to_string(),
+        "technical" => "technical".to_string(),
+        _ => "auto".to_string(),
+    }
+}
+
 fn load_user_profile(conn: &Connection) -> UserProfile {
     conn.query_row(
-        "SELECT name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json
+        "SELECT name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json, writing_level_mode
          FROM user_profile WHERE id = 1",
         [],
         |row| {
@@ -759,6 +1247,7 @@ fn load_user_profile(conn: &Connection) -> UserProfile {
             let theme_mode: String = row.get(2)?;
             let mirror_story_completed: i64 = row.get(3)?;
             let codes_json: String = row.get(4)?;
+            let writing_level_mode: String = row.get(5).unwrap_or_else(|_| "auto".to_string());
             let shortlisted_onet_codes: Vec<String> =
                 serde_json::from_str(&codes_json).unwrap_or_default();
             Ok(UserProfile {
@@ -771,6 +1260,7 @@ fn load_user_profile(conn: &Connection) -> UserProfile {
                 },
                 mirror_story_completed: mirror_story_completed != 0,
                 shortlisted_onet_codes,
+                writing_level_mode: normalize_writing_level_mode(&writing_level_mode),
             })
         },
     )
@@ -780,15 +1270,17 @@ fn load_user_profile(conn: &Connection) -> UserProfile {
 fn save_user_profile_to_sqlite(conn: &Connection, profile: &UserProfile) -> rusqlite::Result<()> {
     let codes_json =
         serde_json::to_string(&profile.shortlisted_onet_codes).unwrap_or_else(|_| "[]".into());
+    let mode = normalize_writing_level_mode(&profile.writing_level_mode);
     conn.execute(
-        "INSERT OR REPLACE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json)
-         VALUES (1, ?1, ?2, ?3, ?4, ?5)",
+        "INSERT OR REPLACE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json, writing_level_mode)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             profile.name.trim(),
             profile.avatar_data_url,
             if profile.theme_mode == "dark" { "dark" } else { "light" },
             if profile.mirror_story_completed { 1 } else { 0 },
             codes_json,
+            mode,
         ],
     )?;
     Ok(())
@@ -798,9 +1290,11 @@ fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashbo
     let profile = load_user_profile(conn);
     let prompts = load_prompts_from_sqlite(conn);
     let summary = summarize_persisted_prompts(&prompts);
-    let mirror_cards = build_mirror_cards(&prompts);
-    let onet_matches = match_onet_paths(&prompts);
-    let quests = load_quests(conn);
+    let effective_level =
+        WritingLevel::resolve(&profile.writing_level_mode, summary.writing_level.measured_level);
+    let mirror_cards = build_mirror_cards(&prompts, effective_level);
+    let onet_matches = match_onet_paths_for_level(&prompts, effective_level);
+    let quests = build_personalized_quests(conn, &prompts, &onet_matches, &profile, effective_level);
     let journals = load_journals(conn);
     let recent_high_signal_prompts: Vec<NormalizedPrompt> = prompts
         .into_iter()
@@ -908,7 +1402,7 @@ fn reset_full_factory(state: State<AppState>) -> Result<VaultDashboardPayload, S
     let _ = conn.execute("DELETE FROM journals", []);
     let _ = conn.execute("UPDATE quests SET accepted = 0, completed = 0", []);
     let _ = conn.execute(
-        "UPDATE user_profile SET name = '', avatar_data_url = NULL, mirror_story_completed = 0, shortlisted_onet_codes_json = '[]' WHERE id = 1",
+        "UPDATE user_profile SET name = '', avatar_data_url = NULL, mirror_story_completed = 0, shortlisted_onet_codes_json = '[]', writing_level_mode = 'auto' WHERE id = 1",
         [],
     );
     Ok(build_dashboard_from_sqlite(&conn, &state.db_path))
@@ -999,6 +1493,7 @@ mod tests {
         assert_eq!(default_profile.theme_mode, "light");
         assert!(!default_profile.mirror_story_completed);
         assert!(default_profile.shortlisted_onet_codes.is_empty());
+        assert_eq!(default_profile.writing_level_mode, "auto");
 
         let updated = UserProfile {
             name: "Chris".to_string(),
@@ -1006,6 +1501,7 @@ mod tests {
             theme_mode: "dark".to_string(),
             mirror_story_completed: true,
             shortlisted_onet_codes: vec!["15-1252.00".to_string()],
+            writing_level_mode: "everyday".to_string(),
         };
         save_user_profile_to_sqlite(&conn, &updated).expect("save profile");
 
@@ -1014,6 +1510,7 @@ mod tests {
         assert_eq!(loaded.theme_mode, "dark");
         assert!(loaded.mirror_story_completed);
         assert_eq!(loaded.shortlisted_onet_codes, vec!["15-1252.00".to_string()]);
+        assert_eq!(loaded.writing_level_mode, "everyday");
 
         let sample_prompts = vec![NormalizedPrompt {
             id: "p1".to_string(),
@@ -1028,13 +1525,46 @@ mod tests {
             signal_categories: vec!["Systems & Architecture".to_string()],
             skill_tier: SkillTier::Advanced,
         }];
-        let cards = build_mirror_cards(&sample_prompts);
-        assert_eq!(cards.len(), 5);
-        assert_eq!(cards[0].story_chapter, "excel");
-        assert_eq!(cards[1].story_chapter, "excel");
-        assert_eq!(cards[2].story_chapter, "grow");
-        assert_eq!(cards[3].story_chapter, "friction");
-        assert_eq!(cards[4].story_chapter, "grow");
+        let cards_everyday = build_mirror_cards(&sample_prompts, WritingLevel::Everyday);
+        let cards_pro = build_mirror_cards(&sample_prompts, WritingLevel::Professional);
+        let cards_tech = build_mirror_cards(&sample_prompts, WritingLevel::Technical);
+        assert_eq!(cards_everyday.len(), 5);
+        assert_eq!(cards_everyday[0].story_chapter, "excel");
+        assert_eq!(cards_everyday[1].story_chapter, "excel");
+        assert_eq!(cards_everyday[2].story_chapter, "grow");
+        assert_eq!(cards_everyday[3].story_chapter, "friction");
+        assert_eq!(cards_everyday[4].story_chapter, "grow");
+        assert_ne!(cards_everyday[0].title, cards_tech[0].title);
+        assert_ne!(cards_pro[0].title, cards_tech[0].title);
+
+        let forbidden = [
+            "unit economics",
+            "unit-economics",
+            "telemetry contracts",
+            "automated regression",
+            "load-testing benchmarks",
+            "1-to-many",
+            "dialectical verification",
+        ];
+        for level in [WritingLevel::Everyday, WritingLevel::Professional] {
+            let cards = build_mirror_cards(&sample_prompts, level);
+            let matches = match_onet_paths_for_level(&sample_prompts, level);
+            let quests = build_personalized_quests(&conn, &sample_prompts, &matches, &loaded, level);
+            assert_eq!(quests.len(), 6);
+            assert_eq!(quests[0].horizon, "Next 7 Days (Quick Win)");
+            for c in &cards {
+                let blob = format!("{} {} {} {}", c.title, c.summary, c.assumption_challenged, c.identified_gap).to_lowercase();
+                for f in forbidden {
+                    assert!(!blob.contains(f), "Forbidden jargon '{}' found in {:?}", f, level);
+                }
+            }
+            for q in &quests {
+                let blob = format!("{} {} {}", q.title, q.rationale, q.equity_category).to_lowercase();
+                for f in forbidden {
+                    assert!(!blob.contains(f), "Forbidden quest jargon '{}' found in {:?}", f, level);
+                }
+            }
+        }
     }
 
     #[test]
