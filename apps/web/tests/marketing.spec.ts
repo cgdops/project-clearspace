@@ -61,7 +61,7 @@ test.describe("Clearspace Marketing & Download Page", () => {
     const downloadPromiseNsis = page.waitForEvent("download");
     await page.locator("#btn-download-nsis").click();
     const downloadNsis = await downloadPromiseNsis;
-    expect(downloadNsis.suggestedFilename()).toBe("Clearspace_0.1.0_x64-setup.exe");
+    expect(downloadNsis.suggestedFilename()).toBe("Clearspace_0.2.0_x64-setup.exe");
     const nsisPath = await downloadNsis.path();
     expect(nsisPath).toBeTruthy();
     if (nsisPath) {
@@ -73,7 +73,7 @@ test.describe("Clearspace Marketing & Download Page", () => {
     const dialog = page.locator("#install-guide-dialog");
     await expect(dialog).toBeVisible();
     await expect(page.locator("#dialog-ps-cmd")).toContainText(
-      "Get-FileHash .\\Clearspace_0.1.0_x64-setup.exe -Algorithm SHA256"
+      "Get-FileHash .\\Clearspace_0.2.0_x64-setup.exe -Algorithm SHA256"
     );
 
     // Screenshot the installation guide dialog
@@ -89,14 +89,14 @@ test.describe("Clearspace Marketing & Download Page", () => {
     const downloadPromiseMsi = page.waitForEvent("download");
     await page.locator("#btn-download-msi").click();
     const downloadMsi = await downloadPromiseMsi;
-    expect(downloadMsi.suggestedFilename()).toBe("Clearspace_0.1.0_x64_en-US.msi");
+    expect(downloadMsi.suggestedFilename()).toBe("Clearspace_0.2.0_x64_en-US.msi");
     await page.locator("#btn-close-dialog").click();
 
     // 3. Test Portable .exe download
     const downloadPromisePortable = page.waitForEvent("download");
     await page.locator("#btn-download-portable").click();
     const downloadPortable = await downloadPromisePortable;
-    expect(downloadPortable.suggestedFilename()).toBe("Clearspace_0.1.0_x64-portable.exe");
+    expect(downloadPortable.suggestedFilename()).toBe("Clearspace_0.2.0_x64-portable.exe");
   });
 
   test("interactive 5-tab module showcase supports click and keyboard navigation and live PII scrubber works", async ({

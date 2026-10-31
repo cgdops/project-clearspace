@@ -150,6 +150,25 @@ export interface NormalizedPrompt {
   skill_tier?: SkillTier;
 }
 
+export interface AppUpdateStatus {
+  installed_version: string;
+  schema_version: number;
+  last_backup_path: string | null;
+  last_migrated_at: string | null;
+}
+
+export interface UpdateCheckResult {
+  installed_version: string;
+  latest_version: string;
+  schema_version: number;
+  update_available: boolean;
+  release_notes: string;
+  pub_date: string;
+  download_url: string | null;
+  sha256: string | null;
+  checked_at: string;
+}
+
 export interface VaultDashboardPayload {
   db_path: string;
   profile: UserProfile;
@@ -159,12 +178,14 @@ export interface VaultDashboardPayload {
   quests: EquityQuest[];
   journals: JournalEntry[];
   recent_high_signal_prompts?: NormalizedPrompt[];
+  update_status?: AppUpdateStatus;
 }
 
 const STORAGE_PROMPTS_KEY = "clearspace_vault_prompts_v1";
 const STORAGE_QUESTS_KEY = "clearspace_vault_quests_v1";
 const STORAGE_JOURNALS_KEY = "clearspace_vault_journals_v1";
 const STORAGE_PROFILE_KEY = "clearspace_user_profile_v1";
+const STORAGE_BACKUP_META_KEY = "clearspace_vault_backup_meta_v1";
 
 export const DEFAULT_USER_PROFILE: UserProfile = {
   name: "",
@@ -1712,6 +1733,26 @@ export async function updateUserProfile(
   return next;
 }
 
+function loadBrowserUpdateStatus(): AppUpdateStatus {
+  try {
+    const raw = localStorage.getItem(STORAGE_BACKUP_META_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return {
+      installed_version: "0.2.0",
+      schema_version: 2,
+      last_backup_path: parsed?.last_backup_path ?? null,
+      last_migrated_at: parsed?.last_migrated_at ?? "2026-10-30 00:00",
+    };
+  } catch {
+    return {
+      installed_version: "0.2.0",
+      schema_version: 2,
+      last_backup_path: null,
+      last_migrated_at: "2026-10-30 00:00",
+    };
+  }
+}
+
 function buildBrowserDashboard(): VaultDashboardPayload {
   const profile = loadBrowserProfile();
   const prompts = loadBrowserPrompts();
@@ -1730,6 +1771,7 @@ function buildBrowserDashboard(): VaultDashboardPayload {
     quests,
     journals,
     recent_high_signal_prompts: prompts.filter((p) => p.is_high_signal).slice(-40).reverse(),
+    update_status: loadBrowserUpdateStatus(),
   };
 }
 
@@ -2299,3 +2341,82 @@ export async function addJournalEntry(
   saveBrowserJournals(updated);
   return updated;
 }
+
+export function compareSemver(a: string, b: string): number {
+  const clean = (v: string) =>
+    v
+      .replace(/^v/i, "")
+      .split("-")[0]
+      .split(".")
+      .map((n) => parseInt(n, 10) || 0);
+  const [aMaj = 0, aMin = 0, aPat = 0] = clean(a);
+  const [bMaj = 0, bMin = 0, bPat = 0] = clean(b);
+  if (aMaj !== bMaj) return aMaj > bMaj ? 1 : -1;
+  if (aMin !== bMin) return aMin > bMin ? 1 : -1;
+  if (aPat !== bPat) return aPat > bPat ? 1 : -1;
+  return 0;
+}
+
+export async function backupLocalVault(): Promise<AppUpdateStatus> {
+  if (isTauriRuntime()) {
+    return invoke<AppUpdateStatus>("backup_local_vault");
+  }
+  const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const bakPath = "localStorage://clearspace_vault.db.bak-v2";
+  try {
+    localStorage.setItem(
+      STORAGE_BACKUP_META_KEY,
+      JSON.stringify({
+        last_backup_path: bakPath,
+        last_migrated_at: now,
+      })
+    );
+  } catch {
+    // ignore
+  }
+  return loadBrowserUpdateStatus();
+}
+
+export async function checkForAppUpdates(
+  installedVersion = "0.2.0",
+  schemaVersion = 2
+): Promise<UpdateCheckResult> {
+  const nowIso = new Date().toISOString().slice(0, 16).replace("T", " ");
+  try {
+    const res = await fetch("/latest.json", { cache: "no-store" });
+    if (res.ok) {
+      const manifest = await res.json();
+      const latestVersion: string = manifest.version ?? installedVersion;
+      const winPlatform = manifest.platforms?.["windows-x86_64"] ?? null;
+      return {
+        installed_version: installedVersion,
+        latest_version: latestVersion,
+        schema_version: manifest.schemaVersion ?? schemaVersion,
+        update_available: compareSemver(latestVersion, installedVersion) > 0,
+        release_notes:
+          manifest.notes ??
+          "Zero-Knowledge local SQLite vault with v2 schema migration guard and pre-upgrade DB backup.",
+        pub_date: (manifest.pub_date ?? "2026-10-30").slice(0, 10),
+        download_url: winPlatform?.url ?? "/downloads/Clearspace_0.2.0_x64-setup.exe",
+        sha256: winPlatform?.sha256 ?? null,
+        checked_at: nowIso,
+      };
+    }
+  } catch {
+    // Offline or non-HTTP environment fallback
+  }
+
+  return {
+    installed_version: installedVersion,
+    latest_version: installedVersion,
+    schema_version: schemaVersion,
+    update_available: false,
+    release_notes:
+      "Zero-Knowledge local SQLite vault with v2 schema migration guard and automatic pre-upgrade DB backup.",
+    pub_date: "2026-10-30",
+    download_url: "/downloads/Clearspace_0.2.0_x64-setup.exe",
+    sha256: null,
+    checked_at: nowIso,
+  };
+}
+

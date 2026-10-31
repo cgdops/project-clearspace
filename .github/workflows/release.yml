@@ -2,21 +2,73 @@ name: Release Desktop Installers
 
 on:
   push:
+    branches:
+      - master
+      - main
+    paths:
+      - "package.json"
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Release tag (e.g. v0.1.0)"
-        required: true
-        default: "v0.1.0"
+        description: "Optional release tag override (defaults to v<package.json version>)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
 
 jobs:
+  check-release:
+    name: Check if Release Needed
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version & release gate
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PKG_VER=$(node -p "require('./package.json').version")
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${PKG_VER}"
+          fi
+
+          echo "version=${PKG_VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          # Always build on manual workflow_dispatch or explicit tag push
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # On branch push, only build if this version's GitHub Release does not exist yet
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; skipping installer build."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version $TAG detected; proceeding with release build."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release-windows:
     name: Build & Publish Windows Installers (x64)
+    needs: check-release
+    if: needs.check-release.outputs.should_release == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -37,6 +89,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Sync version across workspace
+        run: npm run version:sync
+
       - name: Build Tauri Desktop App & Installers
         run: npm --workspace=apps/desktop run tauri build
 
@@ -48,18 +103,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          $tag = if ("${{ github.event.inputs.tag_name }}" -ne "") { "${{ github.event.inputs.tag_name }}" } else { "${{ github.ref_name }}" }
+          $ver = "${{ needs.check-release.outputs.version }}"
+          $tag = "${{ needs.check-release.outputs.tag }}"
           $files = @(
-            "apps/web/public/downloads/Clearspace_0.1.0_x64-setup.exe",
-            "apps/web/public/downloads/Clearspace_0.1.0_x64_en-US.msi",
-            "apps/web/public/downloads/Clearspace_0.1.0_x64-portable.exe",
+            "apps/web/public/downloads/Clearspace_${ver}_x64-setup.exe",
+            "apps/web/public/downloads/Clearspace_${ver}_x64_en-US.msi",
+            "apps/web/public/downloads/Clearspace_${ver}_x64-portable.exe",
             "apps/web/public/downloads/SHA256SUMS.txt",
-            "apps/web/public/downloads/release-manifest.json"
+            "apps/web/public/downloads/release-manifest.json",
+            "apps/web/public/downloads/latest.json"
           ) | Where-Object { Test-Path $_ }
 
           $exists = gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $files --clobber
           } else {
-            gh release create $tag $files --title "Clearspace $tag" --generate-notes
+            gh release create $tag $files --target ${{ github.sha }} --title "Clearspace $tag" --generate-notes
           }

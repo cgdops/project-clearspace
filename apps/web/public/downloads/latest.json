@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "schemaVersion": 2,
+  "notes": "Zero-Knowledge local SQLite vault with v2 schema migration guard, pre-upgrade DB backup, and O*NET seniority calibration.",
+  "pub_date": "2026-10-30T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "/downloads/Clearspace_0.2.0_x64-setup.exe",
+      "sha256": "b256a95962018488e0f5ae928c95b418872ea7e1e2e7eeae1958151fc91d1d78",
+      "filename": "Clearspace_0.2.0_x64-setup.exe",
+      "sizeFormatted": "4.93 MB"
+    }
+  }
+}

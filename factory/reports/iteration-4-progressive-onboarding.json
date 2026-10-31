@@ -1,7 +1,7 @@
 {
   "iteration": 4,
   "phase": "progressive-onboarding-and-narrative-mirror",
-  "timestamp": "2026-10-31T02:44:18.876Z",
+  "timestamp": "2026-10-31T03:18:34.044Z",
   "status": "PASS_CONVERGED_ZERO_DEFECTS",
   "functionalFlows": {
     "onboardingEmptyVault": {
@@ -68,11 +68,11 @@
       "returnedToStep1OnFullFactoryReset": true
     },
     "tabSwitchLatencyMs": {
-      "mirror": 87.5,
-      "onet": 76,
-      "equity": 37.5,
-      "journal": 31.1,
-      "vault": 119.4
+      "mirror": 94.9,
+      "onet": 79.3,
+      "equity": 39.5,
+      "journal": 28.5,
+      "vault": 130
     }
   },
   "contrastTelemetry": {
