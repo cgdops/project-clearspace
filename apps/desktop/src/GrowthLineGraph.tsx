@@ -37,9 +37,7 @@ export function GrowthLineGraph({
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const series = useMemo(() => {
-    const todayUtc = new Date().toISOString().slice(0, 10);
-    let anchor = latestDate && /^\d{4}-\d{2}-\d{2}/.test(latestDate) ? latestDate.slice(0, 10) : todayUtc;
-    if (todayUtc > anchor) anchor = todayUtc;
+    let anchor = latestDate && /^\d{4}-\d{2}-\d{2}/.test(latestDate) ? latestDate.slice(0, 10) : "";
 
     const qualityMap = new Map<string, number>();
     if (dailyPromptQuality.length > 0) {
@@ -78,9 +76,14 @@ export function GrowthLineGraph({
         if (d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d > anchor) anchor = d;
       }
     }
+    if (!anchor) anchor = new Date().toISOString().slice(0, 10);
 
     const totalQuestPts = quests.reduce((acc, q) => acc + q.equity_points, 0);
     let ewma: number | null = null;
+    const windowStart = addUtcDaysStr(anchor, -364);
+    for (const [d, v] of Array.from(qualityMap.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+      if (d < windowStart) ewma = ewma === null ? v : 0.35 * v + 0.65 * ewma;
+    }
     const dailyScores = new Map<string, { composite: number; promptScore: number; commitmentScore: number }>();
 
     for (let i = 364; i >= 0; i--) {
@@ -90,10 +93,10 @@ export function GrowthLineGraph({
       const promptScore = Math.round((ewma ?? 0) * 0.5);
       let earnedPts = 0;
       for (const q of quests) {
-        const accDate = q.accepted_at?.slice(0, 10) || anchor;
-        const compDate = q.completed_at?.slice(0, 10) || anchor;
+        const accDate = q.accepted_at?.slice(0, 10) || "0000-01-01";
+        const compDate = q.completed_at?.slice(0, 10) || "0000-01-01";
         if (q.completed && compDate <= d) earnedPts += q.equity_points;
-        else if ((q.accepted || q.completed) && accDate <= d) earnedPts += q.equity_points * 0.5;
+        else if (q.accepted && accDate <= d) earnedPts += q.equity_points * 0.5;
       }
       const commitmentScore = totalQuestPts > 0 ? Math.round((earnedPts / totalQuestPts) * 50) : 0;
       dailyScores.set(d, { composite: Math.min(100, promptScore + commitmentScore), promptScore, commitmentScore });
@@ -157,7 +160,7 @@ export function GrowthLineGraph({
           <polygon points={areaPoints} fill="var(--bg-accent-soft)" opacity="0.75" />
           <polyline fill="none" stroke="var(--accent-sage)" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" points={coords} />
           {series.map((pt, i) => (
-            <circle key={pt.date} cx={xAt(i)} cy={yAt(pt.composite)} r={hoverIdx === i ? 5 : 3} fill="var(--accent-sage)" opacity={hoverIdx === i ? 1 : 0.35} tabIndex={0} aria-label={`${pt.date}: Growth ${pt.composite} of 100`} onMouseEnter={() => setHoverIdx(i)} onFocus={() => setHoverIdx(i)} style={{ cursor: "pointer" }} />
+            <circle key={pt.date} cx={xAt(i)} cy={yAt(pt.composite)} r={hoverIdx === i ? 5 : 3} fill="var(--accent-sage)" opacity={hoverIdx === i ? 1 : 0.35} tabIndex={0} aria-label={`${pt.date}: Growth ${pt.composite} of 100`} onMouseEnter={() => setHoverIdx(i)} onFocus={() => setHoverIdx(i)} onBlur={() => setHoverIdx(null)} style={{ cursor: "pointer" }} />
           ))}
           <circle cx={xAt(series.length - 1)} cy={yAt(latest.composite)} r={5.5} fill="var(--accent-sage)" stroke="var(--bg-card)" strokeWidth="2" data-testid="growth-line-terminal-dot" />
           <text x={48} y={168} textAnchor="start" fontSize="10" fill="var(--text-muted)">{first.date}</text>
