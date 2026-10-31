@@ -1,6 +1,6 @@
 # Clearspace (Codename) — The Zero-Knowledge Career & Cognitive Compass
 
-> **Your resume shows who you had to be. Your AI prompts show who you actually are.**
+> **Your resume shows who you had to be. Your prompts show who you actually are.**
 
 [![Latest Release](https://img.shields.io/github/v/release/cgdops/project-clearspace?label=Latest%20Installer&color=2b5b48)](https://github.com/cgdops/project-clearspace/releases/latest)
 [![Download Windows Setup (.exe)](https://img.shields.io/badge/Download-Windows%20Setup%20(.exe)-2b5b48?logo=windows)](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.3.0_x64-setup.exe)
