@@ -3,9 +3,9 @@
 > **Your resume shows who you had to be. Your prompts show who you actually are.**
 
 [![Latest Release](https://img.shields.io/github/v/release/cgdops/project-clearspace?label=Latest%20Installer&color=2b5b48)](https://github.com/cgdops/project-clearspace/releases/latest)
-[![Download Windows Setup (.exe)](https://img.shields.io/badge/Download-Windows%20Setup%20(.exe)-2b5b48?logo=windows)](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.3.0_x64-setup.exe)
-[![Download Windows MSI (.msi)](https://img.shields.io/badge/Download-Windows%20Installer%20(.msi)-3b7a61?logo=windows)](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.3.0_x64_en-US.msi)
-[![Download Portable (.exe)](https://img.shields.io/badge/Download-Portable%20Binary%20(.exe)-4a5550?logo=windows)](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.3.0_x64-portable.exe)
+[![Download Windows Setup (.exe)](https://img.shields.io/badge/Download-Windows%20Setup%20(.exe)-2b5b48?logo=windows)](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.4.0_x64-setup.exe)
+[![Download Windows MSI (.msi)](https://img.shields.io/badge/Download-Windows%20Installer%20(.msi)-3b7a61?logo=windows)](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.4.0_x64_en-US.msi)
+[![Download Portable (.exe)](https://img.shields.io/badge/Download-Portable%20Binary%20(.exe)-4a5550?logo=windows)](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.4.0_x64-portable.exe)
 
 Clearspace is a **100% local-first, zero-knowledge desktop application** (built with **Tauri v2 + Rust + SQLite**) that helps people discover who they are, what career paths and roles match their natural strengths, and how to build 5-year personal equity—using the most honest, unfiltered writing they have ever produced: **their own AI conversation prompts**.
 
@@ -17,9 +17,9 @@ You can download the latest pre-built Windows installers directly from [**GitHub
 
 | Package | Format | Direct Download |
 | :--- | :--- | :--- |
-| **Windows 10/11 Setup (Recommended)** | NSIS Installer (`.exe`) | [**Download `Clearspace_0.3.0_x64-setup.exe`**](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.3.0_x64-setup.exe) |
-| **Windows 10/11 Enterprise Installer** | MSI Package (`.msi`) | [**Download `Clearspace_0.3.0_x64_en-US.msi`**](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.3.0_x64_en-US.msi) |
-| **Windows 10/11 Standalone Portable** | No-Install Binary (`.exe`) | [**Download `Clearspace_0.3.0_x64-portable.exe`**](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.3.0_x64-portable.exe) |
+| **Windows 10/11 Setup (Recommended)** | NSIS Installer (`.exe`) | [**Download `Clearspace_0.4.0_x64-setup.exe`**](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.4.0_x64-setup.exe) |
+| **Windows 10/11 Enterprise Installer** | MSI Package (`.msi`) | [**Download `Clearspace_0.4.0_x64_en-US.msi`**](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.4.0_x64_en-US.msi) |
+| **Windows 10/11 Standalone Portable** | No-Install Binary (`.exe`) | [**Download `Clearspace_0.4.0_x64-portable.exe`**](https://github.com/cgdops/project-clearspace/releases/latest/download/Clearspace_0.4.0_x64-portable.exe) |
 | **SHA-256 Checksums & Manifest** | Verification Files | [`SHA256SUMS.txt`](https://github.com/cgdops/project-clearspace/releases/latest/download/SHA256SUMS.txt) • [`release-manifest.json`](https://github.com/cgdops/project-clearspace/releases/latest/download/release-manifest.json) |
 
 ---

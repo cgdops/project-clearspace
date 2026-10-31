@@ -714,20 +714,20 @@ We need to ensure that every user import produces immediate visual confirmation 
     expect(compareSemver("v1.0.0", "0.9.9")).toBe(1);
 
     const status = await backupLocalVault();
-    expect(status.installed_version).toBe("0.3.0");
-    expect(status.schema_version).toBe(3);
-    expect(status.last_backup_path).toContain("clearspace_vault.db.bak-v3");
+    expect(status.installed_version).toBe("0.4.0");
+    expect(status.schema_version).toBe(4);
+    expect(status.last_backup_path).toContain("clearspace_vault.db.bak-v4");
 
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({
-        version: "0.3.0",
-        schemaVersion: 3,
-        notes: "v0.3.0 release notes",
+        version: "0.4.0",
+        schemaVersion: 4,
+        notes: "v0.4.0 release notes",
         pub_date: "2026-10-30T00:00:00Z",
         platforms: {
           "windows-x86_64": {
-            url: "/downloads/Clearspace_0.3.0_x64-setup.exe",
+            url: "/downloads/Clearspace_0.4.0_x64-setup.exe",
             sha256: "acf69f66e81d314369b70e5ea9cfed7a4bde0cee7028e310bf4bbe647a5a0700",
           },
         },
@@ -735,16 +735,16 @@ We need to ensure that every user import produces immediate visual confirmation 
     } as Response);
 
     try {
-      const checkRes = await checkForAppUpdates("0.3.0", 3);
-      expect(checkRes.installed_version).toBe("0.3.0");
-      expect(checkRes.schema_version).toBe(3);
+      const checkRes = await checkForAppUpdates("0.4.0", 4);
+      expect(checkRes.installed_version).toBe("0.4.0");
+      expect(checkRes.schema_version).toBe(4);
       expect(checkRes.update_available).toBe(false);
 
       const legacyCheckRes = await checkForAppUpdates("0.2.0", 2);
       expect(legacyCheckRes.installed_version).toBe("0.2.0");
-      expect(legacyCheckRes.latest_version).toBe("0.3.0");
+      expect(legacyCheckRes.latest_version).toBe("0.4.0");
       expect(legacyCheckRes.update_available).toBe(true);
-      expect(legacyCheckRes.schema_version).toBe(3);
+      expect(legacyCheckRes.schema_version).toBe(4);
     } finally {
       fetchSpy.mockRestore();
     }
