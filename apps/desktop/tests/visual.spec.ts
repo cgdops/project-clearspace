@@ -223,6 +223,15 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
 
     // Verify Peak Flow Rhythm Card is promoted to the front of Step 3 (Cognitive Mirror)
     await expect(page.getByTestId("peak-flow-rhythm-card")).toBeVisible();
+    const hourLabels = await page
+      .getByTestId("peak-flow-rhythm-card")
+      .locator(".hour-label")
+      .allTextContents();
+    expect(hourLabels).toHaveLength(24);
+    expect(hourLabels[0]).toBe("12a");
+    expect(hourLabels[12]).toBe("12p");
+    expect(hourLabels[19]).toBe("7p");
+    expect(hourLabels[23]).toBe("11p");
 
     // Verify 3-Chapter Narrative Story Stepper on Step 3
     const stepper = page.getByTestId("story-chapter-stepper");

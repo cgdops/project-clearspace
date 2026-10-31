@@ -363,6 +363,7 @@ label:focus-visible {
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .meter-row {
