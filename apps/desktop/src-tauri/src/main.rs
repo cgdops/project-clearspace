@@ -81,6 +81,10 @@ pub struct EquityQuest {
     pub equity_points: u16,
     pub accepted: bool,
     pub completed: bool,
+    #[serde(default)]
+    pub accepted_at: Option<String>,
+    #[serde(default)]
+    pub completed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -326,7 +330,9 @@ fn init_sqlite_schema_with_backup(
             equity_category TEXT NOT NULL,
             equity_points INTEGER NOT NULL,
             accepted INTEGER NOT NULL DEFAULT 0,
-            completed INTEGER NOT NULL DEFAULT 0
+            completed INTEGER NOT NULL DEFAULT 0,
+            accepted_at TEXT,
+            completed_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS journals (
@@ -377,6 +383,12 @@ fn init_sqlite_schema_with_backup(
             "ALTER TABLE user_profile ADD COLUMN writing_level_mode TEXT NOT NULL DEFAULT 'auto'",
             [],
         );
+    }
+    if !table_has_column(conn, "quests", "accepted_at") {
+        let _ = conn.execute("ALTER TABLE quests ADD COLUMN accepted_at TEXT", []);
+    }
+    if !table_has_column(conn, "quests", "completed_at") {
+        let _ = conn.execute("ALTER TABLE quests ADD COLUMN completed_at TEXT", []);
     }
 
     let _ = conn.execute(
@@ -898,12 +910,12 @@ fn build_personalized_quests(
     level: WritingLevel,
 ) -> Vec<EquityQuest> {
     let saved = load_quests(conn);
-    let get_state = |id: &str| -> (bool, bool) {
+    let get_state = |id: &str| -> (bool, bool, Option<String>, Option<String>) {
         saved
             .iter()
             .find(|q| q.id == id)
-            .map(|q| (q.accepted, q.completed))
-            .unwrap_or((false, false))
+            .map(|q| (q.accepted, q.completed, q.accepted_at.clone(), q.completed_at.clone()))
+            .unwrap_or((false, false, None, None))
     };
 
     let target_match = onet_matches
@@ -1109,10 +1121,10 @@ fn build_personalized_quests(
 
     let mut out = Vec::with_capacity(definitions.len());
     for (id, horizon, title, rationale, equity_category, equity_points) in definitions {
-        let (accepted, completed) = get_state(id);
+        let (accepted, completed, accepted_at, completed_at) = get_state(id);
         let _ = conn.execute(
-            "INSERT OR REPLACE INTO quests (id, horizon, title, rationale, equity_category, equity_points, accepted, completed)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT OR REPLACE INTO quests (id, horizon, title, rationale, equity_category, equity_points, accepted, completed, accepted_at, completed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 id,
                 horizon,
@@ -1121,7 +1133,9 @@ fn build_personalized_quests(
                 equity_category,
                 equity_points,
                 if accepted { 1 } else { 0 },
-                if completed { 1 } else { 0 }
+                if completed { 1 } else { 0 },
+                accepted_at,
+                completed_at
             ],
         );
         out.push(EquityQuest {
@@ -1133,6 +1147,8 @@ fn build_personalized_quests(
             equity_points,
             accepted,
             completed,
+            accepted_at,
+            completed_at,
         });
     }
     out
@@ -1198,7 +1214,7 @@ fn load_prompts_from_sqlite(conn: &Connection) -> Vec<NormalizedPrompt> {
 
 fn load_quests(conn: &Connection) -> Vec<EquityQuest> {
     let Ok(mut stmt) = conn.prepare(
-        "SELECT id, horizon, title, rationale, equity_category, equity_points, accepted, completed FROM quests",
+        "SELECT id, horizon, title, rationale, equity_category, equity_points, accepted, completed, accepted_at, completed_at FROM quests",
     ) else {
         return Vec::new();
     };
@@ -1212,6 +1228,8 @@ fn load_quests(conn: &Connection) -> Vec<EquityQuest> {
             equity_points: row.get(5)?,
             accepted: row.get::<_, i64>(6)? != 0,
             completed: row.get::<_, i64>(7)? != 0,
+            accepted_at: row.get(8).unwrap_or(None),
+            completed_at: row.get(9).unwrap_or(None),
         })
     }) else {
         return Vec::new();
@@ -1470,7 +1488,10 @@ fn import_exported_json(
 fn reset_local_vault(state: State<AppState>) -> Result<VaultDashboardPayload, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let _ = conn.execute("DELETE FROM prompts", []);
-    let _ = conn.execute("UPDATE quests SET accepted = 0, completed = 0", []);
+    let _ = conn.execute(
+        "UPDATE quests SET accepted = 0, completed = 0, accepted_at = NULL, completed_at = NULL",
+        [],
+    );
     let _ = conn.execute(
         "UPDATE user_profile SET mirror_story_completed = 0, shortlisted_onet_codes_json = '[]' WHERE id = 1",
         [],
@@ -1483,12 +1504,34 @@ fn reset_full_factory(state: State<AppState>) -> Result<VaultDashboardPayload, S
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let _ = conn.execute("DELETE FROM prompts", []);
     let _ = conn.execute("DELETE FROM journals", []);
-    let _ = conn.execute("UPDATE quests SET accepted = 0, completed = 0", []);
+    let _ = conn.execute(
+        "UPDATE quests SET accepted = 0, completed = 0, accepted_at = NULL, completed_at = NULL",
+        [],
+    );
     let _ = conn.execute(
         "UPDATE user_profile SET name = '', avatar_data_url = NULL, mirror_story_completed = 0, shortlisted_onet_codes_json = '[]', writing_level_mode = 'auto' WHERE id = 1",
         [],
     );
     Ok(build_dashboard_from_sqlite(&conn, &state.db_path))
+}
+
+fn apply_quest_toggle(
+    conn: &Connection,
+    quest_id: &str,
+    field: &str,
+    now_iso: &str,
+) -> Result<Vec<EquityQuest>, String> {
+    let (col, ts_col) = if field == "completed" {
+        ("completed", "completed_at")
+    } else {
+        ("accepted", "accepted_at")
+    };
+    let sql = format!(
+        "UPDATE quests SET {col} = CASE WHEN {col} = 1 THEN 0 ELSE 1 END, {ts_col} = CASE WHEN {col} = 1 THEN NULL ELSE ?2 END WHERE id = ?1"
+    );
+    conn.execute(&sql, params![quest_id, now_iso])
+        .map_err(|e| e.to_string())?;
+    Ok(load_quests(conn))
 }
 
 #[tauri::command]
@@ -1498,18 +1541,8 @@ fn toggle_quest_state(
     state: State<AppState>,
 ) -> Result<Vec<EquityQuest>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let col = if field == "completed" {
-        "completed"
-    } else {
-        "accepted"
-    };
-    let sql = format!(
-        "UPDATE quests SET {} = CASE WHEN {} = 1 THEN 0 ELSE 1 END WHERE id = ?1",
-        col, col
-    );
-    conn.execute(&sql, params![quest_id])
-        .map_err(|e| e.to_string())?;
-    Ok(load_quests(&conn))
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    apply_quest_toggle(&conn, &quest_id, &field, &now_iso)
 }
 
 #[tauri::command]
@@ -1738,5 +1771,35 @@ mod tests {
             sanitize_github_release_url(Some("https://evil.example.com/Clearspace_0.3.0_x64-setup.exe")),
             default_url
         );
+    }
+
+    #[test]
+    fn quest_toggle_persists_and_clears_timestamps_across_rebuilds() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        init_sqlite_schema(&conn).expect("schema init");
+
+        let toggled = apply_quest_toggle(&conn, "q-reposition-architect", "accepted", "2026-03-10T12:00:00Z")
+            .expect("accept quest");
+        let q = toggled.iter().find(|q| q.id == "q-reposition-architect").expect("quest exists");
+        assert!(q.accepted);
+        assert_eq!(q.accepted_at.as_deref(), Some("2026-03-10T12:00:00Z"));
+        assert!(q.completed_at.is_none());
+
+        let completed = apply_quest_toggle(&conn, "q-reposition-architect", "completed", "2026-03-12T15:30:00Z")
+            .expect("complete quest");
+        let q_done = completed.iter().find(|q| q.id == "q-reposition-architect").expect("quest exists");
+        assert!(q_done.completed);
+        assert_eq!(q_done.completed_at.as_deref(), Some("2026-03-12T15:30:00Z"));
+
+        let rebuilt = build_personalized_quests(&conn, &[], &[], &UserProfile::default(), WritingLevel::Everyday);
+        let q_rebuilt = rebuilt.iter().find(|q| q.id == "q-reposition-architect").expect("quest exists");
+        assert_eq!(q_rebuilt.accepted_at.as_deref(), Some("2026-03-10T12:00:00Z"));
+        assert_eq!(q_rebuilt.completed_at.as_deref(), Some("2026-03-12T15:30:00Z"));
+
+        let cleared = apply_quest_toggle(&conn, "q-reposition-architect", "completed", "2026-03-13T00:00:00Z")
+            .expect("uncomplete quest");
+        let q_cleared = cleared.iter().find(|q| q.id == "q-reposition-architect").expect("quest exists");
+        assert!(!q_cleared.completed);
+        assert!(q_cleared.completed_at.is_none());
     }
 }
