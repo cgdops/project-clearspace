@@ -195,6 +195,23 @@ pub struct ManifestFileLink {
     pub export_url: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DailyPromptQuality {
+    pub date: String,
+    pub prompt_count: usize,
+    pub avg_quality_score: f32,
+    pub tier_counts: [usize; 3],
+}
+
+pub fn compute_prompt_quality_score(tier: SkillTier, is_high_signal: bool) -> f32 {
+    let base = match tier {
+        SkillTier::Beginner => 25.0,
+        SkillTier::Intermediate => 65.0,
+        SkillTier::Advanced => 90.0,
+    };
+    if is_high_signal { base + 10.0 } else { base }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct IngestionSummary {
     pub total_files_scanned: usize,
@@ -222,6 +239,8 @@ pub struct IngestionSummary {
     pub manifest_links: Vec<ManifestFileLink>,
     #[serde(default)]
     pub daily_counts: Vec<(String, usize)>,
+    #[serde(default)]
+    pub daily_prompt_quality: Vec<DailyPromptQuality>,
     #[serde(default)]
     pub writing_level: WritingLevelMetrics,
 }
@@ -710,7 +729,7 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
 
     let mut cat_map: HashMap<String, usize> = HashMap::new();
     let mut src_map: HashMap<String, usize> = HashMap::new();
-    let mut day_map: HashMap<String, usize> = HashMap::new();
+    let mut day_map: HashMap<String, (usize, f32, [usize; 3])> = HashMap::new();
     summary.hourly_distribution = [0usize; 24];
     summary.tier_counts = [0usize; 3];
     summary.high_signal_prompts = 0;
@@ -719,23 +738,25 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
         if r.is_high_signal {
             summary.high_signal_prompts += 1;
         }
-        let trimmed_dt = r.created_at.trim();
-        if trimmed_dt.len() >= 10 {
-            let day_key = &trimmed_dt[..10];
+        let tier_idx = match r.skill_tier {
+            SkillTier::Beginner => 0,
+            SkillTier::Intermediate => 1,
+            SkillTier::Advanced => 2,
+        };
+        summary.tier_counts[tier_idx] += 1;
+        if let Some(day_key) = r.created_at.trim().get(..10) {
             if day_key.as_bytes().get(4) == Some(&b'-') && day_key.as_bytes().get(7) == Some(&b'-')
             {
-                *day_map.entry(day_key.to_string()).or_insert(0usize) += 1;
+                let entry = day_map.entry(day_key.to_string()).or_insert((0, 0.0, [0; 3]));
+                entry.0 += 1;
+                entry.1 += compute_prompt_quality_score(r.skill_tier, r.is_high_signal);
+                entry.2[tier_idx] += 1;
             }
         }
         if let Some(h) = r.local_hour {
             if (h as usize) < 24 {
                 summary.hourly_distribution[h as usize] += 1;
             }
-        }
-        match r.skill_tier {
-            SkillTier::Beginner => summary.tier_counts[0] += 1,
-            SkillTier::Intermediate => summary.tier_counts[1] += 1,
-            SkillTier::Advanced => summary.tier_counts[2] += 1,
         }
         for c in &r.signal_categories {
             *cat_map.entry(c.clone()).or_insert(0usize) += 1;
@@ -753,9 +774,18 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
     src_vec.sort_by_key(|entry| Reverse(entry.1));
     summary.source_counts = src_vec;
 
-    let mut day_vec: Vec<(String, usize)> = day_map.into_iter().collect();
+    let mut day_vec: Vec<_> = day_map.into_iter().collect();
     day_vec.sort_by(|a, b| a.0.cmp(&b.0));
-    summary.daily_counts = day_vec;
+    summary.daily_counts = day_vec.iter().map(|(d, (c, _, _))| (d.clone(), *c)).collect();
+    summary.daily_prompt_quality = day_vec
+        .into_iter()
+        .map(|(date, (prompt_count, sum, tier_counts))| DailyPromptQuality {
+            date,
+            prompt_count,
+            avg_quality_score: ((sum / prompt_count.max(1) as f32) * 10.0).round() / 10.0,
+            tier_counts,
+        })
+        .collect();
 
     summary.clean_prompts_kept = results.len();
 
@@ -2232,5 +2262,20 @@ mod tests {
         assert_eq!(tech_sum.writing_level.measured_level, WritingLevel::Technical);
         assert!(tech_sum.writing_level.flesch_kincaid_grade >= 12.5);
         assert!(tech_sum.writing_level.jargon_density_pct >= 20.0);
+    }
+
+    #[test]
+    fn tracks_daily_prompt_quality_improvements_and_regressions_chronologically() {
+        let md = "# 2026-03-01 10:00\nWhat is a syntax error for a beginner just starting out?\n\n# 2026-03-02 10:00\nI want to architect an automated telemetry pipeline with deterministic schema tradeoffs and unit economics.\n\n# 2026-03-03 10:00\nHow do I fix this syntax error in my basic hello world tutorial for a newbie?";
+        let (_prompts, summary) = parse_exported_conversations_json(md).expect("valid md");
+        assert_eq!(summary.daily_prompt_quality.len(), 3);
+        assert_eq!(summary.daily_prompt_quality[0].date, "2026-03-01");
+        assert_eq!(summary.daily_prompt_quality[0].tier_counts, [1, 0, 0]);
+        assert_eq!(summary.daily_prompt_quality[1].date, "2026-03-02");
+        assert_eq!(summary.daily_prompt_quality[1].tier_counts, [0, 0, 1]);
+        assert!(summary.daily_prompt_quality[1].avg_quality_score > summary.daily_prompt_quality[0].avg_quality_score);
+        assert_eq!(summary.daily_prompt_quality[2].date, "2026-03-03");
+        assert_eq!(summary.daily_prompt_quality[2].tier_counts, [1, 0, 0]);
+        assert!(summary.daily_prompt_quality[2].avg_quality_score < summary.daily_prompt_quality[1].avg_quality_score);
     }
 }
