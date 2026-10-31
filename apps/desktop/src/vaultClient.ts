@@ -2557,14 +2557,14 @@ function loadBrowserUpdateStatus(): AppUpdateStatus {
     const raw = localStorage.getItem(STORAGE_BACKUP_META_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     return {
-      installed_version: "0.2.0",
+      installed_version: "0.3.0",
       schema_version: 3,
       last_backup_path: parsed?.last_backup_path ?? null,
       last_migrated_at: parsed?.last_migrated_at ?? "2026-10-30 00:00",
     };
   } catch {
     return {
-      installed_version: "0.2.0",
+      installed_version: "0.3.0",
       schema_version: 3,
       last_backup_path: null,
       last_migrated_at: "2026-10-30 00:00",
@@ -3209,7 +3209,7 @@ export async function backupLocalVault(): Promise<AppUpdateStatus> {
 }
 
 export async function checkForAppUpdates(
-  installedVersion = "0.2.0",
+  installedVersion = "0.3.0",
   schemaVersion = 3
 ): Promise<UpdateCheckResult> {
   const nowIso = new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -3228,7 +3228,7 @@ export async function checkForAppUpdates(
           manifest.notes ??
           "Zero-Knowledge local SQLite vault with v2 schema migration guard and pre-upgrade DB backup.",
         pub_date: (manifest.pub_date ?? "2026-10-30").slice(0, 10),
-        download_url: winPlatform?.url ?? "/downloads/Clearspace_0.2.0_x64-setup.exe",
+        download_url: winPlatform?.url ?? "/downloads/Clearspace_0.3.0_x64-setup.exe",
         sha256: winPlatform?.sha256 ?? null,
         checked_at: nowIso,
       };
@@ -3245,7 +3245,7 @@ export async function checkForAppUpdates(
     release_notes:
       "Zero-Knowledge local SQLite vault with v2 schema migration guard and automatic pre-upgrade DB backup.",
     pub_date: "2026-10-30",
-    download_url: "/downloads/Clearspace_0.2.0_x64-setup.exe",
+    download_url: "/downloads/Clearspace_0.3.0_x64-setup.exe",
     sha256: null,
     checked_at: nowIso,
   };

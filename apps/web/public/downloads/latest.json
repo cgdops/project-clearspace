@@ -1,14 +1,14 @@
 {
-  "version": "0.2.0",
-  "schemaVersion": 2,
-  "notes": "Zero-Knowledge local SQLite vault with v2 schema migration guard, pre-upgrade DB backup, and O*NET seniority calibration.",
+  "version": "0.3.0",
+  "schemaVersion": 3,
+  "notes": "Zero-Knowledge local SQLite vault with v3 schema migration guard, Adaptive Writing Level (Everyday, Professional, Technical), Plain-English Career Matches, and Personalized Next Steps.",
   "pub_date": "2026-10-30T00:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "/downloads/Clearspace_0.2.0_x64-setup.exe",
-      "sha256": "b256a95962018488e0f5ae928c95b418872ea7e1e2e7eeae1958151fc91d1d78",
-      "filename": "Clearspace_0.2.0_x64-setup.exe",
-      "sizeFormatted": "4.93 MB"
+      "url": "/downloads/Clearspace_0.3.0_x64-setup.exe",
+      "sha256": "5de9333ae4b9306349dc8fc8ccba64217f281eb4134786046e75d08ba51ba42d",
+      "filename": "Clearspace_0.3.0_x64-setup.exe",
+      "sizeFormatted": "4.96 MB"
     }
   }
 }

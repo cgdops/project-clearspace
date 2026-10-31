@@ -549,28 +549,48 @@ fn count_word_syllables_and_jargon(raw_token: &str) -> (usize, bool) {
         return (0, false);
     }
 
-    let alnum: String = raw_token
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .map(|c| c.to_ascii_lowercase())
-        .collect();
-    if alnum.is_empty() {
+    let mut alnum_buf = [0u8; 48];
+    let mut alnum_len = 0usize;
+    let mut alpha_buf = [0u8; 48];
+    let mut alpha_len = 0usize;
+
+    for b in raw_token.bytes() {
+        if b.is_ascii_alphanumeric() && alnum_len < alnum_buf.len() {
+            let lower = b.to_ascii_lowercase();
+            alnum_buf[alnum_len] = lower;
+            alnum_len += 1;
+            if lower.is_ascii_alphabetic() {
+                alpha_buf[alpha_len] = lower;
+                alpha_len += 1;
+            }
+        }
+    }
+
+    if alnum_len == 0 {
         return (0, false);
     }
 
-    if TECHNICAL_ACRONYMS.contains(&alnum.as_str()) {
-        return (3, true);
+    if alnum_len <= 8 {
+        if let Ok(alnum_str) = std::str::from_utf8(&alnum_buf[..alnum_len]) {
+            if TECHNICAL_ACRONYMS.contains(&alnum_str) {
+                return (3, true);
+            }
+        }
     }
 
-    let alpha: String = alnum.chars().filter(|c| c.is_ascii_alphabetic()).collect();
-    if alpha.is_empty() {
+    if alpha_len == 0 {
         return (0, false);
     }
 
-    let syllables = if alpha.len() <= 3 {
+    let alpha_str = match std::str::from_utf8(&alpha_buf[..alpha_len]) {
+        Ok(s) => s,
+        Err(_) => return (0, false),
+    };
+
+    let syllables = if alpha_len <= 3 {
         1
     } else {
-        let mut working = alpha.as_str();
+        let mut working = alpha_str;
         let strip_two_char_suffix = working.len() > 4
             && ((working.ends_with("es")
                 && !working.ends_with("aes")
@@ -587,8 +607,8 @@ fn count_word_syllables_and_jargon(raw_token: &str) -> (usize, bool) {
 
         let mut vowel_runs = 0usize;
         let mut prev_vowel = false;
-        for ch in working.chars() {
-            let is_vowel = matches!(ch, 'a' | 'e' | 'i' | 'o' | 'u' | 'y');
+        for ch in working.bytes() {
+            let is_vowel = matches!(ch, b'a' | b'e' | b'i' | b'o' | b'u' | b'y');
             if is_vowel && !prev_vowel {
                 vowel_runs += 1;
             }
@@ -597,8 +617,13 @@ fn count_word_syllables_and_jargon(raw_token: &str) -> (usize, bool) {
         vowel_runs.max(1)
     };
 
-    let is_jargon = TECHNICAL_JARGON_TERMS.contains(&alpha.as_str())
-        || (syllables >= 3 && !EVERYDAY_POLYSYLLABIC_ALLOWLIST.contains(&alpha.as_str()));
+    let is_jargon = if syllables >= 3 {
+        !EVERYDAY_POLYSYLLABIC_ALLOWLIST.contains(&alpha_str)
+    } else if alpha_len >= 4 {
+        TECHNICAL_JARGON_TERMS.contains(&alpha_str)
+    } else {
+        false
+    };
 
     (syllables, is_jargon)
 }

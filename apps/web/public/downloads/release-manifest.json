@@ -1,44 +1,48 @@
 {
   "productName": "Clearspace",
-  "version": "0.2.0",
-  "schemaVersion": 2,
-  "releaseDate": "2026-10-30",
+  "version": "0.3.0",
+  "schemaVersion": 3,
+  "releaseDate": "2026-10-31",
   "identifier": "com.g3zcreative.clearspace",
+  "codeSigningProvider": "Unsigned (SHA-256 Verified)",
   "license": "MIT Open-Core + Auditable Commercial EE",
-  "notes": "Zero-Knowledge local SQLite vault with v2 schema migration guard, pre-upgrade DB backup, and O*NET seniority calibration.",
+  "notes": "Zero-Knowledge local SQLite vault with v3 schema migration guard, Adaptive Writing Level (Everyday, Professional, Technical), Plain-English Career Matches, and Personalized Next Steps.",
   "artifacts": [
     {
       "id": "win-nsis",
       "platform": "Windows 10/11 (x64)",
       "kind": "NSIS Setup Installer (.exe)",
       "recommended": true,
-      "filename": "Clearspace_0.2.0_x64-setup.exe",
-      "url": "/downloads/Clearspace_0.2.0_x64-setup.exe",
-      "sizeBytes": 5166668,
-      "sizeFormatted": "4.93 MB",
-      "sha256": "b256a95962018488e0f5ae928c95b418872ea7e1e2e7eeae1958151fc91d1d78"
+      "signed": false,
+      "filename": "Clearspace_0.3.0_x64-setup.exe",
+      "url": "/downloads/Clearspace_0.3.0_x64-setup.exe",
+      "sizeBytes": 5204530,
+      "sizeFormatted": "4.96 MB",
+      "sha256": "5de9333ae4b9306349dc8fc8ccba64217f281eb4134786046e75d08ba51ba42d"
     },
     {
       "id": "win-msi",
       "platform": "Windows 10/11 (x64)",
       "kind": "MSI Windows Installer (.msi)",
       "recommended": false,
-      "filename": "Clearspace_0.2.0_x64_en-US.msi",
-      "url": "/downloads/Clearspace_0.2.0_x64_en-US.msi",
-      "sizeBytes": 7626752,
-      "sizeFormatted": "7.27 MB",
-      "sha256": "ceaba04e9f3d605c194cf78dc92899d9427f5d3ae7f9a2b0008f8231d75eff2f"
+      "signed": false,
+      "filename": "Clearspace_0.3.0_x64_en-US.msi",
+      "url": "/downloads/Clearspace_0.3.0_x64_en-US.msi",
+      "sizeBytes": 7680000,
+      "sizeFormatted": "7.32 MB",
+      "sha256": "1fc59f043f738b995bfc862b2514f9ca0267cc63764b827df62a8ba3fdd96588"
     },
     {
       "id": "win-portable",
       "platform": "Windows 10/11 (x64)",
       "kind": "Standalone Portable Binary (.exe)",
       "recommended": false,
-      "filename": "Clearspace_0.2.0_x64-portable.exe",
-      "url": "/downloads/Clearspace_0.2.0_x64-portable.exe",
-      "sizeBytes": 25200976,
-      "sizeFormatted": "24.03 MB",
-      "sha256": "4fab33e173b1882203a9d804d399cc6ac4f4551fc53e53685312e854c1cb8011"
+      "signed": false,
+      "filename": "Clearspace_0.3.0_x64-portable.exe",
+      "url": "/downloads/Clearspace_0.3.0_x64-portable.exe",
+      "sizeBytes": 25295151,
+      "sizeFormatted": "24.12 MB",
+      "sha256": "d8f5f1f4a2fd710830ef5f0b26e77f59eedab02251681a864b8a58cb52532606"
     }
   ]
 }
