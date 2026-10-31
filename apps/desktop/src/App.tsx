@@ -57,6 +57,7 @@ import {
   parseMultiProviderClient,
 } from "./vaultClient";
 import { ContributionGrid } from "./ContributionGrid";
+import { GrowthDailyQualityInput, GrowthLineGraph } from "./GrowthLineGraph";
 
 type TabKey = "mirror" | "onet" | "equity" | "journal" | "vault";
 type StandalonePageKey = "none" | "zero-knowledge" | "how-ai-works";
@@ -2684,6 +2685,14 @@ export default function App() {
                     />
                   </div>
                 </div>
+
+                <GrowthLineGraph
+                  dailyPromptQuality={(data.summary as { daily_prompt_quality?: GrowthDailyQualityInput[] }).daily_prompt_quality}
+                  recentPrompts={data.recent_high_signal_prompts}
+                  dailyCounts={data.summary.daily_counts}
+                  quests={data.quests}
+                  latestDate={data.summary.latest_date}
+                />
 
                 <div className="card-stack">
                   {data.quests.map((q) => (
