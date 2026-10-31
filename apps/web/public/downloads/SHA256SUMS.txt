@@ -1,0 +1,3 @@
+c30c1d370ce2b9fc35b870dec3c7ee704fbeaf272c5a31ada2e1534bd537bfc9  Clearspace_0.1.0_x64-setup.exe
+3b649a627e7c1f8de37a7bd481ec462fbfa874e143e8d92dce19d48eb0fc4928  Clearspace_0.1.0_x64_en-US.msi
+ca2a0c331eab77ad102d68dd14508bb34e66e37cd37f43ad362421ca8bc8fc6e  Clearspace_0.1.0_x64-portable.exe

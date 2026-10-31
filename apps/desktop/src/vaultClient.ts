@@ -32,7 +32,7 @@ export interface IngestionSummary {
 
 export interface FileImportReport {
   file_name: string;
-  status: "imported" | "manifest_warning" | "empty" | "error";
+  status: "imported" | "manifest_ready" | "empty" | "error";
   detected_format: string;
   raw_prompts_scanned: number;
   clean_prompts_kept: number;
@@ -64,9 +64,13 @@ export interface QuoteCitation {
   text: string;
 }
 
+export type StoryChapterKey = "excel" | "grow" | "friction";
+
 export interface MirrorInsightCard {
   id: string;
   category: string;
+  story_chapter?: StoryChapterKey;
+  story_chapter_title?: string;
   title: string;
   summary: string;
   confidence_pct: number;
@@ -75,6 +79,14 @@ export interface MirrorInsightCard {
   assessed_tier?: string;
   assumption_challenged?: string;
   identified_gap?: string;
+}
+
+export interface UserProfile {
+  name: string;
+  avatar_data_url: string | null;
+  theme_mode: "light" | "dark";
+  mirror_story_completed: boolean;
+  shortlisted_onet_codes: string[];
 }
 
 export interface EvidenceQuote {
@@ -140,6 +152,7 @@ export interface NormalizedPrompt {
 
 export interface VaultDashboardPayload {
   db_path: string;
+  profile: UserProfile;
   summary: IngestionSummary;
   mirror_cards: MirrorInsightCard[];
   onet_matches: RoleMatchResult[];
@@ -151,6 +164,15 @@ export interface VaultDashboardPayload {
 const STORAGE_PROMPTS_KEY = "clearspace_vault_prompts_v1";
 const STORAGE_QUESTS_KEY = "clearspace_vault_quests_v1";
 const STORAGE_JOURNALS_KEY = "clearspace_vault_journals_v1";
+const STORAGE_PROFILE_KEY = "clearspace_user_profile_v1";
+
+export const DEFAULT_USER_PROFILE: UserProfile = {
+  name: "",
+  avatar_data_url: null,
+  theme_mode: "light",
+  mirror_story_completed: false,
+  shortlisted_onet_codes: [],
+};
 
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -1124,6 +1146,8 @@ function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[
     {
       id: "card-tool-builder",
       category: "Superpower",
+      story_chapter: "excel",
+      story_chapter_title: "1. Where You Currently Excel",
       title: "The 'Bottleneck → Build the System' Reflex",
       summary: `Detected in ${tool.hits} of ${prompts.length} prompts (${tierCounts[0]} Beginner / ${tierCounts[1]} Intermediate / ${tierCounts[2]} Advanced across vault): when you encounter manual overhead, evaluate whether you are designing durable systems or just scripting one-off patches.`,
       confidence_pct: calcConf(tool.hits),
@@ -1144,6 +1168,8 @@ function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[
     {
       id: "card-bilingual-empathy",
       category: "Superpower",
+      story_chapter: "excel",
+      story_chapter_title: "1. Where You Currently Excel",
       title: "Bilingual Translation: Systems Depth → Clear Human Value",
       summary: `Identified across ${empathy.hits} of ${prompts.length} prompts: measures how consistently you connect backend engineering decisions to user clarity, positioning, and measurable unit economics.`,
       confidence_pct: calcConf(empathy.hits),
@@ -1162,6 +1188,8 @@ function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[
     {
       id: "card-values-anchor",
       category: "Core Value",
+      story_chapter: "grow",
+      story_chapter_title: "2. Where We Think You Could Grow",
       title: "Autonomy, Sustainable Stability & High-Leverage Ownership",
       summary: `Synthesized from ${values.hits} value-signal prompt(s): tracks whether your daily technical work actually compounds toward household stability and autonomy.`,
       confidence_pct: calcConf(values.hits),
@@ -1178,6 +1206,8 @@ function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[
     {
       id: "card-burnout-trigger",
       category: "Burnout Trigger",
+      story_chapter: "friction",
+      story_chapter_title: "3. What Is Causing You Friction",
       title: "The Repetitive Manual Maintenance Trap",
       summary: `Detected ${burnout.hits} friction signal(s): tracks where repetitive hand-maintenance, boilerplate, or fragmented context-switching drains your cognitive output.`,
       confidence_pct: calcConf(burnout.hits),
@@ -1194,6 +1224,8 @@ function buildMirrorCardsClient(prompts: NormalizedPrompt[]): MirrorInsightCard[
     {
       id: "card-grill-me",
       category: "Cognitive Rhythm",
+      story_chapter: "grow",
+      story_chapter_title: "2. Where We Think You Could Grow",
       title: "First-Principles Truth-Seeking & Dialectical Verification",
       summary: `With ${skeptic.hits} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions from first principles before committing engineering effort.`,
       confidence_pct: calcConf(skeptic.hits),
@@ -1633,7 +1665,55 @@ function saveBrowserJournals(journals: JournalEntry[]): void {
   }
 }
 
+function loadBrowserProfile(): UserProfile {
+  try {
+    const raw = localStorage.getItem(STORAGE_PROFILE_KEY);
+    if (!raw) return { ...DEFAULT_USER_PROFILE };
+    const parsed = JSON.parse(raw) as Partial<UserProfile>;
+    return {
+      name: typeof parsed.name === "string" ? parsed.name : "",
+      avatar_data_url: typeof parsed.avatar_data_url === "string" ? parsed.avatar_data_url : null,
+      theme_mode: parsed.theme_mode === "dark" ? "dark" : "light",
+      mirror_story_completed: Boolean(parsed.mirror_story_completed),
+      shortlisted_onet_codes: Array.isArray(parsed.shortlisted_onet_codes)
+        ? parsed.shortlisted_onet_codes
+        : [],
+    };
+  } catch {
+    return { ...DEFAULT_USER_PROFILE };
+  }
+}
+
+function saveBrowserProfile(profile: UserProfile): void {
+  try {
+    localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(profile));
+  } catch {
+    // ignore
+  }
+}
+
+export async function updateUserProfile(
+  partial: Partial<UserProfile>
+): Promise<UserProfile> {
+  if (isTauriRuntime()) {
+    const current = (await invoke<VaultDashboardPayload>("get_vault_dashboard")).profile;
+    const next: UserProfile = {
+      ...current,
+      ...partial,
+    };
+    return invoke<UserProfile>("update_user_profile", { profile: next });
+  }
+  const current = loadBrowserProfile();
+  const next: UserProfile = {
+    ...current,
+    ...partial,
+  };
+  saveBrowserProfile(next);
+  return next;
+}
+
 function buildBrowserDashboard(): VaultDashboardPayload {
+  const profile = loadBrowserProfile();
   const prompts = loadBrowserPrompts();
   const quests = loadBrowserQuests();
   const journals = loadBrowserJournals();
@@ -1643,6 +1723,7 @@ function buildBrowserDashboard(): VaultDashboardPayload {
 
   return {
     db_path: "localStorage://clearspace_vault.db (Zero-Cloud Local Vault)",
+    profile,
     summary,
     mirror_cards,
     onet_matches,
@@ -1817,7 +1898,7 @@ export async function importFilesBatch(
         const newAdded = Math.max(0, afterDashboard.summary.clean_prompts_kept - beforeCount);
         const isManifest = summary.detected_format.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
         const status: FileImportReport["status"] = isManifest
-          ? "manifest_warning"
+          ? "manifest_ready"
           : summary.clean_prompts_kept > 0
           ? "imported"
           : "empty";
@@ -1862,7 +1943,7 @@ export async function importFilesBatch(
       const isManifest =
         summary.detected_format.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
       const status: FileImportReport["status"] = isManifest
-        ? "manifest_warning"
+        ? "manifest_ready"
         : summary.clean_prompts_kept > 0
         ? "imported"
         : "empty";
@@ -2056,7 +2137,7 @@ export async function importExportedContent(
         {
           file_name: fileName,
           status: isManifest
-            ? "manifest_warning"
+            ? "manifest_ready"
             : summary.clean_prompts_kept > 0
             ? "imported"
             : "empty",
@@ -2105,7 +2186,7 @@ export async function importExportedContent(
       {
         file_name: fileName,
         status: isManifest
-          ? "manifest_warning"
+          ? "manifest_ready"
           : summary.clean_prompts_kept > 0
           ? "imported"
           : "empty",
@@ -2158,6 +2239,24 @@ export async function resetLocalVault(): Promise<VaultDashboardPayload> {
   saveBrowserPrompts([]);
   const resetQuests = DEFAULT_QUESTS.map((q) => ({ ...q, accepted: false, completed: false }));
   saveBrowserQuests(resetQuests);
+  const profile = loadBrowserProfile();
+  saveBrowserProfile({
+    ...profile,
+    mirror_story_completed: false,
+    shortlisted_onet_codes: [],
+  });
+  return buildBrowserDashboard();
+}
+
+export async function resetFullFactory(): Promise<VaultDashboardPayload> {
+  if (isTauriRuntime()) {
+    return invoke<VaultDashboardPayload>("reset_full_factory");
+  }
+  saveBrowserPrompts([]);
+  saveBrowserJournals([]);
+  const resetQuests = DEFAULT_QUESTS.map((q) => ({ ...q, accepted: false, completed: false }));
+  saveBrowserQuests(resetQuests);
+  saveBrowserProfile({ ...DEFAULT_USER_PROFILE });
   return buildBrowserDashboard();
 }
 

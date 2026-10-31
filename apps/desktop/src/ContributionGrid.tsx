@@ -314,6 +314,7 @@ interface ContributionGridProps {
   dailyCounts?: [string, number][];
   recentPrompts?: NormalizedPrompt[];
   latestDate?: string | null;
+  appTheme?: "light" | "dark";
 }
 
 interface HoveredCellState {
@@ -326,11 +327,14 @@ export function ContributionGrid({
   dailyCounts = [],
   recentPrompts = [],
   latestDate = null,
+  appTheme = "light",
 }: ContributionGridProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<string>("last_year");
-  const [colorTheme, setColorTheme] = useState<GridColorTheme>("github-dark");
   const [hovered, setHovered] = useState<HoveredCellState | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const colorTheme: GridColorTheme =
+    appTheme === "dark" ? "github-dark" : "clearspace-sage";
 
   // Merge dailyCounts with any recentPrompts dates if dailyCounts is empty
   const effectiveDailyCounts = useMemo<[string, number][]>(() => {
@@ -404,19 +408,13 @@ export function ContributionGrid({
         </div>
 
         <div className="contribution-controls">
-          <button
-            type="button"
+          <span
             className="contribution-theme-toggle"
-            onClick={() =>
-              setColorTheme((prev) =>
-                prev === "github-dark" ? "clearspace-sage" : "github-dark"
-              )
-            }
-            title="Switch contribution color palette"
-            data-testid="contribution-theme-toggle"
+            style={{ cursor: "default" }}
+            data-testid="contribution-theme-badge"
           >
-            Palette: {colorTheme === "github-dark" ? "GitHub Emerald" : "Clearspace Sage"}
-          </button>
+            Theme: {colorTheme === "github-dark" ? "Deep Forest Dark" : "Clearspace Sage (Light)"}
+          </span>
         </div>
       </div>
 

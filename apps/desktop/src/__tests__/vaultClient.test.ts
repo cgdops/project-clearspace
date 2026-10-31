@@ -7,9 +7,11 @@ import {
   importFilesBatch,
   loadSampleMultiProviderVault,
   parseMultiProviderClient,
+  resetFullFactory,
   resetLocalVault,
   scanLocalVault,
   toggleQuestState,
+  updateUserProfile,
 } from "../vaultClient";
 import {
   buildContributionGridModel,
@@ -539,7 +541,7 @@ We need to ensure that every user import produces immediate visual confirmation 
     expect(byName.get("projects.json")?.status).toBe("imported");
     expect(byName.get("projects.json")?.clean_prompts_kept).toBe(2);
     expect(byName.get("Master Resume v2")?.status).toBe("imported");
-    expect(byName.get("anthropic_data_manifest.json")?.status).toBe("manifest_warning");
+    expect(byName.get("anthropic_data_manifest.json")?.status).toBe("manifest_ready");
     expect(byName.get("anthropic_data_manifest.json")?.manifest_links).toHaveLength(1);
     expect(byName.get("gemini_scheduled_actions_data.html")?.status).toBe("empty");
     expect(byName.get("broken.json")?.status).toBe("error");
@@ -614,9 +616,9 @@ We need to ensure that every user import produces immediate visual confirmation 
 
     const byName = new Map(report.file_reports.map((r) => [r.file_name, r]));
     // 1. Both Anthropic files are Export Batch Manifests with direct download links
-    expect(byName.get("anthropic_data_christian.json")?.status).toBe("manifest_warning");
+    expect(byName.get("anthropic_data_christian.json")?.status).toBe("manifest_ready");
     expect(byName.get("anthropic_data_christian.json")?.manifest_links).toHaveLength(3);
-    expect(byName.get("manifest-batch.json")?.status).toBe("manifest_warning");
+    expect(byName.get("manifest-batch.json")?.status).toBe("manifest_ready");
     expect(byName.get("manifest-batch.json")?.manifest_links).toHaveLength(4);
 
     // 2. Gemini MyActivity.json filters out Canvas/UI system events and keeps 842 genuine prompts
@@ -655,5 +657,47 @@ We need to ensure that every user import produces immediate visual confirmation 
       expect(zipRes.report.files_processed).toBe(6);
       expect(zipRes.dashboard.summary.clean_prompts_kept).toBe(879);
     }
+  });
+
+  it("persists Step 1 user profile (name, optional avatar, theme mode) across vault resets and wipes on full factory reset", async () => {
+    const initial = await getVaultDashboard();
+    expect(initial.profile.name).toBe("");
+    expect(initial.profile.theme_mode).toBe("light");
+
+    const updated = await updateUserProfile({
+      name: "Chris",
+      avatar_data_url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      theme_mode: "dark",
+      mirror_story_completed: true,
+      shortlisted_onet_codes: ["15-1252.00"],
+    });
+    expect(updated.name).toBe("Chris");
+    expect(updated.theme_mode).toBe("dark");
+    expect(updated.mirror_story_completed).toBe(true);
+    expect(updated.shortlisted_onet_codes).toEqual(["15-1252.00"]);
+
+    await loadSampleMultiProviderVault();
+    const populated = await getVaultDashboard();
+    expect(populated.mirror_cards.map((c) => c.story_chapter)).toEqual([
+      "excel",
+      "excel",
+      "grow",
+      "friction",
+      "grow",
+    ]);
+
+    // Resetting local vault keeps Step 1 profile name & avatar intact while resetting progress
+    const afterVaultReset = await resetLocalVault();
+    expect(afterVaultReset.summary.clean_prompts_kept).toBe(0);
+    expect(afterVaultReset.profile.name).toBe("Chris");
+    expect(afterVaultReset.profile.avatar_data_url).toContain("data:image/png");
+    expect(afterVaultReset.profile.mirror_story_completed).toBe(false);
+    expect(afterVaultReset.profile.shortlisted_onet_codes).toEqual([]);
+
+    // Full factory reset returns all the way to Step 1
+    const afterFactoryReset = await resetFullFactory();
+    expect(afterFactoryReset.profile.name).toBe("");
+    expect(afterFactoryReset.profile.avatar_data_url).toBeNull();
+    expect(afterFactoryReset.summary.clean_prompts_kept).toBe(0);
   });
 });

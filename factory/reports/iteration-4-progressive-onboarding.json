@@ -1,0 +1,198 @@
+{
+  "iteration": 4,
+  "phase": "progressive-onboarding-and-narrative-mirror",
+  "timestamp": "2026-10-31T02:44:18.876Z",
+  "status": "PASS_CONVERGED_ZERO_DEFECTS",
+  "functionalFlows": {
+    "onboardingEmptyVault": {
+      "horizontalOverflowPx": 0,
+      "mainHeading": "Chris’s Unmasked Cognitive Mirror",
+      "onboardingTitle": "Welcome, Chris to Clearspace — Bring Your Prompt Archive",
+      "providerStepCount": 4,
+      "statValues": [
+        "0",
+        "0",
+        "0",
+        "Awaiting Data"
+      ],
+      "statsGridRowCount": 1,
+      "statCardRects": [
+        {
+          "x": 314,
+          "y": 154,
+          "width": 219
+        },
+        {
+          "x": 549,
+          "y": 154,
+          "width": 219
+        },
+        {
+          "x": 783,
+          "y": 154,
+          "width": 219
+        },
+        {
+          "x": 1018,
+          "y": 154,
+          "width": 219
+        }
+      ],
+      "sidebarEquityScoreOnFreshStorage": "0 pts",
+      "sidebarEquitySubOnFreshStorage": "Compounding across 0 active career commitments."
+    },
+    "keyboardNavigation": {
+      "activeAfterArrowDown": "O*NET Path Finder",
+      "activeAfterEnd": "Local Vault & Scrubber",
+      "activeAfterHome": "Cognitive Mirror"
+    },
+    "onetMeterBars": {
+      "meterTrackCount": 16,
+      "meterFillCount": 16,
+      "onetProgressbarRoleCount": 16,
+      "allHaveAriaAttrs": true
+    },
+    "equityProgressSummary": {
+      "hasEquityProgressSummary": true,
+      "hasEquityProgressTrack": true,
+      "hasEquityProgressFill": true,
+      "equityProgressbarRoleCount": 1,
+      "trackHasAriaValueNow": true
+    },
+    "vaultPromptExplorer": {
+      "explorerVisible": true,
+      "searchFilterFoundRedactedEmail": true
+    },
+    "resetVaultFlow": {
+      "returnedToStep2KeepingProfile": true,
+      "returnedToStep1OnFullFactoryReset": true
+    },
+    "tabSwitchLatencyMs": {
+      "mirror": 87.5,
+      "onet": 76,
+      "equity": 37.5,
+      "journal": 31.1,
+      "vault": 119.4
+    }
+  },
+  "contrastTelemetry": {
+    "statLabel_textMuted_on_statCard": {
+      "ratio": 6.77,
+      "wcagAA_4_5": true
+    },
+    "quoteMeta_textMuted_on_quoteBox": {
+      "ratio": 6.34,
+      "wcagAA_4_5": true
+    },
+    "badgeValue": {
+      "ratio": 5.39,
+      "wcagAA_4_5": true
+    }
+  },
+  "ariaTelemetry": {
+    "tablistCount": 1,
+    "tabRoleCount": 5,
+    "totalProgressbarRoleCountAcrossOnetAndEquity": 17
+  },
+  "viewports": {
+    "1280x800": {
+      "viewport": {
+        "name": "1280x800",
+        "label": "Standard Desktop",
+        "width": 1280,
+        "height": 800
+      },
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "emptyStateHorizontalOverflowPx": 0,
+      "perTabGeometry": {
+        "mirror": {
+          "heading": "Chris’s Unmasked Cognitive Mirror",
+          "horizontalOverflowPx": 0
+        },
+        "onet": {
+          "heading": "Chris’s O*NET Natural Path Finder",
+          "horizontalOverflowPx": 0
+        },
+        "equity": {
+          "heading": "Chris’s 5-Year Personal Equity Map",
+          "horizontalOverflowPx": 0
+        },
+        "journal": {
+          "heading": "Chris’s Reflective Sanctuary & Socratic Journal",
+          "horizontalOverflowPx": 0
+        },
+        "vault": {
+          "heading": "Zero-Knowledge Local Vault & Scrubber",
+          "horizontalOverflowPx": 0
+        }
+      }
+    },
+    "1440x900": {
+      "viewport": {
+        "name": "1440x900",
+        "label": "Wide Desktop",
+        "width": 1440,
+        "height": 900
+      },
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "emptyStateHorizontalOverflowPx": 0,
+      "perTabGeometry": {
+        "mirror": {
+          "heading": "Chris’s Unmasked Cognitive Mirror",
+          "horizontalOverflowPx": 0
+        },
+        "onet": {
+          "heading": "Chris’s O*NET Natural Path Finder",
+          "horizontalOverflowPx": 0
+        },
+        "equity": {
+          "heading": "Chris’s 5-Year Personal Equity Map",
+          "horizontalOverflowPx": 0
+        },
+        "journal": {
+          "heading": "Chris’s Reflective Sanctuary & Socratic Journal",
+          "horizontalOverflowPx": 0
+        },
+        "vault": {
+          "heading": "Zero-Knowledge Local Vault & Scrubber",
+          "horizontalOverflowPx": 0
+        }
+      }
+    },
+    "1024x768": {
+      "viewport": {
+        "name": "1024x768",
+        "label": "Compact/Split-Screen",
+        "width": 1024,
+        "height": 768
+      },
+      "consoleErrorCount": 0,
+      "pageErrorCount": 0,
+      "emptyStateHorizontalOverflowPx": 0,
+      "perTabGeometry": {
+        "mirror": {
+          "heading": "Chris’s Unmasked Cognitive Mirror",
+          "horizontalOverflowPx": 0
+        },
+        "onet": {
+          "heading": "Chris’s O*NET Natural Path Finder",
+          "horizontalOverflowPx": 0
+        },
+        "equity": {
+          "heading": "Chris’s 5-Year Personal Equity Map",
+          "horizontalOverflowPx": 0
+        },
+        "journal": {
+          "heading": "Chris’s Reflective Sanctuary & Socratic Journal",
+          "horizontalOverflowPx": 0
+        },
+        "vault": {
+          "heading": "Zero-Knowledge Local Vault & Scrubber",
+          "horizontalOverflowPx": 0
+        }
+      }
+    }
+  }
+}

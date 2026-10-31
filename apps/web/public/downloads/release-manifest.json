@@ -1,0 +1,42 @@
+{
+  "productName": "Clearspace",
+  "version": "0.1.0",
+  "releaseDate": "2026-10-30",
+  "identifier": "com.g3zcreative.clearspace",
+  "license": "MIT Open-Core + Auditable Commercial EE",
+  "artifacts": [
+    {
+      "id": "win-nsis",
+      "platform": "Windows 10/11 (x64)",
+      "kind": "NSIS Setup Installer (.exe)",
+      "recommended": true,
+      "filename": "Clearspace_0.1.0_x64-setup.exe",
+      "url": "/downloads/Clearspace_0.1.0_x64-setup.exe",
+      "sizeBytes": 5163707,
+      "sizeFormatted": "4.92 MB",
+      "sha256": "c30c1d370ce2b9fc35b870dec3c7ee704fbeaf272c5a31ada2e1534bd537bfc9"
+    },
+    {
+      "id": "win-msi",
+      "platform": "Windows 10/11 (x64)",
+      "kind": "MSI Windows Installer (.msi)",
+      "recommended": false,
+      "filename": "Clearspace_0.1.0_x64_en-US.msi",
+      "url": "/downloads/Clearspace_0.1.0_x64_en-US.msi",
+      "sizeBytes": 7622656,
+      "sizeFormatted": "7.27 MB",
+      "sha256": "3b649a627e7c1f8de37a7bd481ec462fbfa874e143e8d92dce19d48eb0fc4928"
+    },
+    {
+      "id": "win-portable",
+      "platform": "Windows 10/11 (x64)",
+      "kind": "Standalone Portable Binary (.exe)",
+      "recommended": false,
+      "filename": "Clearspace_0.1.0_x64-portable.exe",
+      "url": "/downloads/Clearspace_0.1.0_x64-portable.exe",
+      "sizeBytes": 25196487,
+      "sizeFormatted": "24.03 MB",
+      "sha256": "ca2a0c331eab77ad102d68dd14508bb34e66e37cd37f43ad362421ca8bc8fc6e"
+    }
+  ]
+}

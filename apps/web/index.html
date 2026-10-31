@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clearspace — The Zero-Knowledge Career &amp; Cognitive Compass</title>
+    <meta
+      name="description"
+      content="Download Clearspace for Windows (x64). 100% local-first, zero-knowledge desktop app (Tauri v2 + Rust + SQLite) that turns your AI prompts into citation-backed career & cognitive insights."
+    />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <!-- Polite Live Region for Clipboard & Download Status Announcements -->
+    <div id="status-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Top Navigation Bar -->
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href="#" class="brand-lockup" aria-label="Clearspace Home">
+          <svg class="brand-icon" width="34" height="34" viewBox="0 0 1024 1024" aria-hidden="true">
+            <rect x="64" y="64" width="896" height="896" rx="220" fill="#2B5B48" />
+            <circle cx="512" cy="512" r="295" stroke="#FAF7F2" stroke-width="34" fill="none" />
+            <path
+              d="M512 190 L580 444 L834 512 L580 580 L512 834 L444 580 L190 512 L444 444 Z"
+              fill="#FAF7F2"
+            />
+            <path
+              d="M512 270 L556 468 L754 512 L556 556 L512 754 L468 556 L270 512 L468 468 Z"
+              fill="#C86D44"
+            />
+            <circle cx="512" cy="512" r="44" fill="#FAF7F2" />
+            <circle cx="512" cy="512" r="20" fill="#2B5B48" />
+          </svg>
+          <span class="brand-name">Clearspace</span>
+          <span class="version-badge" id="nav-version-badge">v0.1.0</span>
+        </a>
+
+        <nav class="site-nav" aria-label="Primary Navigation">
+          <a href="#download-hub">Download</a>
+          <a href="#inside-app">Inside the App</a>
+          <a href="#pii-demo">Live PII Scrubber</a>
+          <a href="/zero-knowledge.html">Zero-Knowledge Proof</a>
+          <a href="/how-ai-works.html">How We Use AI</a>
+        </nav>
+
+        <div class="header-actions">
+          <button
+            type="button"
+            id="theme-toggle-btn"
+            class="btn-ghost"
+            aria-label="Switch color theme (currently System)"
+            title="Cycle theme: System / Light / Dark"
+          >
+            <span id="theme-toggle-label">Theme: Auto</span>
+          </button>
+          <a href="#download-hub" class="btn-primary btn-sm">Download v0.1.0</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <!-- HERO & INTERACTIVE DOWNLOAD HUB -->
+      <section class="hero-section" id="download-hub" aria-labelledby="hero-heading">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <div class="trust-pill">
+              <span class="pulse-dot" aria-hidden="true"></span>
+              <span>100% Local-First Desktop App &bull; Tauri v2 + Rust + SQLite</span>
+            </div>
+
+            <h1 id="hero-heading">
+              Your resume shows who you had to be.
+              <em>Your AI prompts show who you actually are.</em>
+            </h1>
+
+            <p class="hero-lead">
+              Clearspace is a zero-knowledge desktop compass that analyzes your exported AI conversations
+              (ChatGPT, Claude, Google Gemini Takeout, Antigravity, and Markdown journals)
+              <strong>entirely on your local hard drive</strong>. Discover your natural cognitive rhythm,
+              calibrated O*NET 29.x career matches, and a 5-year personal equity roadmap—without ever
+              uploading your raw thoughts to the cloud.
+            </p>
+
+            <!-- Primary Download Hub Card -->
+            <div class="download-hub-card" role="region" aria-label="Clearspace Desktop Installer Downloads">
+              <div class="download-hub-header">
+                <div>
+                  <span class="os-detected-label" id="os-detected-badge">
+                    Detected OS: Windows 10/11 (x64)
+                  </span>
+                  <h2 class="download-card-title">Download Clearspace Desktop</h2>
+                </div>
+                <span class="license-tag">MIT Open-Core &bull; Free Local Vault</span>
+              </div>
+
+              <!-- Direct Download Buttons -->
+              <div class="download-buttons-grid" id="download-buttons-container">
+                <a
+                  href="/downloads/Clearspace_0.1.0_x64-setup.exe"
+                  download="Clearspace_0.1.0_x64-setup.exe"
+                  class="btn-download-primary"
+                  id="btn-download-nsis"
+                  data-artifact-id="win-nsis"
+                >
+                  <span class="btn-download-main">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Download for Windows (x64 Setup .exe)</span>
+                  </span>
+                  <span class="btn-download-meta" id="meta-win-nsis">
+                    Recommended NSIS Installer &bull; v0.1.0
+                  </span>
+                </a>
+
+                <div class="secondary-downloads-row">
+                  <a
+                    href="/downloads/Clearspace_0.1.0_x64_en-US.msi"
+                    download="Clearspace_0.1.0_x64_en-US.msi"
+                    class="btn-download-secondary"
+                    id="btn-download-msi"
+                    data-artifact-id="win-msi"
+                  >
+                    <span>Windows MSI Package (.msi)</span>
+                    <small id="meta-win-msi">Enterprise / Standard MSI</small>
+                  </a>
+
+                  <a
+                    href="/downloads/Clearspace_0.1.0_x64-portable.exe"
+                    download="Clearspace_0.1.0_x64-portable.exe"
+                    class="btn-download-secondary"
+                    id="btn-download-portable"
+                    data-artifact-id="win-portable"
+                  >
+                    <span>Standalone Portable (.exe)</span>
+                    <small id="meta-win-portable">Zero-Install Instant Run</small>
+                  </a>
+                </div>
+              </div>
+
+              <!-- Live Checksum & Verification Bar -->
+              <div class="checksum-box">
+                <div class="checksum-header">
+                  <span class="checksum-title">
+                    SHA-256 Checksum (<code id="active-artifact-filename">Clearspace_0.1.0_x64-setup.exe</code>)
+                  </span>
+                  <div class="checksum-actions">
+                    <button type="button" class="btn-micro" id="btn-copy-sha256">
+                      Copy SHA-256
+                    </button>
+                    <button type="button" class="btn-micro" id="btn-copy-ps-verify">
+                      Copy PowerShell Verify Cmd
+                    </button>
+                    <button type="button" class="btn-micro btn-micro-accent" id="btn-open-install-guide">
+                      Installation &amp; Test Checklist
+                    </button>
+                  </div>
+                </div>
+                <pre class="checksum-code"><code id="active-artifact-sha256">Loading release manifest checksum...</code></pre>
+              </div>
+
+              <div class="download-footer-links">
+                <span>Requires Windows 10/11 (64-bit) with WebView2</span>
+                <span>&bull;</span>
+                <a href="/downloads/SHA256SUMS.txt" download="SHA256SUMS.txt">Download SHA256SUMS.txt</a>
+                <span>&bull;</span>
+                <a href="/downloads/release-manifest.json" target="_blank" rel="noopener">Release Manifest JSON</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Live Interactive Desktop App Window Frame -->
+          <div class="hero-visual">
+            <div class="desktop-window-frame" aria-label="Clearspace Desktop Application Preview">
+              <div class="window-titlebar">
+                <div class="window-dots" aria-hidden="true">
+                  <span class="dot dot-close"></span>
+                  <span class="dot dot-min"></span>
+                  <span class="dot dot-max"></span>
+                </div>
+                <div class="window-title-text">
+                  Clearspace — Zero-Knowledge Career &amp; Cognitive Compass
+                </div>
+                <div class="window-badge">LOCAL SQLITE</div>
+              </div>
+
+              <div class="window-body">
+                <!-- Mini Sidebar -->
+                <aside class="mock-sidebar" aria-label="Preview Sidebar">
+                  <div class="mock-brand">
+                    <strong>Clearspace</strong>
+                    <span>Zero-Knowledge Vault</span>
+                  </div>
+                  <div class="mock-pill">100% Local SQLite + PII Scrubber</div>
+                  <ul class="mock-nav-list">
+                    <li class="active">1. Cognitive Mirror</li>
+                    <li>2. O*NET Career Compass</li>
+                    <li>3. 5-Year Equity Tree</li>
+                    <li>4. Socratic /grill-me</li>
+                    <li>5. Local SQLite Vault</li>
+                  </ul>
+                  <div class="mock-stats">
+                    <div>
+                      <small>SCRUBBED PROMPTS</small>
+                      <strong>1,428</strong>
+                    </div>
+                    <div>
+                      <small>HIGH-SIGNAL RATIO</small>
+                      <strong>89.4%</strong>
+                    </div>
+                  </div>
+                </aside>
+
+                <!-- Mini Main Content -->
+                <div class="mock-main">
+                  <div class="mock-top-row">
+                    <div>
+                      <span class="mock-eyebrow">CITATION-BACKED SYNTHESIS</span>
+                      <h3>Cognitive Mirror &amp; Flow Architecture</h3>
+                    </div>
+                    <span class="mock-tier-badge">Tier 4: Systems Architect</span>
+                  </div>
+
+                  <div class="mock-cards-grid">
+                    <article class="mock-insight-card">
+                      <div class="mock-card-head">
+                        <span class="badge-sage">Superpower</span>
+                        <span class="conf-score">96% Evidence Match</span>
+                      </div>
+                      <h4>First-Principles Systems &amp; Telemetry Calibration</h4>
+                      <p>
+                        Consistently replaces brittle manual scripts with deterministic pipelines,
+                        self-correcting feedback loops, and unit-economics instrumentation.
+                      </p>
+                      <blockquote class="mock-citation">
+                        “Calculate target values from first principles rather than guessing across
+                        multiple iterations…”
+                      </blockquote>
+                    </article>
+
+                    <article class="mock-insight-card">
+                      <div class="mock-card-head">
+                        <span class="badge-terracotta">O*NET 29.x Top Match</span>
+                        <span class="conf-score">94.2% Fit</span>
+                      </div>
+                      <h4>Staff AI Systems &amp; Developer Platform Architect</h4>
+                      <div class="mock-bars">
+                        <div class="mock-bar-row">
+                          <span>Systems Architecture</span>
+                          <div class="mock-bar-track"><div class="mock-bar-fill" style="inline-size: 95%"></div></div>
+                          <strong>95%</strong>
+                        </div>
+                        <div class="mock-bar-row">
+                          <span>AI Orchestration</span>
+                          <div class="mock-bar-track"><div class="mock-bar-fill" style="inline-size: 92%"></div></div>
+                          <strong>92%</strong>
+                        </div>
+                        <div class="mock-bar-row">
+                          <span>Strategic Leverage</span>
+                          <div class="mock-bar-track"><div class="mock-bar-fill" style="inline-size: 89%"></div></div>
+                          <strong>89%</strong>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+
+                  <div class="mock-rhythm-strip">
+                    <div class="mock-rhythm-info">
+                      <small>PEAK 4-HOUR DEEP FLOW WINDOW</small>
+                      <strong>8:00 PM – 12:00 AM</strong>
+                      <span>42% of architectural prompts occur in this window</span>
+                    </div>
+                    <div class="mock-heatmap-bars" aria-hidden="true">
+                      <span style="block-size: 22%"></span>
+                      <span style="block-size: 35%"></span>
+                      <span style="block-size: 48%"></span>
+                      <span style="block-size: 62%"></span>
+                      <span style="block-size: 54%"></span>
+                      <span style="block-size: 40%"></span>
+                      <span style="block-size: 78%"></span>
+                      <span style="block-size: 96%" class="peak"></span>
+                      <span style="block-size: 100%" class="peak"></span>
+                      <span style="block-size: 84%" class="peak"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3-STEP HOW TO TEST DOWNLOAD & INSTALLATION BANNER -->
+      <section class="quickstart-strip" aria-labelledby="quickstart-heading">
+        <div class="container">
+          <div class="quickstart-header">
+            <h2 id="quickstart-heading">Test Downloading &amp; Installing Clearspace in 60 Seconds</h2>
+            <p>
+              Built for rapid local verification—no account signup, no API key required, and zero cloud
+              dependencies.
+            </p>
+          </div>
+          <ol class="quickstart-steps">
+            <li class="step-card">
+              <span class="step-num">01</span>
+              <div>
+                <h3>Download the Installer</h3>
+                <p>
+                  Click <strong>Download for Windows (.exe)</strong> or <strong>(.msi)</strong> above.
+                  Verify the binary anytime using the live SHA-256 hash.
+                </p>
+              </div>
+            </li>
+            <li class="step-card">
+              <span class="step-num">02</span>
+              <div>
+                <h3>Run Setup or Portable App</h3>
+                <p>
+                  Run <code>Clearspace_0.1.0_x64-setup.exe</code> to install to
+                  <code>%LOCALAPPDATA%\Programs\Clearspace</code> with Start Menu &amp; Desktop shortcuts, or launch the Portable binary directly.
+                </p>
+              </div>
+            </li>
+            <li class="step-card">
+              <span class="step-num">03</span>
+              <div>
+                <h3>Explore Onboarding &amp; Sample Vault</h3>
+                <p>
+                  On first launch, test the <strong>New-User Onboarding</strong> flow: click
+                  <em>“Load Multi-Provider Sample Vault”</em> or drag-and-drop your own ChatGPT / Claude / Gemini JSON exports.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- INTERACTIVE 5-TAB FEATURE PREVIEW ("INSIDE THE APP") -->
+      <section class="features-section" id="inside-app" aria-labelledby="inside-heading">
+        <div class="container">
+          <div class="section-header">
+            <span class="eyebrow">FIVE INTEGRATED MODULES</span>
+            <h2 id="inside-heading">Inside the Clearspace Desktop Experience</h2>
+            <p>
+              Explore how Clearspace transforms raw multi-provider prompt archives into structured
+              self-knowledge and long-term career equity.
+            </p>
+          </div>
+
+          <div
+            class="feature-tabs"
+            role="tablist"
+            aria-label="Clearspace Desktop Modules"
+            id="feature-tablist"
+          >
+            <button
+              type="button"
+              role="tab"
+              id="tab-btn-mirror"
+              aria-selected="true"
+              aria-controls="panel-mirror"
+              tabindex="0"
+              class="feature-tab-btn active"
+              data-tab="mirror"
+            >
+              1. Cognitive Mirror
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-btn-onet"
+              aria-selected="false"
+              aria-controls="panel-onet"
+              tabindex="-1"
+              class="feature-tab-btn"
+              data-tab="onet"
+            >
+              2. O*NET 29.x Compass
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-btn-equity"
+              aria-selected="false"
+              aria-controls="panel-equity"
+              tabindex="-1"
+              class="feature-tab-btn"
+              data-tab="equity"
+            >
+              3. 5-Year Equity Tree
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-btn-journal"
+              aria-selected="false"
+              aria-controls="panel-journal"
+              tabindex="-1"
+              class="feature-tab-btn"
+              data-tab="journal"
+            >
+              4. Socratic /grill-me
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-btn-vault"
+              aria-selected="false"
+              aria-controls="panel-vault"
+              tabindex="-1"
+              class="feature-tab-btn"
+              data-tab="vault"
+            >
+              5. Local SQLite Vault
+            </button>
+          </div>
+
+          <div class="feature-panels">
+            <!-- Panel 1: Mirror -->
+            <div
+              role="tabpanel"
+              id="panel-mirror"
+              aria-labelledby="tab-btn-mirror"
+              class="feature-panel"
+            >
+              <div class="panel-grid">
+                <div class="panel-info">
+                  <span class="panel-badge">crates/prompt-parsers + ee/mirror-synthesizer</span>
+                  <h3>Citation-Backed Superpowers, Values &amp; Burnout Triggers</h3>
+                  <p>
+                    Unlike generic personality quizzes, every insight card in Clearspace is anchored
+                    to timestamped quotes from your own prompt history, classified across four skill
+                    tiers (from Exploratory Prompting to Principal Systems Architecture).
+                  </p>
+                  <ul class="feature-checklist">
+                    <li>
+                      <strong>365-Day &amp; 24-Hour Cognitive Rhythm Grid:</strong> Pinpoints your
+                      exact 4-hour deep-flow window and weekly problem-solving cadence.
+                    </li>
+                    <li>
+                      <strong>Assumption &amp; Gap Auditing:</strong> Surfaces where you under-index
+                      your architectural skills as “just execution.”
+                    </li>
+                    <li>
+                      <strong>Multi-Provider Synthesis:</strong> Merges signals across OpenAI ChatGPT,
+                      Anthropic Claude, Google Gemini Takeout, Antigravity, and Markdown notes.
+                    </li>
+                  </ul>
+                </div>
+                <div class="panel-preview-card">
+                  <div class="preview-card-header">
+                    <span>Mirror Insight Specimen</span>
+                    <span class="pill-sage">95% Confidence</span>
+                  </div>
+                  <h4>Cybernetic &amp; Homeostatic System Design</h4>
+                  <p>
+                    Your prompt corpus shows a strong preference for self-correcting feedback loops,
+                    deterministic invariants, and centralized configuration over ad-hoc manual patches.
+                  </p>
+                  <div class="preview-meta-grid">
+                    <div>
+                      <small>Assessed Skill Tier</small>
+                      <strong>Tier 4 — Principal / Staff Architect</strong>
+                    </div>
+                    <div>
+                      <small>Identified Blindspot</small>
+                      <strong>Packaging internal tools into public proof-of-work</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 2: O*NET -->
+            <div
+              role="tabpanel"
+              id="panel-onet"
+              aria-labelledby="tab-btn-onet"
+              class="feature-panel"
+              hidden
+            >
+              <div class="panel-grid">
+                <div class="panel-info">
+                  <span class="panel-badge">crates/onet-engine</span>
+                  <h3>Calibrated O*NET 29.x + Modern AI Role Matcher</h3>
+                  <p>
+                    Powered by our deterministic Rust scoring engine (`crates/onet-engine`), Clearspace
+                    evaluates your scrubbed prompt vocabulary against O*NET 29.x occupational vectors
+                    and modern AI/platform engineering roles—with zero artificial score floors.
+                  </p>
+                  <ul class="feature-checklist">
+                    <li>
+                      <strong>4-Dimensional Sub-Metric Breakdown:</strong> Technical Depth (35%), AI &amp;
+                      Automation Leverage (25%), Strategic &amp; Economic Framing (20%), and Analytical
+                      Rigor (20%).
+                    </li>
+                    <li>
+                      <strong>Compensation &amp; Autonomy Banding:</strong> Maps each matched role to
+                      realistic market positioning and 5-year compounding potential.
+                    </li>
+                    <li>
+                      <strong>Evidence-Linked Rationale:</strong> Explains why your specific problem-solving
+                      patterns fit (or clash with) each career track.
+                    </li>
+                  </ul>
+                </div>
+                <div class="panel-preview-card">
+                  <div class="preview-card-header">
+                    <span>O*NET Role Match #1 (15-1299.08)</span>
+                    <span class="pill-sage">94.2% Calibrated Fit</span>
+                  </div>
+                  <h4>AI Workflow &amp; Systems Architecture Lead</h4>
+                  <p>
+                    High density of architectural synthesis, telemetry calibration, and multi-agent
+                    verification patterns across 1,400+ local prompts.
+                  </p>
+                  <div class="preview-meta-grid">
+                    <div>
+                      <small>Formula Weighting</small>
+                      <strong>0.35 Tech + 0.25 AI + 0.20 Strategy + 0.20 Rigor</strong>
+                    </div>
+                    <div>
+                      <small>Empty-Vault Floor</small>
+                      <strong>0.0% (True Zero-Baseline Calibration)</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 3: 5-Year Equity Tree -->
+            <div
+              role="tabpanel"
+              id="panel-equity"
+              aria-labelledby="tab-btn-equity"
+              class="feature-panel"
+              hidden
+            >
+              <div class="panel-grid">
+                <div class="panel-info">
+                  <span class="panel-badge">ee/trajectory-5yr</span>
+                  <h3>Interactive 5-Year Personal Equity Tree</h3>
+                  <p>
+                    Stop trading hours for linear maintenance. The 5-Year Equity Tree converts your
+                    cognitive strengths into concrete, checkable quests across four compounding
+                    horizons.
+                  </p>
+                  <ul class="feature-checklist">
+                    <li>
+                      <strong>4 Time Horizons:</strong> Now (30 Days), Year 1 Milestone, Year 3
+                      Milestone, and Year 5 Autonomy Horizon.
+                    </li>
+                    <li>
+                      <strong>4 Equity Categories:</strong> Positioning Clarity, Mastered
+                      Proof-of-Work, Pitfall Immunity, and Compounding Distribution.
+                    </li>
+                    <li>
+                      <strong>Persistent SQLite Quest State:</strong> Accept and complete quests
+                      locally to track your compounding career equity score over time.
+                    </li>
+                  </ul>
+                </div>
+                <div class="panel-preview-card">
+                  <div class="preview-card-header">
+                    <span>Horizon: Now (30 Days)</span>
+                    <span class="pill-terracotta">+250 Equity Pts</span>
+                  </div>
+                  <h4>Enforce a 3-Pillar Cognitive Focus Rule</h4>
+                  <p>
+                    Commit to 1 Core Anchor Role, 1 Compounding Engine, and 1 Deep-Flow Lab to
+                    eliminate context-switching drag across fragmented side projects.
+                  </p>
+                  <div class="preview-meta-grid">
+                    <div>
+                      <small>Category</small>
+                      <strong>Pitfall Immunity</strong>
+                    </div>
+                    <div>
+                      <small>Persistence</small>
+                      <strong>Saved in local SQLite `equity_quests` table</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 4: Socratic Journal -->
+            <div
+              role="tabpanel"
+              id="panel-journal"
+              aria-labelledby="tab-btn-journal"
+              class="feature-panel"
+              hidden
+            >
+              <div class="panel-grid">
+                <div class="panel-info">
+                  <span class="panel-badge">ee/journal-coach</span>
+                  <h3>Socratic <code>/grill-me</code> Reflective Coach</h3>
+                  <p>
+                    High-leverage career decisions require honest self-interrogation. Clearspace pairs
+                    Socratic reflection prompts with your real historical behavior so you can spot
+                    energy leaks before they turn into burnout.
+                  </p>
+                  <ul class="feature-checklist">
+                    <li>
+                      <strong>Targeted Socratic Questions:</strong> Challenges where you undersell
+                      architectural leverage or get trapped in low-leverage maintenance.
+                    </li>
+                    <li>
+                      <strong>Mood &amp; Energy Valence Tagging:</strong> Track Deep Flow, Energized,
+                      Neutral, or Drained states alongside every entry.
+                    </li>
+                    <li>
+                      <strong>100% Private Local Storage:</strong> Every journal entry stays inside
+                      your local `clearspace.db` SQLite vault.
+                    </li>
+                  </ul>
+                </div>
+                <div class="panel-preview-card">
+                  <div class="preview-card-header">
+                    <span>Socratic Prompt #3</span>
+                    <span class="pill-sage">Deep Flow Tagged</span>
+                  </div>
+                  <h4>
+                    “Where are you currently underselling your systems architecture as ‘just execution’
+                    instead of strategic unit-economics leverage?”
+                  </h4>
+                  <p>
+                    Reflect directly in the app and link your answers to your 30-day positioning
+                    milestones.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 5: Local SQLite Vault -->
+            <div
+              role="tabpanel"
+              id="panel-vault"
+              aria-labelledby="tab-btn-vault"
+              class="feature-panel"
+              hidden
+            >
+              <div class="panel-grid">
+                <div class="panel-info">
+                  <span class="panel-badge">crates/pii-scrubber + rusqlite</span>
+                  <h3>Additive Multi-Provider SQLite Vault &amp; Auditor</h3>
+                  <p>
+                    Import exports from OpenAI ChatGPT (`conversations.json`), Anthropic Claude,
+                    Google Gemini Takeout, Antigravity brain logs, or Markdown folders. Imports merge
+                    non-destructively with automatic deduplication.
+                  </p>
+                  <ul class="feature-checklist">
+                    <li>
+                      <strong>Instant Search &amp; Source/Category Filtering:</strong> Filter your
+                      scrubbed prompts by provider or cognitive signal category in under 16ms.
+                    </li>
+                    <li>
+                      <strong>Noise &amp; Code-Dump Filtering:</strong> Automatically filters raw log
+                      dumps and giant stack traces so only genuine human intent is scored.
+                    </li>
+                    <li>
+                      <strong>One-Click Vault Reset:</strong> Clear and re-test the New-User Onboarding
+                      flow anytime with a single button click.
+                    </li>
+                  </ul>
+                </div>
+                <div class="panel-preview-card">
+                  <div class="preview-card-header">
+                    <span>Local SQLite Engine</span>
+                    <span class="pill-sage">&lt; 150ms / 1,000 Prompts</span>
+                  </div>
+                  <h4>Non-Destructive Additive Persistence</h4>
+                  <p>
+                    Drop multiple provider archives in a single batch or incrementally over months—your
+                    existing vault insights, quests, and journals are preserved.
+                  </p>
+                  <div class="preview-meta-grid">
+                    <div>
+                      <small>Database Engine</small>
+                      <strong>Embedded SQLite (`rusqlite` bundled)</strong>
+                    </div>
+                    <div>
+                      <small>Network Calls Required</small>
+                      <strong>0 (Runs 100% Offline)</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INTERACTIVE LIVE PII SCRUBBER SANDBOX -->
+      <section class="scrubber-section" id="pii-demo" aria-labelledby="scrubber-heading">
+        <div class="container">
+          <div class="section-header">
+            <span class="eyebrow">TRY THE ENGINE IN YOUR BROWSER</span>
+            <h2 id="scrubber-heading">Interactive PII &amp; Secret Scrubber Sandbox</h2>
+            <p>
+              Before any prompt touches your local SQLite database, Clearspace’s open-source
+              <code>crates/pii-scrubber</code> strips emails, API keys, bearer tokens, local file
+              paths, phone numbers, and SSNs. Test it live below:
+            </p>
+          </div>
+
+          <div class="scrubber-presets">
+            <span>Load test prompt:</span>
+            <button type="button" class="btn-chip active" data-preset="secrets">
+              API Keys &amp; Local Paths
+            </button>
+            <button type="button" class="btn-chip" data-preset="contact">
+              Emails, Phones &amp; SSN
+            </button>
+            <button type="button" class="btn-chip" data-preset="architecture">
+              High-Signal Architecture Prompt
+            </button>
+          </div>
+
+          <div class="scrubber-workbench">
+            <div class="scrubber-pane">
+              <label for="raw-prompt-input" class="pane-label">
+                <span>1. Raw Unfiltered Prompt Input</span>
+                <span class="pane-sub">Editable — type or paste any text</span>
+              </label>
+              <textarea
+                id="raw-prompt-input"
+                rows="6"
+                spellcheck="false"
+              >Can you help me refactor the auth worker at C:\Users\jane\projects\acme-vault\src\auth.rs? My test OpenAI key is sk-proj-98a7b6c5d4e3f2a1b2c3d4e5f6a7b8c9 and my email is jane.doe@example.com. I want to design a zero-knowledge token rotation system that cuts p99 latency by 40%.</textarea>
+            </div>
+
+            <div class="scrubber-pane">
+              <div class="pane-label">
+                <span>2. Deterministically Scrubbed Output</span>
+                <span class="pane-sub" id="scrubber-stats-badge">3 PII / Secret tokens redacted</span>
+              </div>
+              <pre class="scrubbed-output" id="scrubbed-prompt-output" aria-live="polite"></pre>
+              <div class="scrubber-signal-bar">
+                <div>
+                  <small>CLASSIFIED SKILL TIER</small>
+                  <strong id="scrubber-tier-output">Tier 4: Systems Architecture &amp; Tradeoffs</strong>
+                </div>
+                <div>
+                  <small>PRIVACY GUARANTEE</small>
+                  <strong>Executed 100% Locally in &lt; 1ms</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RADICAL TRANSPARENCY & ZERO-KNOWLEDGE ARCHITECTURE -->
+      <section class="architecture-section" id="zero-knowledge" aria-labelledby="arch-heading">
+        <div class="container">
+          <div class="section-header">
+            <span class="eyebrow">RADICAL TRANSPARENCY PROMISE</span>
+            <h2 id="arch-heading">Why Local-First Zero-Knowledge Matters</h2>
+            <p>
+              Your AI prompt history is the most honest intellectual diary you have ever written. It
+              belongs on your machine—never in a third-party marketing database.
+            </p>
+          </div>
+
+          <div class="arch-grid">
+            <article class="arch-card">
+              <div class="arch-card-kicker">01 &bull; OPEN-SOURCE INGESTION</div>
+              <h3>Auditable MIT Rust Crates</h3>
+              <p>
+                Every line of code that reads local files (`crates/prompt-parsers`), scrubs sensitive
+                identifiers (`crates/pii-scrubber`), or scores O*NET career matches
+                (`crates/onet-engine`) is MIT-licensed and inspectable in this repository.
+              </p>
+            </article>
+
+            <article class="arch-card">
+              <div class="arch-card-kicker">02 &bull; LOCAL SQLITE VAULT</div>
+              <h3>Your Database Lives on Your Drive</h3>
+              <p>
+                Clearspace stores your scrubbed insights, quests, and Socratic reflections in a local
+                SQLite file (`clearspace.db`). Delete or reset your vault with one click inside the
+                desktop app at any time.
+              </p>
+            </article>
+
+            <article class="arch-card">
+              <div class="arch-card-kicker">03 &bull; ZERO TELEMETRY</div>
+              <h3>Works 100% Offline—Air-Gap Ready</h3>
+              <p>
+                Disconnect from Wi-Fi before launching Clearspace: every parser, PII scrubber,
+                Cognitive Mirror synthesizer, and O*NET 29.x role matcher runs natively in compiled
+                Rust with zero external network calls.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- SYSTEM REQUIREMENTS & RELEASE ARTIFACT TABLE -->
+      <section class="specs-section" id="system-specs" aria-labelledby="specs-heading">
+        <div class="container">
+          <div class="section-header">
+            <span class="eyebrow">TECHNICAL SPECIFICATIONS &amp; ARTIFACTS</span>
+            <h2 id="specs-heading">Release v0.1.0 Build Matrix &amp; System Requirements</h2>
+            <p>
+              Select any installer package below to test downloading and installing Clearspace on your
+              workstation.
+            </p>
+          </div>
+
+          <div class="specs-table-wrapper">
+            <table class="specs-table">
+              <thead>
+                <tr>
+                  <th scope="col">Package Type</th>
+                  <th scope="col">Filename</th>
+                  <th scope="col">Size</th>
+                  <th scope="col">SHA-256 Checksum</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody id="release-table-body">
+                <tr>
+                  <td><strong>Windows NSIS Installer (Recommended)</strong></td>
+                  <td><code>Clearspace_0.1.0_x64-setup.exe</code></td>
+                  <td id="table-size-nsis">~4.5 MB</td>
+                  <td><code class="hash-cell" id="table-hash-nsis">Verifying...</code></td>
+                  <td>
+                    <a
+                      href="/downloads/Clearspace_0.1.0_x64-setup.exe"
+                      download="Clearspace_0.1.0_x64-setup.exe"
+                      class="table-dl-link"
+                      data-artifact-id="win-nsis"
+                    >
+                      Download .exe
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Windows MSI Installer</strong></td>
+                  <td><code>Clearspace_0.1.0_x64_en-US.msi</code></td>
+                  <td id="table-size-msi">~6.2 MB</td>
+                  <td><code class="hash-cell" id="table-hash-msi">Verifying...</code></td>
+                  <td>
+                    <a
+                      href="/downloads/Clearspace_0.1.0_x64_en-US.msi"
+                      download="Clearspace_0.1.0_x64_en-US.msi"
+                      class="table-dl-link"
+                      data-artifact-id="win-msi"
+                    >
+                      Download .msi
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Windows Portable Executable</strong></td>
+                  <td><code>Clearspace_0.1.0_x64-portable.exe</code></td>
+                  <td id="table-size-portable">~9.8 MB</td>
+                  <td><code class="hash-cell" id="table-hash-portable">Verifying...</code></td>
+                  <td>
+                    <a
+                      href="/downloads/Clearspace_0.1.0_x64-portable.exe"
+                      download="Clearspace_0.1.0_x64-portable.exe"
+                      class="table-dl-link"
+                      data-artifact-id="win-portable"
+                    >
+                      Download Portable
+                    </a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="sys-req-grid">
+            <div class="sys-req-card">
+              <h3>Minimum System Requirements</h3>
+              <ul>
+                <li><strong>OS:</strong> Windows 10 (1809+) or Windows 11 (x64)</li>
+                <li><strong>Runtime:</strong> Microsoft Edge WebView2 (pre-installed on Windows 10/11)</li>
+                <li><strong>Memory &amp; Disk:</strong> 120 MB RAM, 25 MB free disk space</li>
+                <li><strong>Network:</strong> None required (100% offline local execution)</li>
+              </ul>
+            </div>
+            <div class="sys-req-card">
+              <h3>Supported AI Export Formats</h3>
+              <ul>
+                <li><strong>OpenAI ChatGPT:</strong> <code>conversations.json</code> data export</li>
+                <li><strong>Anthropic Claude:</strong> <code>conversations.json</code> archive</li>
+                <li><strong>Google Gemini Takeout:</strong> MyActivity / Gemini JSON exports</li>
+                <li><strong>Markdown &amp; Local Logs:</strong> <code>.md</code>, <code>.txt</code>, <code>.jsonl</code></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div>
+          <strong>Clearspace v0.1.0</strong> — The Zero-Knowledge Career &amp; Cognitive Compass
+          <p class="footer-sub">
+            Built with Tauri v2, Rust, React 19, and SQLite. Core parsers, PII scrubber, and O*NET
+            engine licensed under MIT.
+          </p>
+        </div>
+        <div class="footer-links">
+          <a href="#download-hub">Download Installer</a>
+          <a href="/zero-knowledge.html">Zero-Knowledge Proof</a>
+          <a href="/how-ai-works.html">How We Use AI</a>
+          <a href="/downloads/SHA256SUMS.txt" download="SHA256SUMS.txt">SHA256SUMS.txt</a>
+          <a href="/downloads/release-manifest.json" target="_blank" rel="noopener">Manifest JSON</a>
+        </div>
+      </div>
+    </footer>
+
+    <!-- NATIVE MODAL DIALOG: POST-DOWNLOAD INSTALLATION & TESTING CHECKLIST -->
+    <dialog id="install-guide-dialog" class="install-dialog" aria-labelledby="install-dialog-title">
+      <div class="dialog-content">
+        <div class="dialog-header">
+          <div>
+            <span class="eyebrow" id="dialog-status-eyebrow">DOWNLOAD READY FOR TESTING</span>
+            <h2 id="install-dialog-title">Installation &amp; First-Run Verification Guide</h2>
+          </div>
+          <button
+            type="button"
+            class="btn-close-dialog"
+            id="btn-close-dialog"
+            aria-label="Close installation guide"
+          >
+            &times;
+          </button>
+        </div>
+
+        <p class="dialog-intro" id="dialog-download-summary">
+          Your download of <code id="dialog-filename">Clearspace_0.1.0_x64-setup.exe</code> has
+          started. Follow these steps to verify, install, and test the desktop application:
+        </p>
+
+        <ol class="dialog-steps">
+          <li>
+            <strong>1. Verify SHA-256 Checksum (Optional PowerShell Check)</strong>
+            <p>Open PowerShell in your Downloads folder and run:</p>
+            <div class="cmd-block">
+              <code id="dialog-ps-cmd">Get-FileHash .\Clearspace_0.1.0_x64-setup.exe -Algorithm SHA256</code>
+              <button type="button" class="btn-micro" id="btn-dialog-copy-cmd">Copy</button>
+            </div>
+          </li>
+          <li>
+            <strong>2. Run the Installer or Portable Binary</strong>
+            <p>
+              Double-click the downloaded file. Because this is a local unsigned developer build
+              (<code>v0.1.0</code>), if Windows SmartScreen appears, click
+              <strong>More info &rarr; Run anyway</strong> to complete the local installation.
+            </p>
+          </li>
+          <li>
+            <strong>3. Test the New-User Onboarding &amp; Local Vault</strong>
+            <p>
+              Once Clearspace opens, click <strong>“Load Multi-Provider Sample Vault”</strong> to
+              immediately populate all 5 tabs (Cognitive Mirror, O*NET Compass, 5-Year Equity Tree,
+              Socratic Journal, and Local Vault), or import your own AI export files!
+            </p>
+          </li>
+        </ol>
+
+        <div class="dialog-footer">
+          <button type="button" class="btn-primary" id="btn-dialog-done">
+            Got It — Ready to Test
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

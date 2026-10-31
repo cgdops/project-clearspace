@@ -23,6 +23,8 @@ struct AppState {
 pub struct MirrorInsightCard {
     pub id: String,
     pub category: String, // "Superpower", "Core Value", "Burnout Trigger", "Cognitive Rhythm"
+    pub story_chapter: String, // "excel", "grow", "friction"
+    pub story_chapter_title: String,
     pub title: String,
     pub summary: String,
     pub confidence_pct: u8,
@@ -31,6 +33,27 @@ pub struct MirrorInsightCard {
     pub assessed_tier: String,
     pub assumption_challenged: String,
     pub identified_gap: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserProfile {
+    pub name: String,
+    pub avatar_data_url: Option<String>,
+    pub theme_mode: String, // "light" or "dark"
+    pub mirror_story_completed: bool,
+    pub shortlisted_onet_codes: Vec<String>,
+}
+
+impl Default for UserProfile {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            avatar_data_url: None,
+            theme_mode: "light".to_string(),
+            mirror_story_completed: false,
+            shortlisted_onet_codes: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +87,7 @@ pub struct JournalEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultDashboardPayload {
     pub db_path: String,
+    pub profile: UserProfile,
     pub summary: IngestionSummary,
     pub mirror_cards: Vec<MirrorInsightCard>,
     pub onet_matches: Vec<RoleMatchResult>,
@@ -203,8 +227,23 @@ fn init_sqlite_schema(conn: &Connection) -> rusqlite::Result<()> {
             card_id TEXT PRIMARY KEY,
             pinned INTEGER NOT NULL DEFAULT 1
         );
+
+        CREATE TABLE IF NOT EXISTS user_profile (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            name TEXT NOT NULL DEFAULT '',
+            avatar_data_url TEXT,
+            theme_mode TEXT NOT NULL DEFAULT 'light',
+            mirror_story_completed INTEGER NOT NULL DEFAULT 0,
+            shortlisted_onet_codes_json TEXT NOT NULL DEFAULT '[]'
+        );
         ",
     )?;
+
+    let _ = conn.execute(
+        "INSERT OR IGNORE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json)
+         VALUES (1, '', NULL, 'light', 0, '[]')",
+        [],
+    );
 
     seed_or_migrate_quests(conn)?;
     Ok(())
@@ -348,6 +387,8 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
         MirrorInsightCard {
             id: "card-tool-builder".to_string(),
             category: "Superpower".to_string(),
+            story_chapter: "excel".to_string(),
+            story_chapter_title: "1. Where You Currently Excel".to_string(),
             title: "The 'Bottleneck → Build the System' Reflex".to_string(),
             summary: format!(
                 "Detected in {} of {} prompts ({} Beginner / {} Intermediate / {} Advanced across vault): when you encounter manual overhead, evaluate whether you are designing durable systems or just scripting one-off patches.",
@@ -376,6 +417,8 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
         MirrorInsightCard {
             id: "card-bilingual-empathy".to_string(),
             category: "Superpower".to_string(),
+            story_chapter: "excel".to_string(),
+            story_chapter_title: "1. Where You Currently Excel".to_string(),
             title: "Bilingual Translation: Systems Depth → Clear Human Value".to_string(),
             summary: format!(
                 "Identified across {} of {} prompts: measures how consistently you connect backend engineering decisions to user clarity, positioning, and measurable unit economics.",
@@ -399,6 +442,8 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
         MirrorInsightCard {
             id: "card-values-anchor".to_string(),
             category: "Core Value".to_string(),
+            story_chapter: "grow".to_string(),
+            story_chapter_title: "2. Where We Think You Could Grow".to_string(),
             title: "Autonomy, Sustainable Stability & High-Leverage Ownership".to_string(),
             summary: format!(
                 "Synthesized from {} value-signal prompt(s): tracks whether your daily technical work actually compounds toward household stability and autonomy.",
@@ -418,6 +463,8 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
         MirrorInsightCard {
             id: "card-burnout-trigger".to_string(),
             category: "Burnout Trigger".to_string(),
+            story_chapter: "friction".to_string(),
+            story_chapter_title: "3. What Is Causing You Friction".to_string(),
             title: "The Repetitive Manual Maintenance Trap".to_string(),
             summary: format!(
                 "Detected {} friction signal(s): tracks where repetitive hand-maintenance, boilerplate, or fragmented context-switching drains your cognitive output.",
@@ -440,6 +487,8 @@ fn build_mirror_cards(prompts: &[NormalizedPrompt]) -> Vec<MirrorInsightCard> {
         MirrorInsightCard {
             id: "card-grill-me".to_string(),
             category: "Cognitive Rhythm".to_string(),
+            story_chapter: "grow".to_string(),
+            story_chapter_title: "2. Where We Think You Could Grow".to_string(),
             title: format!("First-Principles Truth-Seeking & {} Deep Flow", peak_window),
             summary: format!(
                 "With {}% of timestamped prompts in {} and {} skeptical inquiry signal(s), evaluates whether you actively challenge your own assumptions before building.",
@@ -566,7 +615,54 @@ fn load_journals(conn: &Connection) -> Vec<JournalEntry> {
     rows.filter_map(|r| r.ok()).collect()
 }
 
+fn load_user_profile(conn: &Connection) -> UserProfile {
+    conn.query_row(
+        "SELECT name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json
+         FROM user_profile WHERE id = 1",
+        [],
+        |row| {
+            let name: String = row.get(0)?;
+            let avatar_data_url: Option<String> = row.get(1)?;
+            let theme_mode: String = row.get(2)?;
+            let mirror_story_completed: i64 = row.get(3)?;
+            let codes_json: String = row.get(4)?;
+            let shortlisted_onet_codes: Vec<String> =
+                serde_json::from_str(&codes_json).unwrap_or_default();
+            Ok(UserProfile {
+                name,
+                avatar_data_url,
+                theme_mode: if theme_mode == "dark" {
+                    "dark".to_string()
+                } else {
+                    "light".to_string()
+                },
+                mirror_story_completed: mirror_story_completed != 0,
+                shortlisted_onet_codes,
+            })
+        },
+    )
+    .unwrap_or_default()
+}
+
+fn save_user_profile_to_sqlite(conn: &Connection, profile: &UserProfile) -> rusqlite::Result<()> {
+    let codes_json =
+        serde_json::to_string(&profile.shortlisted_onet_codes).unwrap_or_else(|_| "[]".into());
+    conn.execute(
+        "INSERT OR REPLACE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5)",
+        params![
+            profile.name.trim(),
+            profile.avatar_data_url,
+            if profile.theme_mode == "dark" { "dark" } else { "light" },
+            if profile.mirror_story_completed { 1 } else { 0 },
+            codes_json,
+        ],
+    )?;
+    Ok(())
+}
+
 fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashboardPayload {
+    let profile = load_user_profile(conn);
     let prompts = load_prompts_from_sqlite(conn);
     let summary = summarize_persisted_prompts(&prompts);
     let mirror_cards = build_mirror_cards(&prompts);
@@ -582,6 +678,7 @@ fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashbo
 
     VaultDashboardPayload {
         db_path: db_path.to_string_lossy().to_string(),
+        profile,
         summary,
         mirror_cards,
         onet_matches,
@@ -595,6 +692,16 @@ fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashbo
 fn get_vault_dashboard(state: State<AppState>) -> Result<VaultDashboardPayload, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     Ok(build_dashboard_from_sqlite(&conn, &state.db_path))
+}
+
+#[tauri::command]
+fn update_user_profile(
+    profile: UserProfile,
+    state: State<AppState>,
+) -> Result<UserProfile, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    save_user_profile_to_sqlite(&conn, &profile).map_err(|e| e.to_string())?;
+    Ok(load_user_profile(&conn))
 }
 
 #[tauri::command]
@@ -630,6 +737,23 @@ fn reset_local_vault(state: State<AppState>) -> Result<VaultDashboardPayload, St
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let _ = conn.execute("DELETE FROM prompts", []);
     let _ = conn.execute("UPDATE quests SET accepted = 0, completed = 0", []);
+    let _ = conn.execute(
+        "UPDATE user_profile SET mirror_story_completed = 0, shortlisted_onet_codes_json = '[]' WHERE id = 1",
+        [],
+    );
+    Ok(build_dashboard_from_sqlite(&conn, &state.db_path))
+}
+
+#[tauri::command]
+fn reset_full_factory(state: State<AppState>) -> Result<VaultDashboardPayload, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let _ = conn.execute("DELETE FROM prompts", []);
+    let _ = conn.execute("DELETE FROM journals", []);
+    let _ = conn.execute("UPDATE quests SET accepted = 0, completed = 0", []);
+    let _ = conn.execute(
+        "UPDATE user_profile SET name = '', avatar_data_url = NULL, mirror_story_completed = 0, shortlisted_onet_codes_json = '[]' WHERE id = 1",
+        [],
+    );
     Ok(build_dashboard_from_sqlite(&conn, &state.db_path))
 }
 
@@ -689,12 +813,67 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_vault_dashboard,
+            update_user_profile,
             scan_local_vault,
             import_exported_json,
             reset_local_vault,
+            reset_full_factory,
             toggle_quest_state,
             add_journal_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running Clearspace desktop application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sqlite_profile_and_story_chapters_roundtrip_and_reset_cleanly() {
+        let conn = Connection::open_in_memory().expect("in-memory sqlite");
+        init_sqlite_schema(&conn).expect("schema init");
+
+        let default_profile = load_user_profile(&conn);
+        assert_eq!(default_profile.name, "");
+        assert_eq!(default_profile.theme_mode, "light");
+        assert!(!default_profile.mirror_story_completed);
+        assert!(default_profile.shortlisted_onet_codes.is_empty());
+
+        let updated = UserProfile {
+            name: "Chris".to_string(),
+            avatar_data_url: Some("data:image/png;base64,abc".to_string()),
+            theme_mode: "dark".to_string(),
+            mirror_story_completed: true,
+            shortlisted_onet_codes: vec!["15-1252.00".to_string()],
+        };
+        save_user_profile_to_sqlite(&conn, &updated).expect("save profile");
+
+        let loaded = load_user_profile(&conn);
+        assert_eq!(loaded.name, "Chris");
+        assert_eq!(loaded.theme_mode, "dark");
+        assert!(loaded.mirror_story_completed);
+        assert_eq!(loaded.shortlisted_onet_codes, vec!["15-1252.00".to_string()]);
+
+        let sample_prompts = vec![NormalizedPrompt {
+            id: "p1".to_string(),
+            source: PromptSource::ClaudeWeb,
+            conversation_id: "c1".to_string(),
+            created_at: "2026-03-10T21:00:00Z".to_string(),
+            local_hour: Some(21),
+            cleaned_text: "I want to architect an automated workflow and tool system from first principles to eliminate manual maintenance.".to_string(),
+            word_count: 17,
+            redactions_made: 0,
+            is_high_signal: true,
+            signal_categories: vec!["Systems & Architecture".to_string()],
+            skill_tier: SkillTier::Advanced,
+        }];
+        let cards = build_mirror_cards(&sample_prompts);
+        assert_eq!(cards.len(), 5);
+        assert_eq!(cards[0].story_chapter, "excel");
+        assert_eq!(cards[1].story_chapter, "excel");
+        assert_eq!(cards[2].story_chapter, "grow");
+        assert_eq!(cards[3].story_chapter, "friction");
+        assert_eq!(cards[4].story_chapter, "grow");
+    }
 }
