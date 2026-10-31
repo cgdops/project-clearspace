@@ -727,9 +727,9 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
         .find(|d| !d.is_empty())
         .map(|s| s.to_string());
 
-    let mut cat_map: HashMap<String, usize> = HashMap::new();
-    let mut src_map: HashMap<String, usize> = HashMap::new();
-    let mut day_map: HashMap<String, (usize, f32, [usize; 3])> = HashMap::new();
+    let mut cat_map: HashMap<&str, usize> = HashMap::with_capacity(8);
+    let mut src_map: HashMap<&'static str, usize> = HashMap::with_capacity(6);
+    let mut day_map: HashMap<&str, (usize, f32, [usize; 3])> = HashMap::with_capacity(64);
     summary.hourly_distribution = [0usize; 24];
     summary.tier_counts = [0usize; 3];
     summary.high_signal_prompts = 0;
@@ -747,7 +747,7 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
         if let Some(day_key) = r.created_at.trim().get(..10) {
             if day_key.as_bytes().get(4) == Some(&b'-') && day_key.as_bytes().get(7) == Some(&b'-')
             {
-                let entry = day_map.entry(day_key.to_string()).or_insert((0, 0.0, [0; 3]));
+                let entry = day_map.entry(day_key).or_insert((0, 0.0, [0; 3]));
                 entry.0 += 1;
                 entry.1 += compute_prompt_quality_score(r.skill_tier, r.is_high_signal);
                 entry.2[tier_idx] += 1;
@@ -759,28 +759,31 @@ fn finalize_summary(results: &mut [NormalizedPrompt], summary: &mut IngestionSum
             }
         }
         for c in &r.signal_categories {
-            *cat_map.entry(c.clone()).or_insert(0usize) += 1;
+            *cat_map.entry(c.as_str()).or_insert(0usize) += 1;
         }
-        *src_map
-            .entry(r.source.display_label().to_string())
-            .or_insert(0usize) += 1;
+        *src_map.entry(r.source.display_label()).or_insert(0usize) += 1;
     }
 
-    let mut cat_vec: Vec<(String, usize)> = cat_map.into_iter().collect();
+    let mut cat_vec: Vec<(String, usize)> =
+        cat_map.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
     cat_vec.sort_by_key(|entry| Reverse(entry.1));
     summary.category_counts = cat_vec;
 
-    let mut src_vec: Vec<(String, usize)> = src_map.into_iter().collect();
+    let mut src_vec: Vec<(String, usize)> =
+        src_map.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
     src_vec.sort_by_key(|entry| Reverse(entry.1));
     summary.source_counts = src_vec;
 
     let mut day_vec: Vec<_> = day_map.into_iter().collect();
-    day_vec.sort_by(|a, b| a.0.cmp(&b.0));
-    summary.daily_counts = day_vec.iter().map(|(d, (c, _, _))| (d.clone(), *c)).collect();
+    day_vec.sort_by(|a, b| a.0.cmp(b.0));
+    summary.daily_counts = day_vec
+        .iter()
+        .map(|(d, (c, _, _))| ((*d).to_string(), *c))
+        .collect();
     summary.daily_prompt_quality = day_vec
         .into_iter()
         .map(|(date, (prompt_count, sum, tier_counts))| DailyPromptQuality {
-            date,
+            date: date.to_string(),
             prompt_count,
             avg_quality_score: ((sum / prompt_count.max(1) as f32) * 10.0).round() / 10.0,
             tier_counts,

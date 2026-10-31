@@ -1,14 +1,14 @@
 {
-  "version": "0.3.0",
-  "schemaVersion": 3,
-  "notes": "Zero-Knowledge local SQLite vault with v3 schema migration guard, Adaptive Writing Level (Everyday, Professional, Technical), Plain-English Career Matches, and Personalized Next Steps.",
+  "version": "0.4.0",
+  "schemaVersion": 4,
+  "notes": "Zero-Knowledge local SQLite vault with v4 schema migration guard, Growth Trajectory Line Graph (7D / 30D / 1Y EWMA Prompt Quality & Commitment Scoring), Simplified Sidebar & Settings Drawer, and Adaptive Writing Level.",
   "pub_date": "2026-10-30T00:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "/downloads/Clearspace_0.3.0_x64-setup.exe",
-      "sha256": "c9c7dd85c3447b5fdf35098a999325d68c9fdf3145546f6cb760601785b80ae4",
-      "filename": "Clearspace_0.3.0_x64-setup.exe",
-      "sizeFormatted": "4.98 MB"
+      "url": "/downloads/Clearspace_0.4.0_x64-setup.exe",
+      "sha256": "a2afc4b9adf9fcc21bf02fa7ece0f04c23abd38ed02fd474464fee31333957b9",
+      "filename": "Clearspace_0.4.0_x64-setup.exe",
+      "sizeFormatted": "4.99 MB"
     }
   }
 }

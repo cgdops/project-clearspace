@@ -1,12 +1,12 @@
 {
   "productName": "Clearspace",
-  "version": "0.3.0",
-  "schemaVersion": 3,
+  "version": "0.4.0",
+  "schemaVersion": 4,
   "releaseDate": "2026-10-31",
   "identifier": "com.g3zcreative.clearspace",
   "codeSigningProvider": "Unsigned (SHA-256 Verified)",
   "license": "MIT Open-Core + Auditable Commercial EE",
-  "notes": "Zero-Knowledge local SQLite vault with v3 schema migration guard, Adaptive Writing Level (Everyday, Professional, Technical), Plain-English Career Matches, and Personalized Next Steps.",
+  "notes": "Zero-Knowledge local SQLite vault with v4 schema migration guard, Growth Trajectory Line Graph (7D / 30D / 1Y EWMA Prompt Quality & Commitment Scoring), Simplified Sidebar & Settings Drawer, and Adaptive Writing Level.",
   "artifacts": [
     {
       "id": "win-nsis",
@@ -14,11 +14,11 @@
       "kind": "NSIS Setup Installer (.exe)",
       "recommended": true,
       "signed": false,
-      "filename": "Clearspace_0.3.0_x64-setup.exe",
-      "url": "/downloads/Clearspace_0.3.0_x64-setup.exe",
-      "sizeBytes": 5221381,
-      "sizeFormatted": "4.98 MB",
-      "sha256": "c9c7dd85c3447b5fdf35098a999325d68c9fdf3145546f6cb760601785b80ae4"
+      "filename": "Clearspace_0.4.0_x64-setup.exe",
+      "url": "/downloads/Clearspace_0.4.0_x64-setup.exe",
+      "sizeBytes": 5232219,
+      "sizeFormatted": "4.99 MB",
+      "sha256": "a2afc4b9adf9fcc21bf02fa7ece0f04c23abd38ed02fd474464fee31333957b9"
     },
     {
       "id": "win-msi",
@@ -26,11 +26,11 @@
       "kind": "MSI Windows Installer (.msi)",
       "recommended": false,
       "signed": false,
-      "filename": "Clearspace_0.3.0_x64_en-US.msi",
-      "url": "/downloads/Clearspace_0.3.0_x64_en-US.msi",
-      "sizeBytes": 7704576,
-      "sizeFormatted": "7.35 MB",
-      "sha256": "80fd7c2689599f59ae653a89390f9f7b8f4fa6644cff949cb9829bab15e92e36"
+      "filename": "Clearspace_0.4.0_x64_en-US.msi",
+      "url": "/downloads/Clearspace_0.4.0_x64_en-US.msi",
+      "sizeBytes": 7712768,
+      "sizeFormatted": "7.36 MB",
+      "sha256": "724212052220db94e1257e83baa08fa1b00c2c488c1558463150a06bda52f141"
     },
     {
       "id": "win-portable",
@@ -38,11 +38,11 @@
       "kind": "Standalone Portable Binary (.exe)",
       "recommended": false,
       "signed": false,
-      "filename": "Clearspace_0.3.0_x64-portable.exe",
-      "url": "/downloads/Clearspace_0.3.0_x64-portable.exe",
-      "sizeBytes": 25381844,
-      "sizeFormatted": "24.21 MB",
-      "sha256": "9fb64fd3e6405dddf6092cacb0fbb27b2b9275fcfadb008dec78dc4c16a41be0"
+      "filename": "Clearspace_0.4.0_x64-portable.exe",
+      "url": "/downloads/Clearspace_0.4.0_x64-portable.exe",
+      "sizeBytes": 25401691,
+      "sizeFormatted": "24.22 MB",
+      "sha256": "02178b514a150d7108e9af01535dc3a4b2bae51e1a84b15e2bf606015329871e"
     }
   ]
 }

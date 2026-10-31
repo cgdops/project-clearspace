@@ -124,8 +124,8 @@ const tauriMainRs = fs.readFileSync(
   path.join(repoRoot, "apps/desktop/src-tauri/src/main.rs"),
   "utf8"
 );
-const schemaMatch = /CURRENT_SCHEMA_VERSION:\s*i64\s*=\s*(\d+)/.exec(tauriMainRs);
-const currentSchemaVersion = schemaMatch ? Number(schemaMatch[1]) : 3;
+const schemaMatch = /CURRENT_SCHEMA_VERSION:\s*i(?:32|64)\s*=\s*(\d+)/.exec(tauriMainRs);
+const currentSchemaVersion = schemaMatch ? Number(schemaMatch[1]) : 4;
 
 if (artifacts.length === 0) {
   console.log("No installer binaries found to sync; preserving existing release manifests.");
@@ -140,7 +140,7 @@ const manifest = {
   identifier: "com.g3zcreative.clearspace",
   codeSigningProvider: isSigned ? "SignPath Foundation (SignPath.io)" : "Unsigned (SHA-256 Verified)",
   license: "MIT Open-Core + Auditable Commercial EE",
-  notes: `Zero-Knowledge local SQLite vault with v${currentSchemaVersion} schema migration guard, Adaptive Writing Level (Everyday, Professional, Technical), Plain-English Career Matches, and Personalized Next Steps.`,
+  notes: `Zero-Knowledge local SQLite vault with v${currentSchemaVersion} schema migration guard, Growth Trajectory Line Graph (7D / 30D / 1Y EWMA Prompt Quality & Commitment Scoring), Simplified Sidebar & Settings Drawer, and Adaptive Writing Level.`,
   artifacts,
 };
 
