@@ -31,6 +31,7 @@ import {
   VaultDashboardPayload,
   BatchImportReport,
   StoryChapterKey,
+  UpdateCheckResult,
   getVaultDashboard,
   updateUserProfile,
   scanLocalVault,
@@ -40,6 +41,8 @@ import {
   resetFullFactory,
   toggleQuestState,
   addJournalEntry,
+  backupLocalVault,
+  checkForAppUpdates,
   formatTierLabel,
   classifySkillTierClient,
   SAMPLE_MULTI_PROVIDER_EXPORT,
@@ -163,15 +166,9 @@ function computePeakWindowLabel(hourly: number[]): { windowLabel: string; shareS
     }
   }
   const endHr = (bestStart + 4) % 24;
-  const fmt = (h: number) => {
-    if (h === 0) return "12 AM";
-    if (h < 12) return `${h} AM`;
-    if (h === 12) return "12 PM";
-    return `${h - 12} PM`;
-  };
   const pct = Math.round((bestSum / total) * 100);
   return {
-    windowLabel: `${fmt(bestStart)} – ${fmt(endHr)}`,
+    windowLabel: `${formatHour12(bestStart)} – ${formatHour12(endHr)}`,
     shareSub: `${pct}% of timestamped prompts in this 4h block`,
   };
 }
@@ -214,6 +211,11 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedSource, setSelectedSource] = useState<string>("ALL");
   const [selectedCategory, setSelectedCategory] = useState<string>("All Categories");
+
+  // App Update & Schema Migration state
+  const [updateCheckResult, setUpdateCheckResult] = useState<UpdateCheckResult | null>(null);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState<boolean>(false);
+  const [backupNotice, setBackupNotice] = useState<string>("");
 
   // Interactive Zero-Knowledge Live Scrubber Demo inside Standalone View
   const [zkDemoInput, setZkDemoInput] = useState<string>(
@@ -554,6 +556,28 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCheckUpdates = async () => {
+    setIsCheckingUpdates(true);
+    try {
+      const installedVer = data?.update_status?.installed_version ?? "0.2.0";
+      const schemaVer = data?.update_status?.schema_version ?? 2;
+      const result = await checkForAppUpdates(installedVer, schemaVer);
+      setUpdateCheckResult(result);
+    } finally {
+      setIsCheckingUpdates(false);
+    }
+  };
+
+  const handleBackupVault = async () => {
+    const status = await backupLocalVault();
+    if (data) {
+      setData({ ...data, update_status: status });
+    }
+    setBackupNotice(
+      `Vault backup verified at ${status.last_backup_path ?? "clearspace_vault.db.bak-v2"} (Schema v${status.schema_version}).`
+    );
   };
 
   const handleToggleQuest = async (questId: string, field: "accepted" | "completed") => {
@@ -1738,6 +1762,63 @@ export default function App() {
               gap: 6,
             }}
           >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontSize: 11,
+                color: "var(--text-muted)",
+                marginBottom: 2,
+              }}
+              data-testid="sidebar-version-meta"
+            >
+              <span>
+                v{data?.update_status?.installed_version ?? "0.2.0"} • Schema v
+                {data?.update_status?.schema_version ?? 2}
+              </span>
+              <button
+                type="button"
+                className="btn-outline"
+                style={{ padding: "3px 8px", fontSize: 10.5 }}
+                onClick={handleCheckUpdates}
+                disabled={isCheckingUpdates}
+                data-testid="btn-check-updates"
+                title="Check if a newer signed desktop build is available"
+              >
+                <RefreshCw size={11} className={isCheckingUpdates ? "spin-icon" : ""} />
+                <span>{isCheckingUpdates ? "Checking…" : "Check Updates"}</span>
+              </button>
+            </div>
+            {updateCheckResult && (
+              <div
+                style={{
+                  fontSize: 11,
+                  padding: "6px 8px",
+                  borderRadius: 8,
+                  background: "var(--bg-warm)",
+                  border: "1px solid var(--border-warm)",
+                  color: "var(--text-secondary)",
+                }}
+                data-testid="update-status-banner"
+              >
+                {updateCheckResult.update_available ? (
+                  <>
+                    <strong style={{ color: "var(--accent-sage)" }}>
+                      Update v{updateCheckResult.latest_version} available!
+                    </strong>{" "}
+                    Your local SQLite vault will be automatically backed up before upgrading.
+                  </>
+                ) : (
+                  <>
+                    <strong style={{ color: "var(--accent-sage)" }}>
+                      Up to date (v{updateCheckResult.installed_version})
+                    </strong>{" "}
+                    • Local vault auto-backed up across upgrades.
+                  </>
+                )}
+              </div>
+            )}
             <button
               className="btn-outline"
               style={{ width: "100%", justifyContent: "center", fontSize: 11.5, padding: "6px 10px" }}
@@ -2582,6 +2663,67 @@ export default function App() {
                   Inspect how your local data is parsed and scrubbed. Your local database lives at:{" "}
                   <code style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{data.db_path}</code>
                 </p>
+
+                <div
+                  className="insight-card"
+                  style={{
+                    marginTop: 14,
+                    padding: "14px 20px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 12,
+                  }}
+                  data-testid="vault-upgrade-safety-card"
+                >
+                  <div>
+                    <div className="stat-label">Desktop Upgrade & Schema Migration Guard</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>
+                      Clearspace v{data.update_status?.installed_version ?? "0.2.0"} • SQLite Schema v
+                      {data.update_status?.schema_version ?? 2} (`PRAGMA user_version`)
+                    </div>
+                    <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 2 }}>
+                      Installing a newer `.exe` or `.msi` release never overwrites your vault. Before any schema
+                      upgrade, Clearspace automatically snapshots{" "}
+                      <code>clearspace_vault.db.bak-v{data.update_status?.schema_version ?? 2}</code>.
+                    </div>
+                    {backupNotice && (
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          color: "var(--accent-sage)",
+                          fontWeight: 600,
+                          marginTop: 6,
+                        }}
+                        data-testid="vault-backup-notice"
+                      >
+                        {backupNotice}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={handleBackupVault}
+                      data-testid="btn-backup-vault"
+                    >
+                      <ShieldCheck size={14} />
+                      <span>Snapshot Vault Backup (.bak)</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-outline"
+                      onClick={handleCheckUpdates}
+                      disabled={isCheckingUpdates}
+                      data-testid="btn-vault-check-updates"
+                    >
+                      <RefreshCw size={14} className={isCheckingUpdates ? "spin-icon" : ""} />
+                      <span>{isCheckingUpdates ? "Checking…" : "Check for Updates"}</span>
+                    </button>
+                  </div>
+                </div>
 
                 {isVaultEmpty ? (
                   renderOnboardingPanel()

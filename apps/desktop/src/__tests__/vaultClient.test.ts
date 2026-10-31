@@ -2,6 +2,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   addJournalEntry,
+  backupLocalVault,
+  checkForAppUpdates,
+  compareSemver,
   getVaultDashboard,
   importExportedContent,
   importFilesBatch,
@@ -699,5 +702,22 @@ We need to ensure that every user import produces immediate visual confirmation 
     expect(afterFactoryReset.profile.name).toBe("");
     expect(afterFactoryReset.profile.avatar_data_url).toBeNull();
     expect(afterFactoryReset.summary.clean_prompts_kept).toBe(0);
+  });
+
+  it("compares semver versions deterministically and records pre-upgrade vault backups", async () => {
+    expect(compareSemver("0.1.0", "0.1.0")).toBe(0);
+    expect(compareSemver("0.2.0", "0.1.0")).toBe(1);
+    expect(compareSemver("0.1.0", "0.2.0")).toBe(-1);
+    expect(compareSemver("v1.0.0", "0.9.9")).toBe(1);
+
+    const status = await backupLocalVault();
+    expect(status.installed_version).toBe("0.2.0");
+    expect(status.schema_version).toBe(2);
+    expect(status.last_backup_path).toContain("clearspace_vault.db.bak-v2");
+
+    const checkRes = await checkForAppUpdates("0.2.0", 2);
+    expect(checkRes.installed_version).toBe("0.2.0");
+    expect(checkRes.schema_version).toBe(2);
+    expect(checkRes.update_available).toBe(false);
   });
 });

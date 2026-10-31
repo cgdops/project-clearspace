@@ -1,6 +1,6 @@
 {
   "name": "clearspace-monorepo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "workspaces": [
     "apps/desktop",
@@ -13,6 +13,8 @@
     "build:web": "npm --workspace=apps/web run build",
     "preview:web": "npm --workspace=apps/web run preview",
     "sync:downloads": "node apps/web/scripts/sync-downloads.mjs",
+    "version:sync": "node scripts/sync-version.mjs sync",
+    "version:bump": "node scripts/sync-version.mjs",
     "test:rust": "node apps/desktop/scripts/run-tauri.mjs --cargo test --workspace"
   }
 }

@@ -84,6 +84,17 @@ pub struct JournalEntry {
     pub mood_valence: String,
 }
 
+pub const CURRENT_SCHEMA_VERSION: i32 = 2;
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppUpdateStatus {
+    pub installed_version: String,
+    pub schema_version: i32,
+    pub last_backup_path: Option<String>,
+    pub last_migrated_at: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultDashboardPayload {
     pub db_path: String,
@@ -94,6 +105,7 @@ pub struct VaultDashboardPayload {
     pub quests: Vec<EquityQuest>,
     pub journals: Vec<JournalEntry>,
     pub recent_high_signal_prompts: Vec<NormalizedPrompt>,
+    pub update_status: AppUpdateStatus,
 }
 
 fn default_universal_quests() -> Vec<(&'static str, &'static str, &'static str, &'static str, &'static str, u16, i64, i64)> {
@@ -188,7 +200,89 @@ fn seed_or_migrate_quests(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+fn get_schema_version(conn: &Connection) -> i32 {
+    conn.query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap_or(0)
+}
+
+fn set_schema_version(conn: &Connection, version: i32) -> rusqlite::Result<()> {
+    conn.execute_batch(&format!("PRAGMA user_version = {};", version))
+}
+
+fn table_has_column(conn: &Connection, table: &str, col: &str) -> bool {
+    let sql = format!("PRAGMA table_info({})", table);
+    let Ok(mut stmt) = conn.prepare(&sql) else {
+        return false;
+    };
+    let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) else {
+        return false;
+    };
+    for name in rows.flatten() {
+        if name.eq_ignore_ascii_case(col) {
+            return true;
+        }
+    }
+    false
+}
+
+fn table_exists(conn: &Connection, table: &str) -> bool {
+    conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        params![table],
+        |r| r.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+        > 0
+}
+
+fn set_app_meta(conn: &Connection, key: &str, value: &str) {
+    let _ = conn.execute(
+        "INSERT OR REPLACE INTO app_meta (key, value) VALUES (?1, ?2)",
+        params![key, value],
+    );
+}
+
+fn get_app_meta(conn: &Connection, key: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT value FROM app_meta WHERE key = ?1",
+        params![key],
+        |r| r.get(0),
+    )
+    .ok()
+}
+
 fn init_sqlite_schema(conn: &Connection) -> rusqlite::Result<()> {
+    init_sqlite_schema_with_backup(conn, None)
+}
+
+fn init_sqlite_schema_with_backup(
+    conn: &Connection,
+    db_path: Option<&Path>,
+) -> rusqlite::Result<()> {
+    let initial_version = get_schema_version(conn);
+    let had_existing_tables = table_exists(conn, "prompts");
+
+    // If upgrading an existing database file from an older schema version, create a pre-migration backup on disk
+    let mut created_backup_path: Option<String> = None;
+    if had_existing_tables && initial_version < CURRENT_SCHEMA_VERSION {
+        if let Some(path) = db_path {
+            if path.exists() {
+                let bak_name = format!(
+                    "{}.bak-v{}",
+                    path.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("clearspace_vault.db"),
+                    initial_version
+                );
+                let bak_path = path.with_file_name(bak_name);
+                if fs::copy(path, &bak_path).is_ok() {
+                    created_backup_path = Some(bak_path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // Step 1: Ensure base v1 tables exist
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS prompts (
@@ -236,8 +330,27 @@ fn init_sqlite_schema(conn: &Connection) -> rusqlite::Result<()> {
             mirror_story_completed INTEGER NOT NULL DEFAULT 0,
             shortlisted_onet_codes_json TEXT NOT NULL DEFAULT '[]'
         );
+
+        CREATE TABLE IF NOT EXISTS app_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         ",
     )?;
+
+    // Step 2: Forward-compatible column migrations for existing installs upgrading from early v0.1.0 builds
+    if !table_has_column(conn, "user_profile", "mirror_story_completed") {
+        let _ = conn.execute(
+            "ALTER TABLE user_profile ADD COLUMN mirror_story_completed INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+    }
+    if !table_has_column(conn, "user_profile", "shortlisted_onet_codes_json") {
+        let _ = conn.execute(
+            "ALTER TABLE user_profile ADD COLUMN shortlisted_onet_codes_json TEXT NOT NULL DEFAULT '[]'",
+            [],
+        );
+    }
 
     let _ = conn.execute(
         "INSERT OR IGNORE INTO user_profile (id, name, avatar_data_url, theme_mode, mirror_story_completed, shortlisted_onet_codes_json)
@@ -246,7 +359,27 @@ fn init_sqlite_schema(conn: &Connection) -> rusqlite::Result<()> {
     );
 
     seed_or_migrate_quests(conn)?;
+
+    if initial_version < CURRENT_SCHEMA_VERSION {
+        set_schema_version(conn, CURRENT_SCHEMA_VERSION)?;
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+        set_app_meta(conn, "last_migrated_at", &now);
+    }
+    set_app_meta(conn, "installed_app_version", APP_VERSION);
+    if let Some(bak) = created_backup_path {
+        set_app_meta(conn, "last_backup_path", &bak);
+    }
+
     Ok(())
+}
+
+fn load_update_status(conn: &Connection) -> AppUpdateStatus {
+    AppUpdateStatus {
+        installed_version: APP_VERSION.to_string(),
+        schema_version: get_schema_version(conn),
+        last_backup_path: get_app_meta(conn, "last_backup_path"),
+        last_migrated_at: get_app_meta(conn, "last_migrated_at"),
+    }
 }
 
 fn compute_peak_window_description(prompts: &[NormalizedPrompt]) -> (String, usize) {
@@ -675,6 +808,7 @@ fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashbo
         .rev()
         .take(40)
         .collect();
+    let update_status = load_update_status(conn);
 
     VaultDashboardPayload {
         db_path: db_path.to_string_lossy().to_string(),
@@ -685,7 +819,30 @@ fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashbo
         quests,
         journals,
         recent_high_signal_prompts,
+        update_status,
     }
+}
+
+#[tauri::command]
+fn backup_local_vault(state: State<AppState>) -> Result<AppUpdateStatus, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let schema_ver = get_schema_version(&conn);
+    let bak_name = format!(
+        "{}.bak-v{}",
+        state
+            .db_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("clearspace_vault.db"),
+        schema_ver
+    );
+    let bak_path = state.db_path.with_file_name(bak_name);
+    if state.db_path.exists() {
+        fs::copy(&state.db_path, &bak_path).map_err(|e| e.to_string())?;
+    }
+    let bak_str = bak_path.to_string_lossy().to_string();
+    set_app_meta(&conn, "last_backup_path", &bak_str);
+    Ok(load_update_status(&conn))
 }
 
 #[tauri::command]
@@ -804,7 +961,8 @@ fn main() {
     let db_path = app_dir.join("clearspace_vault.db");
 
     let conn = Connection::open(&db_path).expect("Failed to open local Clearspace SQLite DB");
-    init_sqlite_schema(&conn).expect("Failed to initialize Clearspace SQLite schema");
+    init_sqlite_schema_with_backup(&conn, Some(&db_path))
+        .expect("Failed to initialize Clearspace SQLite schema");
 
     tauri::Builder::default()
         .manage(AppState {
@@ -819,7 +977,8 @@ fn main() {
             reset_local_vault,
             reset_full_factory,
             toggle_quest_state,
-            add_journal_entry
+            add_journal_entry,
+            backup_local_vault
         ])
         .run(tauri::generate_context!())
         .expect("error while running Clearspace desktop application");
@@ -833,6 +992,7 @@ mod tests {
     fn sqlite_profile_and_story_chapters_roundtrip_and_reset_cleanly() {
         let conn = Connection::open_in_memory().expect("in-memory sqlite");
         init_sqlite_schema(&conn).expect("schema init");
+        assert_eq!(get_schema_version(&conn), CURRENT_SCHEMA_VERSION);
 
         let default_profile = load_user_profile(&conn);
         assert_eq!(default_profile.name, "");
@@ -875,5 +1035,71 @@ mod tests {
         assert_eq!(cards[2].story_chapter, "grow");
         assert_eq!(cards[3].story_chapter, "friction");
         assert_eq!(cards[4].story_chapter, "grow");
+    }
+
+    #[test]
+    fn sqlite_schema_migration_preserves_existing_user_data_and_creates_backup() {
+        let temp_dir = env::temp_dir().join(format!("clearspace_upgrade_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+        let db_path = temp_dir.join("clearspace_vault.db");
+        let _ = fs::remove_file(&db_path);
+
+        // Simulate a v0 legacy database from an already-installed v0.1.0 desktop client
+        {
+            let conn = Connection::open(&db_path).expect("open legacy db");
+            conn.execute_batch(
+                "
+                PRAGMA user_version = 1;
+                CREATE TABLE prompts (
+                    id TEXT PRIMARY KEY,
+                    source TEXT NOT NULL,
+                    conversation_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    local_hour INTEGER,
+                    cleaned_text TEXT NOT NULL,
+                    word_count INTEGER NOT NULL,
+                    redactions_made INTEGER NOT NULL,
+                    is_high_signal INTEGER NOT NULL,
+                    signal_categories_json TEXT NOT NULL
+                );
+                CREATE TABLE user_profile (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    name TEXT NOT NULL DEFAULT '',
+                    avatar_data_url TEXT,
+                    theme_mode TEXT NOT NULL DEFAULT 'light'
+                );
+                INSERT INTO user_profile (id, name, avatar_data_url, theme_mode)
+                VALUES (1, 'ExistingUser', NULL, 'dark');
+                INSERT INTO prompts (id, source, conversation_id, created_at, local_hour, cleaned_text, word_count, redactions_made, is_high_signal, signal_categories_json)
+                VALUES ('legacy-1', 'claude_web', 'conv-1', '2026-02-01T20:00:00Z', 20, 'Existing user prompt preserved across desktop upgrade.', 7, 0, 1, '[\"Systems & Architecture\"]');
+                ",
+            )
+            .expect("seed legacy v1 db");
+        }
+
+        // Now run the new app startup schema migration with backup enabled
+        {
+            let conn = Connection::open(&db_path).expect("reopen db for upgrade");
+            init_sqlite_schema_with_backup(&conn, Some(&db_path)).expect("migrate v1 -> v2");
+
+            assert_eq!(get_schema_version(&conn), CURRENT_SCHEMA_VERSION);
+            let profile = load_user_profile(&conn);
+            assert_eq!(profile.name, "ExistingUser");
+            assert_eq!(profile.theme_mode, "dark");
+
+            let prompts = load_prompts_from_sqlite(&conn);
+            assert_eq!(prompts.len(), 1);
+            assert_eq!(prompts[0].id, "legacy-1");
+
+            let status = load_update_status(&conn);
+            assert_eq!(status.installed_version, APP_VERSION);
+            assert_eq!(status.schema_version, CURRENT_SCHEMA_VERSION);
+            assert!(status.last_backup_path.is_some());
+
+            let bak_path = temp_dir.join("clearspace_vault.db.bak-v1");
+            assert!(bak_path.exists(), "Pre-migration backup file should exist on disk");
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }
