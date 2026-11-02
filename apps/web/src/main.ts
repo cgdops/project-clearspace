@@ -217,10 +217,10 @@ async function initReleaseDownloadsAndDialog(): Promise<void> {
     platform: "Windows 10/11 (x64)",
     kind: "NSIS Setup Installer (.exe)",
     recommended: true,
-    filename: "Clearspace_0.3.0_x64-setup.exe",
-    url: "/downloads/Clearspace_0.3.0_x64-setup.exe",
+    filename: "Clearspace_0.4.0_x64-setup.exe",
+    url: "/downloads/Clearspace_0.4.0_x64-setup.exe",
     sizeBytes: 0,
-    sizeFormatted: "v0.3.0",
+    sizeFormatted: "v0.4.0",
     sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   };
 
