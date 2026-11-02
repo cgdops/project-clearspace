@@ -127,8 +127,12 @@ replaceRegexInFile("apps/desktop/src/App.tsx", [
 ]);
 replaceRegexInFile("apps/desktop/src/__tests__/vaultClient.test.ts", [
   [/(expect\(status\.installed_version\)\.toBe\(")\d+\.\d+\.\d+("\))/g, `$1${nextVersion}$2`],
-  [/(checkForAppUpdates\(")\d+\.\d+\.\d+(",\s*\d+\))/g, `$1${nextVersion}$2`],
+  [/(version:\s*")\d+\.\d+\.\d+(",\s*\n\s*schemaVersion:)/, `$1${nextVersion}$2`],
+  [/(notes:\s*"v)\d+\.\d+\.\d+(\s+release notes")/, `$1${nextVersion}$2`],
+  [/Clearspace_\d+\.\d+\.\d+_x64/g, `Clearspace_${nextVersion}_x64`],
+  [/(const checkRes = await checkForAppUpdates\(")\d+\.\d+\.\d+(",\s*\d+\))/, `$1${nextVersion}$2`],
   [/(expect\(checkRes\.installed_version\)\.toBe\(")\d+\.\d+\.\d+("\))/g, `$1${nextVersion}$2`],
+  [/(expect\(legacyCheckRes\.latest_version\)\.toBe\(")\d+\.\d+\.\d+("\))/g, `$1${nextVersion}$2`],
 ]);
 
 console.log(

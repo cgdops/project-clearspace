@@ -2606,15 +2606,15 @@ function loadBrowserUpdateStatus(): AppUpdateStatus {
     const raw = localStorage.getItem(STORAGE_BACKUP_META_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     return {
-      installed_version: "0.3.0",
-      schema_version: 3,
+      installed_version: "0.4.0",
+      schema_version: 4,
       last_backup_path: parsed?.last_backup_path ?? null,
       last_migrated_at: parsed?.last_migrated_at ?? "2026-10-30 00:00",
     };
   } catch {
     return {
-      installed_version: "0.3.0",
-      schema_version: 3,
+      installed_version: "0.4.0",
+      schema_version: 4,
       last_backup_path: null,
       last_migrated_at: "2026-10-30 00:00",
     };
@@ -3246,7 +3246,7 @@ export async function backupLocalVault(): Promise<AppUpdateStatus> {
     return invoke<AppUpdateStatus>("backup_local_vault");
   }
   const now = new Date().toISOString().slice(0, 16).replace("T", " ");
-  const bakPath = "localStorage://clearspace_vault.db.bak-v3";
+  const bakPath = "localStorage://clearspace_vault.db.bak-v4";
   try {
     localStorage.setItem(
       STORAGE_BACKUP_META_KEY,
@@ -3293,8 +3293,8 @@ async function fetchManifestWithTimeout(url: string, timeoutMs = 4000): Promise<
 }
 
 export async function checkForAppUpdates(
-  installedVersion = "0.3.0",
-  schemaVersion = 3
+  installedVersion = "0.4.0",
+  schemaVersion = 4
 ): Promise<UpdateCheckResult> {
   const nowIso = new Date().toISOString().slice(0, 16).replace("T", " ");
   const candidateManifests: RawReleaseManifest[] = [];
@@ -3327,7 +3327,7 @@ export async function checkForAppUpdates(
       best?.notes ??
       "Zero-Knowledge local SQLite vault with v3 schema migration guard and automatic pre-upgrade DB backup.",
     pub_date: (best?.pub_date ?? "2026-10-30").slice(0, 10),
-    download_url: winPlatform?.url ?? "/downloads/Clearspace_0.3.0_x64-setup.exe",
+    download_url: winPlatform?.url ?? "/downloads/Clearspace_0.4.0_x64-setup.exe",
     sha256: winPlatform?.sha256 ?? null,
     checked_at: nowIso,
   };
