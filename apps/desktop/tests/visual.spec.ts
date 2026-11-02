@@ -97,10 +97,21 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForTimeout(250);
 
-    // 1. Verify Step 1 Focused Profile Onboarding (1 thing at a time)
+    // 1. Verify Default Landing Tab is "vault" (Your Data) and Always Unlocked + Step 1 Profile Onboarding
+    await expect(page.locator("#tab-vault")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#tab-vault")).toHaveAttribute("aria-disabled", "false");
+    await expect(page.locator(".main-content h1.page-title")).toHaveText("Your Data");
+
     const step1Card = page.getByTestId("step1-profile-card");
     await expect(step1Card).toBeVisible();
-    await expect(step1Card.locator("h1")).toContainText("Welcome to Clearspace — Let’s Start With You");
+    await expect(step1Card.locator("h2")).toContainText("Welcome to Clearspace — Let’s Start With You");
+
+    // Verify 3-Stage Data Exploration & Visualization Workbench is already visible & interactive in Vault
+    await expect(page.getByTestId("vault-workbench")).toBeVisible();
+    await expect(page.getByTestId("vault-section-structure")).toBeVisible();
+    await expect(page.getByTestId("vault-er-diagram")).toBeVisible();
+    await expect(page.getByTestId("vault-section-visualizations")).toBeVisible();
+    await expect(page.getByTestId("vault-section-insights")).toBeVisible();
 
     // Verify ContributionGrid defaults to Clearspace Sage on light theme (never a dark box on light theme)
     const gridSection = page.getByTestId("prompt-contribution-grid");
@@ -130,13 +141,13 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
     await expect(page.getByTestId("settings-drawer")).toHaveCount(0);
     await expect(page.getByTestId("btn-settings-drawer")).toBeFocused();
     await expect(page.locator(".main-content h1.page-title")).toHaveText(
-      "Chris’s Profile"
+      "Your Data"
     );
     const step2Card = page.getByTestId("step2-upload-card");
     await expect(step2Card).toBeVisible();
     await expect(step2Card.locator("h2")).toContainText("Welcome, Chris to Clearspace");
 
-    // Verify direct 1-click provider export page links are present
+    // Verify direct 1-click provider export page links are present (including LinkedIn Archive)
     await expect(page.getByTestId("provider-link-openai")).toHaveAttribute(
       "href",
       "https://chatgpt.com/#settings/DataControls"
@@ -148,6 +159,10 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
     await expect(page.getByTestId("provider-link-gemini")).toHaveAttribute(
       "href",
       "https://takeout.google.com/"
+    );
+    await expect(page.getByTestId("provider-link-linkedin")).toHaveAttribute(
+      "href",
+      "https://www.linkedin.com/mypreferences/d/download-my-data"
     );
 
     if (vp.name === "1280x800") {
@@ -214,7 +229,7 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
       onboardingVerification = emptyStateMetrics;
     }
 
-    // 3. Upload synthetic multi-provider JSON to test Progressive Unlocking Step 3 -> Step 4 -> Step 5 -> Step 6
+    // 3. Upload synthetic multi-provider JSON -> verify Vault 3-Stage Dashboard -> Continue to Cognitive Mirror
     const fileInput = page.getByTestId("vault-file-input");
     await fileInput.setInputFiles({
       name: "multi-provider-export.json",
@@ -222,6 +237,35 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
       buffer: Buffer.from(SYNTHETIC_MULTI_PROVIDER_JSON, "utf-8"),
     });
     await page.waitForTimeout(200);
+
+    // Verify we remain on the Data Vault Workbench after upload and all 3 sections + 5 LinkedIn modules render
+    await expect(page.locator("#tab-vault")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("er-linkedin-diagram")).toBeVisible();
+    await expect(page.getByTestId("er-root-profile-node")).toBeVisible();
+    await expect(page.getByTestId("er-cluster-card-career_credentials")).toBeVisible();
+    await expect(page.getByTestId("er-cluster-card-skills_peer_proof")).toBeVisible();
+    await expect(page.getByTestId("er-cluster-card-network_messaging")).toBeVisible();
+    await expect(page.getByTestId("er-cluster-card-job_search_positioning")).toBeVisible();
+    await expect(page.getByTestId("er-cluster-card-algorithmic_learning_voice")).toBeVisible();
+    await expect(page.getByTestId("er-ai-dag-diagram")).toBeVisible();
+    await expect(page.getByTestId("vault-file-summary-cards")).toBeVisible();
+
+    await expect(page.getByTestId("viz-linkedin-network")).toBeVisible();
+    await expect(page.getByTestId("viz-linkedin-messaging")).toBeVisible();
+    await expect(page.getByTestId("viz-linkedin-ad-xray")).toBeVisible();
+    await expect(page.getByTestId("viz-linkedin-career-learning")).toBeVisible();
+    await expect(page.getByTestId("viz-linkedin-job-funnel")).toBeVisible();
+    await expect(page.getByTestId("vault-signal-category-breakdown")).toBeVisible();
+
+    await expect(page.getByTestId("insight-three-way-mirror")).toBeVisible();
+    await expect(page.getByTestId("insight-relationship-signature")).toBeVisible();
+    await expect(page.getByTestId("insight-curiosity-evolution")).toBeVisible();
+
+    // Click the bottom Vault CTA to continue into Cognitive Mirror ("mirror")
+    await page.getByTestId("vault-continue-to-mirror-cta").click();
+    await page.waitForTimeout(150);
+    await expect(page.locator("#tab-mirror")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".main-content h1.page-title")).toHaveText("Chris’s Profile");
 
     // Verify Peak Flow Rhythm Card is promoted to the front of Step 3 (Cognitive Mirror)
     await expect(page.getByTestId("peak-flow-rhythm-card")).toBeVisible();
@@ -270,14 +314,16 @@ test("Progressive 1-Thing-at-a-Time Onboarding, Standalone Privacy Pages, Theme 
       "Chris’s Growth Plan"
     );
 
-    // Accept quests via Load Sample or button click to unlock Personal Journal
+    // Accept quests via Load Sample or button click to unlock Personal Journal (and land on Vault)
     await page.getByRole("tab", { name: /Your Data/i }).click();
     await page.getByRole("button", { name: /Load Sample Multi-Provider Vault/i }).click();
     await page.waitForTimeout(200);
+    await expect(page.locator("#tab-vault")).toHaveAttribute("aria-selected", "true");
 
     // Verify all 5 tabs are now unlocked and test WAI-ARIA keyboard navigation
     if (vp.name === "1280x800") {
       const firstTab = page.locator('[role="tab"]').first();
+      await firstTab.click();
       await firstTab.focus();
       await page.keyboard.press("ArrowDown");
       const activeAfterArrowDown = await page
