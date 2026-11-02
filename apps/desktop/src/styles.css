@@ -1330,3 +1330,207 @@ label:focus-visible {
 .growth-graph-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .growth-period-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .growth-svg-wrap { margin-top: 12px; padding: 10px 12px 4px; background: var(--bg-warm); border: 1px solid var(--border-warm); border-radius: 12px; }
+
+/* 3-Stage Data Exploration & Visualization Workbench */
+.er-linkedin-blueprint,
+.er-ai-dag-blueprint {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--bg-warm);
+  border: 1px solid var(--border-warm);
+}
+
+.er-root-hub {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 2px solid var(--accent-sage);
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.er-root-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-accent-soft);
+  color: var(--accent-sage);
+}
+
+.er-clusters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.er-cluster-node {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-warm);
+  cursor: pointer;
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.er-cluster-node:hover,
+.er-cluster-node.active {
+  border-color: var(--accent-sage);
+}
+
+.er-cluster-node.dimmed {
+  opacity: 0.52;
+}
+
+.er-file-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.er-file-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--bg-warm);
+  border: 1px solid var(--border-warm);
+  color: var(--text-primary);
+}
+
+.er-dag-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.er-dag-step {
+  flex: 1 1 170px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-warm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.er-dag-step strong {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.er-dag-step span:last-child {
+  color: var(--text-secondary);
+  font-size: 11.5px;
+}
+
+.er-dag-arrow {
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.file-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.file-summary-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-warm);
+  border: 1px solid var(--border-warm);
+}
+
+.linkedin-viz-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.linkedin-viz-card {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-warm);
+}
+
+.linkedin-viz-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.viz-two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.mini-bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mini-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.mini-bar-label {
+  min-width: 52px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.mini-bar-track {
+  flex: 1;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--bg-warm);
+  border: 1px solid var(--border-warm);
+  overflow: hidden;
+}
+
+.mini-bar-fill {
+  height: 100%;
+  background: var(--accent-sage);
+  border-radius: 999px;
+}
+
+.mini-bar-val {
+  min-width: 36px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.three-way-mirror-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.mirror-pillar-col {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-warm);
+  border: 1px solid var(--border-warm);
+}
+

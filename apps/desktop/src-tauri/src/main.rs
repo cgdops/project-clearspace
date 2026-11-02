@@ -4,8 +4,8 @@
 use clearspace_onet_engine::{match_onet_paths_for_level, RoleMatchResult};
 use clearspace_prompt_parsers::{
     classify_skill_tier, parse_exported_conversations_json, scan_antigravity_brain_dir,
-    summarize_persisted_prompts, IngestionSummary, NormalizedPrompt, PromptSource, SkillTier,
-    WritingLevel,
+    summarize_persisted_prompts, IngestionSummary, LinkedInVaultAnalytics, NormalizedPrompt,
+    PromptSource, SkillTier, WritingLevel,
 };
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -1319,7 +1319,12 @@ fn save_user_profile_to_sqlite(conn: &Connection, profile: &UserProfile) -> rusq
 fn build_dashboard_from_sqlite(conn: &Connection, db_path: &Path) -> VaultDashboardPayload {
     let profile = load_user_profile(conn);
     let prompts = load_prompts_from_sqlite(conn);
-    let summary = summarize_persisted_prompts(&prompts);
+    let mut summary = summarize_persisted_prompts(&prompts);
+    if let Some(li_json) = get_app_meta(conn, "linkedin_analytics_json") {
+        if let Ok(li_analytics) = serde_json::from_str::<LinkedInVaultAnalytics>(&li_json) {
+            summary.linkedin_analytics = Some(li_analytics);
+        }
+    }
     let effective_level =
         WritingLevel::resolve(&profile.writing_level_mode, summary.writing_level.measured_level);
     let mirror_cards = build_mirror_cards(&prompts, effective_level);
@@ -1481,6 +1486,11 @@ fn import_exported_json(
     let (prompts, summary) = parse_exported_conversations_json(&json_content)?;
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     upsert_prompts_to_sqlite(&conn, &prompts);
+    if let Some(ref li_analytics) = summary.linkedin_analytics {
+        if let Ok(serialized) = serde_json::to_string(li_analytics) {
+            set_app_meta(&conn, "linkedin_analytics_json", &serialized);
+        }
+    }
     Ok(summary)
 }
 
@@ -1488,6 +1498,7 @@ fn import_exported_json(
 fn reset_local_vault(state: State<AppState>) -> Result<VaultDashboardPayload, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let _ = conn.execute("DELETE FROM prompts", []);
+    let _ = conn.execute("DELETE FROM app_meta WHERE key = 'linkedin_analytics_json'", []);
     let _ = conn.execute(
         "UPDATE quests SET accepted = 0, completed = 0, accepted_at = NULL, completed_at = NULL",
         [],
@@ -1504,6 +1515,7 @@ fn reset_full_factory(state: State<AppState>) -> Result<VaultDashboardPayload, S
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let _ = conn.execute("DELETE FROM prompts", []);
     let _ = conn.execute("DELETE FROM journals", []);
+    let _ = conn.execute("DELETE FROM app_meta WHERE key = 'linkedin_analytics_json'", []);
     let _ = conn.execute(
         "UPDATE quests SET accepted = 0, completed = 0, accepted_at = NULL, completed_at = NULL",
         [],
@@ -1801,5 +1813,41 @@ mod tests {
         let q_cleared = cleared.iter().find(|q| q.id == "q-reposition-architect").expect("quest exists");
         assert!(!q_cleared.completed);
         assert!(q_cleared.completed_at.is_none());
+    }
+
+    #[test]
+    fn preload_local_vault_from_env_bundle_if_present() {
+        let Ok(bundle_path) = env::var("CLEARSPACE_PRELOAD_BUNDLE_PATH") else {
+            return;
+        };
+        let path = PathBuf::from(bundle_path);
+        if !path.exists() {
+            return;
+        }
+        let raw = fs::read_to_string(&path).expect("read preload bundle");
+        let (prompts, summary) =
+            parse_exported_conversations_json(&raw).expect("parse preload bundle");
+        assert!(!prompts.is_empty());
+        assert!(summary.linkedin_analytics.is_some());
+
+        let app_dir = env::var("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("Clearspace");
+        let _ = fs::create_dir_all(&app_dir);
+        let db_path = app_dir.join("clearspace_vault.db");
+
+        let conn = Connection::open(&db_path).expect("open local sqlite vault");
+        init_sqlite_schema_with_backup(&conn, Some(&db_path)).expect("init sqlite schema");
+        upsert_prompts_to_sqlite(&conn, &prompts);
+        if let Some(ref li_analytics) = summary.linkedin_analytics {
+            if let Ok(serialized) = serde_json::to_string(li_analytics) {
+                set_app_meta(&conn, "linkedin_analytics_json", &serialized);
+            }
+        }
+        drop(conn);
+
+        let alias_db = app_dir.join("clearspace.db");
+        let _ = fs::copy(&db_path, &alias_db);
     }
 }

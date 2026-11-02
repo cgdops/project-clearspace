@@ -58,6 +58,7 @@ import {
 } from "./vaultClient";
 import { ContributionGrid } from "./ContributionGrid";
 import { GrowthDailyQualityInput, GrowthLineGraph } from "./GrowthLineGraph";
+import { VaultWorkbench } from "./VaultWorkbench";
 
 type TabKey = "mirror" | "onet" | "equity" | "journal" | "vault";
 type StandalonePageKey = "none" | "zero-knowledge" | "how-ai-works";
@@ -74,6 +75,7 @@ const SOCRATIC_PROMPTS = [
 
 const PROVIDER_FILTER_OPTIONS = [
   { key: "ALL", label: "All Sources" },
+  { key: "linkedin_export", label: "LinkedIn Archive" },
   { key: "chat_gpt_web", label: "OpenAI ChatGPT" },
   { key: "claude_web", label: "Anthropic Claude" },
   { key: "gemini_takeout", label: "Google Gemini Takeout" },
@@ -125,6 +127,8 @@ const STORY_CHAPTERS: Array<{
 
 function formatSourceLabel(rawSource: string): string {
   switch (rawSource) {
+    case "linkedin_export":
+      return "LinkedIn Archive";
     case "chat_gpt_web":
       return "OpenAI ChatGPT";
     case "claude_web":
@@ -193,7 +197,7 @@ function getInitials(name: string): string {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>("mirror");
+  const [activeTab, setActiveTab] = useState<TabKey>("vault");
   const [standalonePage, setStandalonePage] = useState<StandalonePageKey>("none");
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [data, setData] = useState<VaultDashboardPayload | null>(null);
@@ -317,19 +321,21 @@ export default function App() {
     setIsEditingProfile(false);
   };
 
-  const isVaultEmpty = Boolean(data && data.summary.clean_prompts_kept === 0);
+  const isVaultEmpty = Boolean(
+    data && data.summary.clean_prompts_kept === 0 && !data.summary.linkedin_analytics
+  );
   const hasProfileName = Boolean(data?.profile?.name && data.profile.name.trim().length > 0);
   const acceptedQuests = data?.quests.filter((q) => q.accepted) ?? [];
   const completedQuests = data?.quests.filter((q) => q.completed) ?? [];
 
   // Progressive dependent feature unlocking rules:
-  // - Step 1: Profile Name
-  // - Step 2: Upload Data (unlocks Mirror + Local Vault)
-  // - Step 3: Complete Mirror Story (or view all chapters) -> unlocks O*NET Path Finder
-  // - Step 4: Explore / Shortlist an O*NET role -> unlocks 5-Year Equity & Quests
-  // - Step 5: Accept >= 1 Quest -> unlocks Reflective Journal
-  const isMirrorUnlocked = !isVaultEmpty;
-  const isVaultUnlocked = !isVaultEmpty;
+  // - Local Data Vault ("vault") is ALWAYS unlocked as the primary Data Exploration & Visualization Workbench
+  // - Upload Data unlocks Cognitive Mirror ("mirror")
+  // - Complete Mirror Story (or view all chapters) -> unlocks O*NET Path Finder ("onet")
+  // - Explore / Shortlist an O*NET role -> unlocks 5-Year Equity & Quests ("equity")
+  // - Accept >= 1 Quest -> unlocks Reflective Journal ("journal")
+  const isMirrorUnlocked = true;
+  const isVaultUnlocked = true;
   const isOnetUnlocked =
     !isVaultEmpty &&
     Boolean(
@@ -481,7 +487,7 @@ export default function App() {
       setImportStatus(
         `Scanned & merged local vault: ${s.clean_prompts_kept.toLocaleString()} clean prompts ready (${s.total_redactions} PII redactions).`
       );
-      setActiveTab("mirror");
+      setActiveTab("vault");
     } catch (err) {
       setImportStatus(`Local scan error: ${String(err)}`);
     } finally {
@@ -491,7 +497,7 @@ export default function App() {
 
   const handleLoadSample = async () => {
     setIsImporting(true);
-    setImportStatus("Loading & scrubbing multi-provider sample archive…");
+    setImportStatus("Loading & scrubbing multi-provider + LinkedIn sample archive…");
     try {
       if (data && !data.profile.name.trim()) {
         await updateUserProfile({ name: profileNameDraft.trim() || "Explorer" });
@@ -518,7 +524,8 @@ export default function App() {
           {
             file_name: "sample-multi-provider-vault.json",
             status: "imported",
-            detected_format: "Multi-Provider Conversations JSON (OpenAI + Claude + Gemini)",
+            detected_format:
+              "Multi-Provider Conversations + LinkedIn Archive (OpenAI + Claude + Gemini + LinkedIn)",
             raw_prompts_scanned: s.total_raw_prompts,
             clean_prompts_kept: s.clean_prompts_kept,
             new_prompts_added: s.clean_prompts_kept,
@@ -532,9 +539,9 @@ export default function App() {
         ],
       });
       setImportStatus(
-        `Loaded multi-provider sample vault (${res.summary.clean_prompts_kept} prompts across OpenAI, Anthropic & Gemini).`
+        `Loaded multi-provider sample vault (${res.summary.clean_prompts_kept} prompts + LinkedIn 21-file archive across OpenAI, Anthropic, Gemini & LinkedIn).`
       );
-      setActiveTab("mirror");
+      setActiveTab("vault");
     } catch (err) {
       setImportStatus(`Sample load error: ${String(err)}`);
     } finally {
@@ -553,7 +560,7 @@ export default function App() {
       setLastImportReport(null);
       setVisitedChapters(new Set(["excel"]));
       setActiveStoryChapter("excel");
-      setActiveTab("mirror");
+      setActiveTab("vault");
       setStandalonePage("none");
       setImportStatus("Local vault cleared. Your profile is preserved—ready for fresh data upload.");
     } catch (err) {
@@ -577,7 +584,7 @@ export default function App() {
       setLastImportReport(null);
       setVisitedChapters(new Set(["excel"]));
       setActiveStoryChapter("excel");
-      setActiveTab("mirror");
+      setActiveTab("vault");
       setStandalonePage("none");
       setImportStatus("");
     } catch (err) {
@@ -694,6 +701,7 @@ export default function App() {
         setImportStatus(
           `Imported ${report.total_clean_kept.toLocaleString()} clean prompts (+${report.total_new_added.toLocaleString()} net-new) from ${report.files_processed} file(s) (${report.total_redactions.toLocaleString()} PII redactions made locally)${issueNote}`
         );
+        setActiveTab("vault");
       }
     } catch (err) {
       setImportStatus(`Import error: ${String(err)}`);
@@ -990,12 +998,25 @@ export default function App() {
       <div className="provider-step">
         <div className="provider-step-header">
           <FileText size={16} color="var(--accent-sage)" />
-          <strong>4. Markdown, Notes & Local Logs</strong>
+          <strong>4. LinkedIn Archive, Markdown &amp; Local Logs</strong>
         </div>
         <p>
-          Drop local <code>.md</code> / <code>.txt</code> journals, YAML frontmatter notes, or click{" "}
-          <strong>Scan Local Antigravity Prompts</strong> above for instant 1-click ingestion.
+          Drop your full <strong>LinkedIn Data Export (<code>.zip</code> / <code>.csv</code>)</strong>, local{" "}
+          <code>.md</code> / <code>.txt</code> notes, or click <strong>Scan Local Antigravity Prompts</strong> above.
         </p>
+        <div className="provider-action-row">
+          <a
+            href="https://www.linkedin.com/mypreferences/d/download-my-data"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-outline"
+            style={{ textDecoration: "none", fontSize: 12, padding: "5px 10px" }}
+            data-testid="provider-link-linkedin"
+          >
+            <ExternalLink size={13} />
+            <span>Open LinkedIn Data Export ↗</span>
+          </a>
+        </div>
       </div>
     </div>
   );
@@ -1484,10 +1505,10 @@ export default function App() {
       <div className="upload-dropzone" aria-live="polite">
         <label className="btn-primary" style={{ cursor: "pointer" }}>
           <Upload size={15} />
-          <span>Import Export Files (.json, .md, .html, .txt, .zip)</span>
+          <span>Import Export Files (.zip, .csv, .json, .md, .html, .txt)</span>
           <input
             type="file"
-            accept=".json,.md,.txt,.jsonl,.html,.zip"
+            accept=".json,.csv,.md,.txt,.jsonl,.html,.zip"
             multiple
             hidden
             onChange={handleFileUpload}
@@ -1508,9 +1529,9 @@ export default function App() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
         <div>
           <span className="badge superpower">Step 1 of 3 • Personalize Your Local Vault</span>
-          <h1 className="page-title" style={{ fontSize: 32, marginTop: 10 }}>
+          <h2 className="page-title" style={{ fontSize: 30, marginTop: 10 }}>
             Welcome to Clearspace — Let’s Start With You
-          </h1>
+          </h2>
           <p className="page-lead" style={{ marginTop: 8 }}>
             We show you <strong>one step at a time</strong> so you are never overwhelmed. First, enter your name and optionally add a profile photo (stored strictly on your local disk).
           </p>
@@ -2855,14 +2876,259 @@ export default function App() {
               <div>
                 <h1 className="page-title">Your Data</h1>
                 <p className="page-lead">
-                  Inspect how your local data is parsed and scrubbed. Your local database lives at:{" "}
+                  Understand your data → understand yourself. Explore how your LinkedIn Archive and AI
+                  conversation exports are structured, what is inside them, and what they reveal about your
+                  trajectory. Local SQLite vault:{" "}
                   <code style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>{data.db_path}</code>
                 </p>
+
+                <div className="stats-grid">
+                  <div className="stat-card">
+                    <div className="stat-label">Unique Human Prompts</div>
+                    <div className="stat-value">{data.summary.clean_prompts_kept.toLocaleString()}</div>
+                    <div className="stat-sub">
+                      {data.summary.noise_filtered_out} code/short commands stripped
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Meaningful Prompts</div>
+                    <div className="stat-value">{data.summary.high_signal_prompts.toLocaleString()}</div>
+                    <div className="stat-sub">Problem-solving, values &amp; career goals</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Local PII Redactions</div>
+                    <div className="stat-value">{data.summary.total_redactions.toLocaleString()}</div>
+                    <div className="stat-sub">Emails, phones &amp; keys scrubbed on disk</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Peak Deep-Flow Window</div>
+                    <div className="stat-value" style={{ fontSize: 26 }}>{peakInfo.windowLabel}</div>
+                    <div className="stat-sub">{peakInfo.shareSub}</div>
+                  </div>
+                </div>
+
+                {isVaultEmpty ? (
+                  <>
+                    {!hasProfileName ? renderStep1ProfileCard() : renderOnboardingPanel()}
+                  </>
+                ) : (
+                  <div className="insight-card" style={{ marginTop: 16, padding: "16px 22px" }}>
+                    <div
+                      className="upload-dropzone"
+                      style={{ marginTop: 0, padding: "12px 16px" }}
+                      aria-live="polite"
+                    >
+                      <label className="btn-primary" style={{ cursor: "pointer" }}>
+                        <Upload size={15} />
+                        <span>Import Export Files (.zip, .csv, .json, .md, .html, .txt)</span>
+                        <input
+                          type="file"
+                          accept=".json,.csv,.md,.txt,.jsonl,.html,.zip"
+                          multiple
+                          hidden
+                          onChange={handleFileUpload}
+                          data-testid="vault-file-input"
+                        />
+                      </label>
+                      <button className="btn-outline" onClick={handleLoadSample} disabled={isImporting}>
+                        <Sparkles size={14} />
+                        <span>Load Sample Multi-Provider Vault</span>
+                      </button>
+                      <button className="btn-outline" onClick={handleScanLocal} disabled={isImporting}>
+                        <RefreshCw size={14} className={isImporting ? "spin-icon" : ""} />
+                        <span>Opt-In: Scan Local Antigravity Prompts</span>
+                      </button>
+                      <button className="btn-outline" onClick={handleResetVault} disabled={isImporting}>
+                        <Trash2 size={14} />
+                        <span>Reset / Clear Vault</span>
+                      </button>
+                      {data.summary.source_counts && data.summary.source_counts.length > 0 && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          {data.summary.source_counts.map(([src, count]) => (
+                            <span key={src} className="badge superpower">
+                              {src}: {count.toLocaleString()} prompts
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {importStatus && (
+                        <div
+                          style={{
+                            fontSize: 13,
+                            color: "var(--accent-sage)",
+                            fontWeight: 600,
+                            width: "100%",
+                            marginTop: 4,
+                          }}
+                        >
+                          {importStatus}
+                        </div>
+                      )}
+                      {lastImportReport && renderImportSummaryPanel(true)}
+                    </div>
+                  </div>
+                )}
+
+                <VaultWorkbench
+                  summary={data.summary}
+                  selectedSource={selectedSource}
+                  onSelectSource={setSelectedSource}
+                  onContinueToMirror={() => {
+                    setStandalonePage("none");
+                    setActiveTab("mirror");
+                  }}
+                  isVaultEmpty={isVaultEmpty}
+                  childrenMiddleVisuals={
+                    <>
+                      {renderPeakFlowRhythmCard()}
+
+                      <ContributionGrid
+                        dailyCounts={data.summary.daily_counts}
+                        recentPrompts={data.recent_high_signal_prompts}
+                        latestDate={data.summary.latest_date}
+                        appTheme={appTheme}
+                      />
+
+                      <GrowthLineGraph
+                        dailyPromptQuality={
+                          (data.summary as { daily_prompt_quality?: GrowthDailyQualityInput[] })
+                            .daily_prompt_quality
+                        }
+                        recentPrompts={data.recent_high_signal_prompts}
+                        dailyCounts={data.summary.daily_counts}
+                        quests={data.quests}
+                        latestDate={data.summary.latest_date}
+                      />
+
+                      <div
+                        className="insight-card"
+                        style={{ marginTop: 16, padding: "20px 24px" }}
+                        data-testid="vault-prompt-explorer"
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                            gap: 12,
+                          }}
+                        >
+                          <div>
+                            <h3 style={{ fontSize: 18 }}>Interactive Scrubbed Prompt Explorer</h3>
+                            <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                              Search and filter your Meaningful Prompts &amp; LinkedIn records after deterministic local PII redaction.
+                            </p>
+                          </div>
+                          <div className="search-input-wrap">
+                            <Search size={15} color="var(--text-muted)" />
+                            <input
+                              type="search"
+                              className="vault-search-input"
+                              data-testid="vault-search-input"
+                              placeholder="Search scrubbed prompts by keyword..."
+                              aria-label="Search scrubbed prompts by keyword"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 12 }}>
+                          <div className="stat-label" style={{ marginBottom: 6 }}>
+                            Provider Source
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {PROVIDER_FILTER_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.key}
+                                className={`btn-outline ${selectedSource === opt.key ? "active" : ""}`}
+                                style={{ padding: "5px 11px", fontSize: 12 }}
+                                onClick={() => setSelectedSource(opt.key)}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 10 }}>
+                          <div className="stat-label" style={{ marginBottom: 6 }}>
+                            Signal Category
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {SIGNAL_CATEGORY_OPTIONS.map((cat) => (
+                              <button
+                                key={cat}
+                                className={`btn-outline ${selectedCategory === cat ? "active" : ""}`}
+                                style={{ padding: "5px 11px", fontSize: 12 }}
+                                onClick={() => setSelectedCategory(cat)}
+                              >
+                                {cat}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 14 }}>
+                          {filteredExplorerPrompts.length === 0 ? (
+                            <div className="quote-box" style={{ borderLeftColor: "var(--border-warm)" }}>
+                              No scrubbed prompts match the active filters. Import a provider archive or load the Sample Vault above to inspect normalized records.
+                            </div>
+                          ) : (
+                            filteredExplorerPrompts.map((p) => (
+                              <div key={p.id} className="quote-box" data-testid="explorer-prompt-row">
+                                <div
+                                  className="quote-meta"
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    flexWrap: "wrap",
+                                    gap: 8,
+                                  }}
+                                >
+                                  <span>
+                                    <strong>{formatSourceLabel(p.source)}</strong> • {p.created_at.slice(0, 10)} •{" "}
+                                    {p.word_count} words
+                                  </span>
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                    <span className="badge value">
+                                      {formatTierLabel(
+                                        p.skill_tier ??
+                                          classifySkillTierClient(
+                                            p.cleaned_text,
+                                            p.word_count,
+                                            p.signal_categories
+                                          )
+                                      )}
+                                    </span>
+                                    {p.redactions_made > 0 && (
+                                      <span className="badge burnout">
+                                        {p.redactions_made} PII Redacted
+                                      </span>
+                                    )}
+                                    {p.signal_categories.map((sc) => (
+                                      <span key={sc} className="badge superpower">
+                                        {sc}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div style={{ marginTop: 4 }}>“{p.cleaned_text}”</div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  }
+                />
 
                 <div
                   className="insight-card"
                   style={{
-                    marginTop: 14,
+                    marginTop: 18,
                     padding: "14px 20px",
                     display: "flex",
                     justifyContent: "space-between",
@@ -2938,201 +3204,6 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-
-                {isVaultEmpty ? (
-                  renderOnboardingPanel()
-                ) : (
-                  <div className="insight-card" style={{ marginTop: 16, padding: "16px 22px" }}>
-                    <div
-                      className="upload-dropzone"
-                      style={{ marginTop: 0, padding: "12px 16px" }}
-                      aria-live="polite"
-                    >
-                      <label className="btn-primary" style={{ cursor: "pointer" }}>
-                        <Upload size={15} />
-                        <span>Import Export Files (.json, .md, .html, .txt, .zip)</span>
-                        <input
-                          type="file"
-                          accept=".json,.md,.txt,.jsonl,.html,.zip"
-                          multiple
-                          hidden
-                          onChange={handleFileUpload}
-                          data-testid="vault-file-input"
-                        />
-                      </label>
-                      <button className="btn-outline" onClick={handleLoadSample} disabled={isImporting}>
-                        <Sparkles size={14} />
-                        <span>Load Sample Multi-Provider Vault</span>
-                      </button>
-                      <button className="btn-outline" onClick={handleScanLocal} disabled={isImporting}>
-                        <RefreshCw size={14} className={isImporting ? "spin-icon" : ""} />
-                        <span>Opt-In: Scan Local Antigravity Prompts</span>
-                      </button>
-                      <button className="btn-outline" onClick={handleResetVault} disabled={isImporting}>
-                        <Trash2 size={14} />
-                        <span>Reset / Clear Vault</span>
-                      </button>
-                      {data.summary.source_counts && data.summary.source_counts.length > 0 && (
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                          {data.summary.source_counts.map(([src, count]) => (
-                            <span key={src} className="badge superpower">
-                              {src}: {count.toLocaleString()} prompts
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {importStatus && (
-                        <div
-                          style={{
-                            fontSize: 13,
-                            color: "var(--accent-sage)",
-                            fontWeight: 600,
-                            width: "100%",
-                            marginTop: 4,
-                          }}
-                        >
-                          {importStatus}
-                        </div>
-                      )}
-                      {lastImportReport &&
-                        lastImportReport.file_reports.some((r) => r.status !== "imported") &&
-                        renderImportSummaryPanel(true)}
-                    </div>
-                  </div>
-                )}
-
-                {renderPeakFlowRhythmCard()}
-
-                <div
-                  className="insight-card"
-                  style={{ marginTop: 16, padding: "20px 24px" }}
-                  data-testid="vault-prompt-explorer"
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                      gap: 12,
-                    }}
-                  >
-                    <div>
-                      <h3 style={{ fontSize: 18 }}>Interactive Scrubbed Prompt Explorer</h3>
-                      <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                        Search and filter your Meaningful Prompts after deterministic local PII redaction.
-                      </p>
-                    </div>
-                    <div className="search-input-wrap">
-                      <Search size={15} color="var(--text-muted)" />
-                      <input
-                        type="search"
-                        className="vault-search-input"
-                        data-testid="vault-search-input"
-                        placeholder="Search scrubbed prompts by keyword..."
-                        aria-label="Search scrubbed prompts by keyword"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 12 }}>
-                    <div className="stat-label" style={{ marginBottom: 6 }}>
-                      Provider Source
-                    </div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {PROVIDER_FILTER_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.key}
-                          className={`btn-outline ${selectedSource === opt.key ? "active" : ""}`}
-                          style={{ padding: "5px 11px", fontSize: 12 }}
-                          onClick={() => setSelectedSource(opt.key)}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 10 }}>
-                    <div className="stat-label" style={{ marginBottom: 6 }}>
-                      Signal Category
-                    </div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {SIGNAL_CATEGORY_OPTIONS.map((cat) => (
-                        <button
-                          key={cat}
-                          className={`btn-outline ${selectedCategory === cat ? "active" : ""}`}
-                          style={{ padding: "5px 11px", fontSize: 12 }}
-                          onClick={() => setSelectedCategory(cat)}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 14 }}>
-                    {filteredExplorerPrompts.length === 0 ? (
-                      <div className="quote-box" style={{ borderLeftColor: "var(--border-warm)" }}>
-                        No scrubbed prompts match the active filters. Import a provider archive or load the Sample Vault above to inspect normalized records.
-                      </div>
-                    ) : (
-                      filteredExplorerPrompts.map((p) => (
-                        <div key={p.id} className="quote-box" data-testid="explorer-prompt-row">
-                          <div
-                            className="quote-meta"
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              flexWrap: "wrap",
-                              gap: 8,
-                            }}
-                          >
-                            <span>
-                              <strong>{formatSourceLabel(p.source)}</strong> • {p.created_at.slice(0, 10)} •{" "}
-                              {p.word_count} words
-                            </span>
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                              <span className="badge value">
-                                {formatTierLabel(
-                                  p.skill_tier ??
-                                    classifySkillTierClient(
-                                      p.cleaned_text,
-                                      p.word_count,
-                                      p.signal_categories
-                                    )
-                                )}
-                              </span>
-                              {p.redactions_made > 0 && (
-                                <span className="badge burnout">
-                                  {p.redactions_made} PII Redacted
-                                </span>
-                              )}
-                              {p.signal_categories.map((sc) => (
-                                <span key={sc} className="badge superpower">
-                                  {sc}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div style={{ marginTop: 4 }}>“{p.cleaned_text}”</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {!isVaultEmpty && renderImportSummaryPanel(false)}
-
-                <ContributionGrid
-                  dailyCounts={data.summary.daily_counts}
-                  recentPrompts={data.recent_high_signal_prompts}
-                  latestDate={data.summary.latest_date}
-                  appTheme={appTheme}
-                />
 
                 {!isVaultEmpty && (
                   <div className="onboarding-card" style={{ marginTop: 16 }}>

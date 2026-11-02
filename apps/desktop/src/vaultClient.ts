@@ -1,4 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
+import {
+  hasPromptInjectionClient,
+  inferLinkedInCsvFilenameClient,
+  isLinkedInEntryClient,
+  LinkedInArchiveEntry,
+  LinkedInVaultAnalytics,
+  parseLinkedInArchiveEntriesClient,
+  SAMPLE_ANONYMIZED_LINKEDIN_ENTRIES,
+  stripPromptInjectionClient,
+} from "./linkedinAnalytics";
+export * from "./linkedinAnalytics";
 
 export type SkillTier = "beginner" | "intermediate" | "advanced";
 export type WritingLevel = "everyday" | "professional" | "technical";
@@ -68,6 +79,7 @@ export interface IngestionSummary {
   warnings: string[];
   manifest_links: ManifestFileLink[];
   writing_level: WritingLevelMetrics;
+  linkedin_analytics?: LinkedInVaultAnalytics | null;
 }
 
 export interface FileImportReport {
@@ -230,6 +242,8 @@ const STORAGE_QUESTS_KEY = "clearspace_vault_quests_v1";
 const STORAGE_JOURNALS_KEY = "clearspace_vault_journals_v1";
 const STORAGE_PROFILE_KEY = "clearspace_user_profile_v1";
 const STORAGE_BACKUP_META_KEY = "clearspace_vault_backup_meta_v1";
+const STORAGE_LINKEDIN_ENTRIES_KEY = "clearspace_linkedin_entries_v1";
+const STORAGE_LINKEDIN_ANALYTICS_KEY = "clearspace_linkedin_analytics_v1";
 
 export const DEFAULT_USER_PROFILE: UserProfile = {
   name: "",
@@ -363,6 +377,9 @@ export const SAMPLE_MULTI_PROVIDER_EXPORT = JSON.stringify([
       "Prompted How can I combine interactive simulation economy design, telemetry routing, and programmatic growth systems into a principal platform architecture role?",
     time: "2026-03-04T20:45:00Z",
   },
+  {
+    linkedin_archive_entries: SAMPLE_ANONYMIZED_LINKEDIN_ENTRIES,
+  },
 ]);
 
 function scrubPromptClient(raw: string): {
@@ -371,9 +388,13 @@ function scrubPromptClient(raw: string): {
   redactionsMade: number;
   isNoise: boolean;
 } {
-  const trimmed = raw.trim();
+  let redactions = 0;
+  if (hasPromptInjectionClient(raw)) {
+    redactions += 1;
+  }
+  const trimmed = stripPromptInjectionClient(raw).trim();
   if (!trimmed) {
-    return { cleanedText: "", wordCount: 0, redactionsMade: 0, isNoise: true };
+    return { cleanedText: "", wordCount: 0, redactionsMade: redactions, isNoise: true };
   }
   const lower = trimmed.toLowerCase();
   if (
@@ -382,10 +403,9 @@ function scrubPromptClient(raw: string): {
     lower.startsWith("your role is ") ||
     lower.startsWith("your sole job is ")
   ) {
-    return { cleanedText: "", wordCount: 0, redactionsMade: 0, isNoise: true };
+    return { cleanedText: "", wordCount: 0, redactionsMade: redactions, isNoise: true };
   }
 
-  let redactions = 0;
   let text = trimmed.replace(/```[\s\S]*?```/g, "[CODE_BLOCK_OMITTED]");
   text = text.replace(
     /\b(?:sk-[a-zA-Z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|xox[baprs]-[0-9a-zA-Z-]{10,})\b/g,
@@ -568,6 +588,8 @@ function sourceDisplayLabel(source: string): string {
       return "Google Gemini Takeout";
     case "markdown_journal":
       return "Markdown Journal";
+    case "linkedin_export":
+      return "LinkedIn Archive";
     default:
       return "Antigravity Local";
   }
@@ -635,7 +657,8 @@ function isKnownConversationItemClient(obj: Record<string, unknown>): boolean {
       typeof obj.prompt === "string" ||
       typeof obj.text === "string" ||
       typeof obj.prompt_template === "string" ||
-      Array.isArray(obj.docs)
+      Array.isArray(obj.docs) ||
+      Array.isArray(obj.linkedin_archive_entries)
   );
 }
 
@@ -643,7 +666,7 @@ export function parseMultiProviderClient(rawInput: string): {
   prompts: NormalizedPrompt[];
   summary: IngestionSummary;
 } {
-  const trimmed = rawInput.trim();
+  const trimmed = rawInput.replace(/^\uFEFF/, "").trim();
   if (!trimmed) {
     throw new Error("Empty import file");
   }
@@ -658,6 +681,7 @@ export function parseMultiProviderClient(rawInput: string): {
   let duplicatesRemoved = 0;
   let totalRedactions = 0;
   let filesScanned = 1;
+  let linkedInAnalytics: LinkedInVaultAnalytics | null = null;
 
   const pushPrompt = (text: string, createdAt: string, convoId: string, source: string) => {
     totalRaw += 1;
@@ -692,6 +716,28 @@ export function parseMultiProviderClient(rawInput: string): {
   };
 
   if (trimmed.startsWith("<")) {
+    if (trimmed.includes('class="published"') || trimmed.includes('class="article-body"')) {
+      detectedFormat = "LinkedIn Published Article HTML";
+      const { analytics, rawCandidatePrompts } = parseLinkedInArchiveEntriesClient([
+        { name: "Articles/Articles/article.html", content: trimmed },
+      ]);
+      linkedInAnalytics = analytics;
+      for (const cand of rawCandidatePrompts) {
+        pushPrompt(cand.text, cand.createdAt, cand.convoId, "linkedin_export");
+      }
+      const summary = summarizePromptsClient(
+        prompts,
+        1,
+        totalRaw,
+        noiseFiltered,
+        duplicatesRemoved,
+        detectedFormat,
+        warnings,
+        manifestLinks,
+        linkedInAnalytics
+      );
+      return { prompts, summary };
+    }
     // HTML export handling (OpenAI ChatGPT chat.html, Google Gemini Gems HTML, or empty HTML)
     const markerIdx = trimmed.indexOf("var jsonData =");
     if (markerIdx !== -1) {
@@ -765,6 +811,29 @@ export function parseMultiProviderClient(rawInput: string): {
       }
     }
   } else if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
+    const inferredLinkedInCsv = inferLinkedInCsvFilenameClient(trimmed);
+    if (inferredLinkedInCsv) {
+      detectedFormat = `LinkedIn Archive CSV (${inferredLinkedInCsv})`;
+      const { analytics, rawCandidatePrompts } = parseLinkedInArchiveEntriesClient([
+        { name: inferredLinkedInCsv, content: trimmed },
+      ]);
+      linkedInAnalytics = analytics;
+      for (const cand of rawCandidatePrompts) {
+        pushPrompt(cand.text, cand.createdAt, cand.convoId, "linkedin_export");
+      }
+      const summary = summarizePromptsClient(
+        prompts,
+        1,
+        totalRaw,
+        noiseFiltered,
+        duplicatesRemoved,
+        detectedFormat,
+        warnings,
+        manifestLinks,
+        linkedInAnalytics
+      );
+      return { prompts, summary };
+    }
     detectedFormat = "Markdown / Text Reflective Document";
     let currentDate = "2026-02-15T20:00:00Z";
     let bodySource = trimmed;
@@ -1042,6 +1111,21 @@ export function parseMultiProviderClient(rawInput: string): {
         if (combined.trim()) {
           pushPrompt(combined, ts, convoId, "gemini_takeout");
         }
+      } else if (Array.isArray(item.linkedin_archive_entries)) {
+        if (detectedFormat === "Multi-Provider Export") {
+          detectedFormat = "LinkedIn Data Archive (.zip / .csv)";
+        }
+        const entries = (item.linkedin_archive_entries as Record<string, unknown>[])
+          .map((e) => ({
+            name: typeof e.name === "string" ? e.name : "",
+            content: typeof e.content === "string" ? e.content : "",
+          }))
+          .filter((e) => e.name && e.content);
+        const { analytics, rawCandidatePrompts } = parseLinkedInArchiveEntriesClient(entries);
+        linkedInAnalytics = analytics;
+        for (const cand of rawCandidatePrompts) {
+          pushPrompt(cand.text, cand.createdAt, cand.convoId, "linkedin_export");
+        }
       } else if (typeof item.prompt === "string" || typeof item.text === "string") {
         const text = String(item.prompt || item.text);
         pushPrompt(text, fallbackTs, convoId, "markdown_journal");
@@ -1049,7 +1133,7 @@ export function parseMultiProviderClient(rawInput: string): {
     });
   }
 
-  if (prompts.length === 0 && warnings.length === 0) {
+  if (prompts.length === 0 && warnings.length === 0 && !linkedInAnalytics) {
     warnings.push(
       `0 qualifying prompts were kept from this file (${totalRaw} raw entries scanned, ${noiseFiltered} filtered as short/system noise).`
     );
@@ -1063,7 +1147,8 @@ export function parseMultiProviderClient(rawInput: string): {
     duplicatesRemoved,
     detectedFormat,
     warnings,
-    manifestLinks
+    manifestLinks,
+    linkedInAnalytics
   );
   return { prompts, summary };
 }
@@ -1247,7 +1332,8 @@ function summarizePromptsClient(
   duplicatesRemoved = 0,
   detectedFormat = "Local Vault",
   warnings: string[] = [],
-  manifestLinks: ManifestFileLink[] = []
+  manifestLinks: ManifestFileLink[] = [],
+  linkedinAnalytics?: LinkedInVaultAnalytics | null
 ): IngestionSummary {
   const sorted = [...prompts].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const hourly = new Array<number>(24).fill(0);
@@ -1331,6 +1417,7 @@ function summarizePromptsClient(
     warnings,
     manifest_links: manifestLinks,
     writing_level,
+    linkedin_analytics: linkedinAnalytics ?? null,
   };
 }
 
@@ -2506,6 +2593,44 @@ function saveBrowserPrompts(prompts: NormalizedPrompt[]): void {
   }
 }
 
+function loadBrowserLinkedInEntries(): LinkedInArchiveEntry[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_LINKEDIN_ENTRIES_KEY);
+    return raw ? (JSON.parse(raw) as LinkedInArchiveEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBrowserLinkedInEntries(entries: LinkedInArchiveEntry[]): void {
+  try {
+    localStorage.setItem(STORAGE_LINKEDIN_ENTRIES_KEY, JSON.stringify(entries));
+  } catch {
+    // ignore
+  }
+}
+
+function loadBrowserLinkedInAnalytics(): LinkedInVaultAnalytics | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_LINKEDIN_ANALYTICS_KEY);
+    return raw ? (JSON.parse(raw) as LinkedInVaultAnalytics) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveBrowserLinkedInAnalytics(analytics: LinkedInVaultAnalytics | null): void {
+  try {
+    if (!analytics) {
+      localStorage.removeItem(STORAGE_LINKEDIN_ANALYTICS_KEY);
+    } else {
+      localStorage.setItem(STORAGE_LINKEDIN_ANALYTICS_KEY, JSON.stringify(analytics));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 function loadBrowserQuests(): EquityQuest[] {
   try {
     const raw = localStorage.getItem(STORAGE_QUESTS_KEY);
@@ -2626,7 +2751,18 @@ function buildBrowserDashboard(): VaultDashboardPayload {
   const prompts = loadBrowserPrompts();
   const savedQuests = loadBrowserQuests();
   const journals = loadBrowserJournals();
-  const summary = summarizePromptsClient(prompts);
+  const linkedinAnalytics = loadBrowserLinkedInAnalytics();
+  const summary = summarizePromptsClient(
+    prompts,
+    undefined,
+    undefined,
+    0,
+    0,
+    "Local Vault",
+    [],
+    [],
+    linkedinAnalytics
+  );
   const effectiveLevel = resolveEffectiveWritingLevel(
     profile.writing_level_mode,
     summary.writing_level.measured_level
@@ -2666,7 +2802,10 @@ export async function scanLocalVault(): Promise<VaultDashboardPayload> {
   if (isTauriRuntime()) {
     return invoke<VaultDashboardPayload>("scan_local_vault");
   }
-  const { prompts } = parseMultiProviderClient(SAMPLE_MULTI_PROVIDER_EXPORT);
+  const { prompts, summary } = parseMultiProviderClient(SAMPLE_MULTI_PROVIDER_EXPORT);
+  if (summary.linkedin_analytics) {
+    saveBrowserLinkedInAnalytics(summary.linkedin_analytics);
+  }
   const existing = loadBrowserPrompts();
   const map = new Map<string, NormalizedPrompt>();
   for (const p of existing) map.set(p.id, p);
@@ -2819,9 +2958,10 @@ export async function importFilesBatch(
         const afterDashboard = await invoke<VaultDashboardPayload>("get_vault_dashboard");
         const newAdded = Math.max(0, afterDashboard.summary.clean_prompts_kept - beforeCount);
         const isManifest = summary.detected_format.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
+        const hasLinkedInRows = (summary.linkedin_analytics?.total_rows_parsed ?? 0) > 0;
         const status: FileImportReport["status"] = isManifest
           ? "manifest_ready"
-          : summary.clean_prompts_kept > 0
+          : summary.clean_prompts_kept > 0 || hasLinkedInRows
           ? "imported"
           : "empty";
 
@@ -2851,6 +2991,9 @@ export async function importFilesBatch(
       }
 
       const { prompts, summary } = parseMultiProviderClient(rawContent);
+      if (summary.linkedin_analytics) {
+        saveBrowserLinkedInAnalytics(summary.linkedin_analytics);
+      }
       let newAddedForFile = 0;
       let existingDupsForFile = 0;
       for (const p of prompts) {
@@ -2864,9 +3007,10 @@ export async function importFilesBatch(
 
       const isManifest =
         summary.detected_format.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
+      const hasLinkedInRows = (summary.linkedin_analytics?.total_rows_parsed ?? 0) > 0;
       const status: FileImportReport["status"] = isManifest
         ? "manifest_ready"
-        : summary.clean_prompts_kept > 0
+        : summary.clean_prompts_kept > 0 || hasLinkedInRows
         ? "imported"
         : "empty";
 
@@ -2947,9 +3091,28 @@ export async function importFilesBatch(
             manifest_links: [],
           });
         } else {
-          for (const entry of entries) {
-            const shortEntryName = entry.name.split("/").slice(-2).join("/");
-            await processSingleTextEntry(`${file.name} → ${shortEntryName}`, entry.content);
+          const liEntries = entries.filter((e) => isLinkedInEntryClient(e.name, e.content));
+          const otherEntries = entries.filter((e) => !isLinkedInEntryClient(e.name, e.content));
+          if (liEntries.length > 0 && liEntries.some((e) => e.name.toLowerCase().endsWith(".csv"))) {
+            const existingLi = loadBrowserLinkedInEntries();
+            const mergedMap = new Map<string, { name: string; content: string }>();
+            for (const item of existingLi) mergedMap.set(item.name, item);
+            for (const item of liEntries) mergedMap.set(item.name, item);
+            const mergedLi = Array.from(mergedMap.values());
+            saveBrowserLinkedInEntries(mergedLi);
+            await processSingleTextEntry(
+              `${file.name} (LinkedIn Archive — ${liEntries.length} files)`,
+              JSON.stringify({ linkedin_archive_entries: mergedLi })
+            );
+            for (const entry of otherEntries) {
+              const shortEntryName = entry.name.split("/").slice(-2).join("/");
+              await processSingleTextEntry(`${file.name} → ${shortEntryName}`, entry.content);
+            }
+          } else {
+            for (const entry of entries) {
+              const shortEntryName = entry.name.split("/").slice(-2).join("/");
+              await processSingleTextEntry(`${file.name} → ${shortEntryName}`, entry.content);
+            }
           }
         }
       } catch (err) {
@@ -2990,7 +3153,27 @@ export async function importFilesBatch(
       try {
         const rawText =
           file.rawText ?? (typeof file.text === "function" ? await file.text() : "");
-        await processSingleTextEntry(file.name, rawText);
+        if (isLinkedInEntryClient(file.name, rawText)) {
+          const existingLi = loadBrowserLinkedInEntries();
+          const mergedMap = new Map<string, { name: string; content: string }>();
+          for (const item of existingLi) mergedMap.set(item.name, item);
+          mergedMap.set(file.name, { name: file.name, content: rawText });
+          const mergedLi = Array.from(mergedMap.values());
+          saveBrowserLinkedInEntries(mergedLi);
+          await processSingleTextEntry(file.name, rawText);
+          if (mergedLi.length > 1) {
+            if (isTauriRuntime()) {
+              await invoke<IngestionSummary>("import_exported_json", {
+                jsonContent: JSON.stringify({ linkedin_archive_entries: mergedLi }),
+              });
+            } else {
+              const combined = parseLinkedInArchiveEntriesClient(mergedLi);
+              saveBrowserLinkedInAnalytics(combined.analytics);
+            }
+          }
+        } else {
+          await processSingleTextEntry(file.name, rawText);
+        }
       } catch (err) {
         fileReports.push({
           file_name: file.name,
@@ -3046,6 +3229,7 @@ export async function importExportedContent(
     const dashboard = await invoke<VaultDashboardPayload>("get_vault_dashboard");
     const isManifest =
       summary.detected_format?.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
+    const hasLinkedInRows = (summary.linkedin_analytics?.total_rows_parsed ?? 0) > 0;
     const report: BatchImportReport = {
       timestamp_iso: new Date().toISOString(),
       files_processed: 1,
@@ -3060,7 +3244,7 @@ export async function importExportedContent(
           file_name: fileName,
           status: isManifest
             ? "manifest_ready"
-            : summary.clean_prompts_kept > 0
+            : summary.clean_prompts_kept > 0 || hasLinkedInRows
             ? "imported"
             : "empty",
           detected_format: summary.detected_format ?? "Multi-Provider Export",
@@ -3079,6 +3263,9 @@ export async function importExportedContent(
     return { summary, report, dashboard };
   }
   const { prompts, summary } = parseMultiProviderClient(rawContent);
+  if (summary.linkedin_analytics) {
+    saveBrowserLinkedInAnalytics(summary.linkedin_analytics);
+  }
   const existing = loadBrowserPrompts();
   const map = new Map<string, NormalizedPrompt>();
   for (const p of existing) map.set(p.id, p);
@@ -3095,6 +3282,7 @@ export async function importExportedContent(
   saveBrowserPrompts(Array.from(map.values()));
   const isManifest =
     summary.detected_format.includes("Manifest") || (summary.manifest_links?.length ?? 0) > 0;
+  const hasLinkedInRows = (summary.linkedin_analytics?.total_rows_parsed ?? 0) > 0;
   const report: BatchImportReport = {
     timestamp_iso: new Date().toISOString(),
     files_processed: 1,
@@ -3109,7 +3297,7 @@ export async function importExportedContent(
         file_name: fileName,
         status: isManifest
           ? "manifest_ready"
-          : summary.clean_prompts_kept > 0
+          : summary.clean_prompts_kept > 0 || hasLinkedInRows
           ? "imported"
           : "empty",
         detected_format: summary.detected_format,
@@ -3157,6 +3345,8 @@ export async function loadSampleMultiProviderVault(): Promise<VaultDashboardPayl
 }
 
 export async function resetLocalVault(): Promise<VaultDashboardPayload> {
+  saveBrowserLinkedInEntries([]);
+  saveBrowserLinkedInAnalytics(null);
   if (isTauriRuntime()) {
     return invoke<VaultDashboardPayload>("reset_local_vault");
   }
@@ -3173,6 +3363,8 @@ export async function resetLocalVault(): Promise<VaultDashboardPayload> {
 }
 
 export async function resetFullFactory(): Promise<VaultDashboardPayload> {
+  saveBrowserLinkedInEntries([]);
+  saveBrowserLinkedInAnalytics(null);
   if (isTauriRuntime()) {
     return invoke<VaultDashboardPayload>("reset_full_factory");
   }
